@@ -4,13 +4,15 @@
 #define STARM_CPP
 
 #include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
+//#include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 #include <cstdio>
 #include <memory>
 #include <cstddef>
 #include <iostream>
 #include <vector>
+#include <omp.h>
+#include <mkl.h>
 
 namespace py = pybind11;
 
@@ -109,20 +111,32 @@ public:
             }
             printf("\n");
         }  
+//#pragma omp parallel
+        //for (size_t i = 0; i < this->nrow; ++i) {
+            //int t = omp_get_thread_num();
+            //printf("Hello from %d\n", t);
+        //}  
+
     }
 };
 
 
 Matrix matmul(Matrix& A, Matrix& B){
     Matrix C(A.nrow*B.ncol, A.nrow, B.ncol);
-    for(size_t i = 0; i < C.nrow; i++){
-        for(size_t j = 0; j < C.ncol; j++){
-            C.set(i, j, 0);
-            for (size_t k = 0; k < A.ncol; k++){
-                C.set(i, j, C.get(i, j) + A.get(i, k)*B.get(k, j) );
-            }
-        }
-    }
+    //for(size_t i = 0; i < C.nrow; i++){
+        //for(size_t j = 0; j < C.ncol; j++){
+            //C.set(i, j, 0);
+            //for (size_t k = 0; k < A.ncol; k++){
+                //C.set(i, j, C.get(i, j) + A.get(i, k)*B.get(k, j) );
+            //}
+        //}
+    //}
+
+	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                C.nrow, C.ncol, A.ncol,
+                1.0, A.data_ptr, A.ncol, // A matrix
+                B.data_ptr, B.ncol,      // B matrix
+                0.0, C.data_ptr, C.ncol); // C matrix
 
     return C;
 }

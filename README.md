@@ -13,9 +13,14 @@
 ### Dependency
 - pybind11
 - numpy
+- MKL
 
 ### Build
-- `python setup.py build_ext --inplace`
+- Bulding with Intel compiler resulted in errors which is yet to be figured out
+- In experiments, we built with default GNU compiler avilable on NERSC Perlmutter
+- Set `MKLROOT` if it is already not specified. 
+    - In our experiments, we used NERSC Perlmutter, where it can be specified as `export MKLROOT=/global/common/software/nersc9/intel/oneapi/mkl/2024.1`
+- Build by running `make all`
 
 ### Usage
 `test.py` contains unit tests for basic modules.
