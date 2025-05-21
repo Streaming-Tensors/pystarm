@@ -120,6 +120,33 @@ public:
     }
 };
 
+class Tensor{
+    public:
+    size_t ndim;
+    std::vector<size_t> dims;
+    double* data_ptr; // Expects the data to be in column major order
+
+    // Takes a preallocated buffer by Python
+    // py::buffer instead of py:array_t to prevent any chance of silent data copy
+    Tensor(py::buffer &buf, size_t ndim, std::vector<size_t> dims){
+        this->ndim = ndim;
+        this->dims.resize(ndim);
+        for(int i = 0; i < ndim; i++) this->dims[i] = dims[i];
+        py::buffer_info buf_info = buf.request();
+        this->data_ptr = static_cast<double*>(buf_info.ptr);
+    }
+
+    std::vector<size_t> getdims(){
+        return this->dims;
+    }
+    void clear(){
+        std::cout << "Clearing tensor" << std::endl;
+        if (this->data_ptr != NULL){
+            free(this->data_ptr);
+        }
+    }
+};
+
 
 Matrix matmul(Matrix& A, Matrix& B){
     Matrix C(A.nrow*B.ncol, A.nrow, B.ncol);
@@ -140,6 +167,12 @@ Matrix matmul(Matrix& A, Matrix& B){
 
     return C;
 }
+
+Tensor ttm(Tensor& T, Matrix& m, size_t mode){
+    return T;
+}
+
+
 
 //PYBIND11_MODULE(pystarm, m) {
     //py::class_<Matrix>(m, "Matrix")
@@ -166,10 +199,33 @@ PYBIND11_MODULE(pystarm, m) {
         .def(py::init<py::buffer& , size_t, size_t>())
         .def("get", &Matrix::get, "Get (i,j) th entry of the matrix")
         .def("set", &Matrix::set, "Set (i,j) th entry of the matrix")
-        .def("clear", &Matrix::get, "Free memory of the underlying data buffer")
+        .def("clear", &Matrix::clear, "Free memory of the underlying data buffer")
         .def("getdims", &Matrix::getdims, "Get matrix dimensions")
         .def("print", &Matrix::print, "Print contents of the matrix");
+    //py::class_<Tensor>(m, "Tensor")
+        //.def(py::init<py::buffer& , size_t, std::vector<size_t> >());
+    py::class_<Tensor>(m, "Tensor", py::buffer_protocol())
+        .def_buffer([](Tensor& ten) -> py::buffer_info{
+            size_t nval = 1;
+            for (size_t i = 0; i < ten.ndim; i++){
+                nval = nval * ten.dims[i];
+            }
+            return py::buffer_info(
+                ten.data_ptr,
+                sizeof(double),
+                py::format_descriptor<double>::format(),
+                1, // Always return as 1d array buffer
+                { nval },
+                {
+                    sizeof(double) // Because always returning as 1d array buffer
+                }
+            );
+        })
+        .def(py::init<py::buffer& , size_t, std::vector<size_t> >())
+        .def("clear", &Tensor::clear, "Free memory of the underlying data buffer")
+        .def("getdims", &Tensor::getdims, "Get tensor dimensions");
 	m.def("matmul", &matmul, "Multiply two matrices and return a new result matrix");
+	m.def("ttm", &ttm, "Tensor times matrix multiply on a specific mode");
 }
 
 #endif
