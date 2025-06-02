@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <iostream>
 #include <vector>
+#include <cassert>
 #include <omp.h>
 #include <mkl.h>
 
@@ -131,14 +132,31 @@ class Tensor{
     Tensor(py::buffer &buf, size_t ndim, std::vector<size_t> dims){
         this->ndim = ndim;
         this->dims.resize(ndim);
-        for(int i = 0; i < ndim; i++) this->dims[i] = dims[i];
+        for(size_t i = 0; i < ndim; i++) this->dims[i] = dims[i];
         py::buffer_info buf_info = buf.request();
         this->data_ptr = static_cast<double*>(buf_info.ptr);
     }
 
+    // Constructor that allocates new buffer
+    Tensor(size_t buflen, size_t ndim, std::vector<size_t> dims){
+        assert(ndim == dims.size());
+        this->ndim = ndim;
+        for(size_t i = 0; i < ndim; i++) this->dims[i] = dims[i];
+
+        size_t x = 1;
+        for(size_t i = 0; i < dims.size(); i++){
+            x = dims[i];
+        }
+        assert(x == buflen);
+
+        this->data_ptr = (double*) malloc(buflen * sizeof(double) );
+    }
+    
+    // Get tensor dimensions
     std::vector<size_t> getdims(){
         return this->dims;
     }
+
     void clear(){
         std::cout << "Clearing tensor" << std::endl;
         if (this->data_ptr != NULL){
@@ -159,16 +177,40 @@ Matrix matmul(Matrix& A, Matrix& B){
         //}
     //}
 
-	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-                C.nrow, C.ncol, A.ncol,
-                1.0, A.data_ptr, A.ncol, // A matrix
-                B.data_ptr, B.ncol,      // B matrix
-                0.0, C.data_ptr, C.ncol); // C matrix
+    cblas_dgemm(
+        CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
+        CblasNoTrans, // A matrix is not transpose. `transa` param of MKL cblas call.
+        CblasNoTrans, // B matrix is not transpose. `transb` param of MKL cblas call.
+        C.nrow, // Number of rows of A or C. `m` param of MKL cblas call.
+        C.ncol, // Number of cols of B or C. `n` param of MKL cblas call.
+        A.ncol, // Inner dimension - number of columns of A or number of rows of B. `k` param of MKL cblas call.
+        1.0, // Scalar `alpha` param of MKL cblas call.
+        A.data_ptr, // Data buffer of A. `a` param of MKL cblas call.
+        A.nrow, // Leading dimension of A. `lda` param of MKL cblas call.
+        B.data_ptr, // Data buffer of B. `b` param of MKL cblas call.
+        B.nrow, // Leading dimension of B. `ldb` param of MKL cblas call.
+        0.0, // Scala `beta` param of MKL cblas call.
+        C.data_ptr, // Data buffer of C. `c` param of MKL cblas call.
+        C.nrow // Leading dimension of C. `ldc` param of MKL cblas call.
+    );
 
     return C;
 }
 
-Tensor ttm(Tensor& T, Matrix& m, size_t mode){
+Tensor ttm(Tensor& T, Matrix& M, size_t mode){
+    std::vector<size_t> ten_dims = T.getdims();
+    std::vector<size_t> mat_dims = M.getdims();
+    assert(mat_dims[1] == ten_dims[mode]);
+
+    if(mode == 0) {
+        // TTM on first mode
+    }
+    else if(mode == ten_dims.size()-1) {
+        // TTM on last mode
+    }
+    else 
+    }
+
     return T;
 }
 
