@@ -51,31 +51,54 @@ Tensor ttm(Tensor& T, Matrix& M, size_t mode){
     std::vector<size_t> mat_dims = M.getdims();
     assert(mat_dims[1] == ten_dims[mode]);
 
-    //std::vector<size_t> out_ten_dims(ten_dims);
-    //out_ten_dims[mode] = mat_dims[0];
-    //size_t buflen = 1;
-    //for (size_t i = mode+1; i<ten_dims.size(); i++){
-        //if(i != mode) buflen = buflen * out_ten_dims[i];
-    //}
+    std::vector<size_t> out_ten_dims(ten_dims);
+    out_ten_dims[mode] = mat_dims[0];
+    size_t buflen = 1;
+    for (size_t i = 0; i<out_ten_dims.size(); i++) buflen = buflen * out_ten_dims[i];
 
-    //Tensor TO(buflen, out_ten_dims.size(), out_ten_dims);
+    Tensor TO(buflen, out_ten_dims.size(), out_ten_dims);
 
-    //if(mode == 0) {
-        //// TTM on first mode
-        //size_t cblas_m = mat_dims[0];
-        //size_t cblas_k = ten_dims[mode]; // Or mat_dims[1]
-        //size_t cblas_n = 1;
-        //for (size_t i = mode+1; i<ten_dims.size(); i++){
-            //cblas_n = cblas_n * ten_dims[i];
-        //}
+    if(mode == 0) {
+        // TTM on first mode
+        size_t cblas_m = mat_dims[0];
+        size_t cblas_k = ten_dims[mode]; // Or mat_dims[1]
+        size_t cblas_n = 1;
+        for (size_t i = mode+1; i<out_ten_dims.size(); i++){
+            cblas_n = cblas_n * out_ten_dims[i];
+        }
+        float cblas_alpha = 1.0;
+        float cblas_beta = 0.0;
+        auto cblas_a = M.data_ptr;
+        auto cblas_lda = mat_dims[0];
+        auto cblas_b = T.data_ptr;
+        auto cblas_ldb = ten_dims[0];
+        auto cblas_c = TO.data_ptr; 
+        auto cblas_ldc = out_ten_dims[0]; // Number of rows of the matrix
+                                         
+        cblas_dgemm(
+            CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
+            CblasNoTrans, // A matrix is not transpose. `transa` param of MKL cblas call.
+            CblasNoTrans, // B matrix is not transpose. `transb` param of MKL cblas call.
+            cblas_m, // Number of rows of A or C. `m` param of MKL cblas call.
+            cblas_n, // Number of cols of B or C. `n` param of MKL cblas call.
+            cblas_k, // Inner dimension - number of columns of A or number of rows of B. `k` param of MKL cblas call.
+            cblas_alpha, // Scalar `alpha` param of MKL cblas call.
+            cblas_a, // Data buffer of A. `a` param of MKL cblas call.
+            cblas_lda, // Leading dimension of A. `lda` param of MKL cblas call.
+            cblas_b, // Data buffer of B. `b` param of MKL cblas call.
+            cblas_ldb, // Leading dimension of B. `ldb` param of MKL cblas call.
+            cblas_beta, // Scalar `beta` param of MKL cblas call.
+            cblas_c, // Data buffer of C. `c` param of MKL cblas call.
+            cblas_ldc // Leading dimension of C. `ldc` param of MKL cblas call.
+        );
+    }
+    //else if(mode == ten_dims.size()-1) {
+        //// TTM on last mode
     //}
-    ////else if(mode == ten_dims.size()-1) {
-        ////// TTM on last mode
-    ////}
-    //else {
-    //}
+    else {
+    }
 
-    return T;
+    return TO;
 }
 
 #endif

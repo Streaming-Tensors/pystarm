@@ -25,7 +25,7 @@
 import unittest
 import pystarm
 import numpy as np
-import pyttb
+import pyttb as ttb
 import os
 
 class TensorTestCase(unittest.TestCase):
@@ -40,8 +40,8 @@ class TensorTestCase(unittest.TestCase):
         flag = np.allclose(arr1, arr2)
         self.assertEqual(flag, True)
 
-    def test_ttm(self):
-        """Test ttm in the first dimension"""
+    def test_ttm_first_mode(self):
+        """Test ttm in the first mode"""
         ten_nelm = 120
         ten_dims = (5, 4, 3, 2)
         ten_ndim = len(ten_dims)
@@ -59,8 +59,10 @@ class TensorTestCase(unittest.TestCase):
         # ten3 = ttb.tensor(arr1)
 
         arr3 = np.frombuffer(ten2, dtype=np.float64).reshape(ten2.getdims(), order='F', copy = False)
-        flag = np.allclose(arr1, arr3)
+        ten3 = ttb.tensor(arr1, copy=True).ttm(arr2, 0)
+        flag = np.allclose(ten3.data, arr3)
         self.assertEqual(flag, True)
+
 
     # def test_matmul(self):
         # """Test matrix multiplication"""

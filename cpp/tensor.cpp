@@ -37,11 +37,11 @@ class Tensor{
     Tensor(size_t buflen, size_t ndim, std::vector<size_t> dims){
         assert(ndim == dims.size());
         this->ndim = ndim;
-        for(size_t i = 0; i < ndim; i++) this->dims[i] = dims[i];
+        this->dims = dims;
 
         size_t x = 1;
         for(size_t i = 0; i < dims.size(); i++){
-            x = dims[i];
+            x = x * dims[i];
         }
         assert(x == buflen);
 
