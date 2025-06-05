@@ -15,6 +15,13 @@
 - numpy
 - MKL
 
+### Directory structure
+`cpp` directory contains all the cpp codes which are wrapped with Python layer to expose the computations as Python package
+- `matrix.cpp` contains the matrix class implementation
+- `tensor.cpp` contains the tensor class implementation
+- `ops.cpp` contains implementation of necessary matrix and tensor operations
+- `starm.cpp` contains definition of Python bindings of C++ implementations of data structures and operations
+
 ### Build
 - Bulding with Intel compiler resulted in errors which is yet to be figured out
 - In experiments, we built with default GNU compiler avilable on NERSC Perlmutter

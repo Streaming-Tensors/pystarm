@@ -9,7 +9,7 @@ LIB = -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a \
 	  -lpthread -lm -ldl
 
 # Source files
-SRC = starm.cpp
+SRC = cpp/starm.cpp
 # Output shared library
 TARGET = pystarm$(shell python3-config --extension-suffix)
 
