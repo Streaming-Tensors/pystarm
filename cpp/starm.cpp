@@ -71,7 +71,8 @@ PYBIND11_MODULE(pystarm, m) {
         .def("clear", &Tensor::clear, "Free memory of the underlying data buffer")
         .def("getdims", &Tensor::getdims, "Get tensor dimensions");
 	m.def("matmul", &matmul, "Multiply two matrices and return a new result matrix");
-	m.def("ttm", &ttm, "Tensor times matrix multiply on a specific mode");
+	m.def("ttm_loop", &ttm_loop, "Tensor times matrix multiply on a specific mode by looping");
+	m.def("ttm", &ttm, "Tensor times matrix multiply on a specific mode by batched BLAS");
 }
 
 #endif

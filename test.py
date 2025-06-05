@@ -56,25 +56,52 @@ class TensorTestCase(unittest.TestCase):
         
         ten2 = pystarm.ttm(ten1, mat2, 0) # On the first mode (0+1th mode)
 
-        # ten3 = ttb.tensor(arr1)
-
         arr3 = np.frombuffer(ten2, dtype=np.float64).reshape(ten2.getdims(), order='F', copy = False)
         ten3 = ttb.tensor(arr1, copy=True).ttm(arr2, 0)
         flag = np.allclose(ten3.data, arr3)
         self.assertEqual(flag, True)
 
+    def test_ttm_last_mode(self):
+        """Test ttm in the last mode"""
+        ten_nelm = 120
+        ten_dims = (5, 4, 3, 2)
+        ten_ndim = len(ten_dims)
+        arr1 = np.arange(ten_nelm, dtype=np.float64).reshape(ten_dims, order='F')
+        ten1 = pystarm.Tensor(arr1, ten_ndim, ten_dims)
 
-    # def test_matmul(self):
-        # """Test matrix multiplication"""
-        # arr1 = np.arange(12, dtype=np.float64).reshape((4,3), order='F')
-        # arr2 = np.arange(12, dtype=np.float64).reshape((3,4), order='F')
-        # arr3 = np.matmul(arr1, arr2)
-        # mat1 = pystarm.Matrix(arr1, 4, 3)
-        # mat2 = pystarm.Matrix(arr2, 3, 4)
-        # mat3 = pystarm.matmul(mat1, mat2)
-        # arr4 = np.frombuffer(mat3, dtype=np.float64).reshape(mat3.getdims(), order='F', copy = False)
-        # flag = np.allclose(arr3, arr4)
-        # self.assertEqual(flag, True)
+        mat_nelm = 3*2 # 6 elements
+        mat_dims = (3, 2)
+        mat_ndim = len(ten_dims)
+        arr2 = np.arange(mat_nelm, dtype=np.float64).reshape(mat_dims, order='F')
+        mat2 = pystarm.Matrix(arr2, mat_dims[0], mat_dims[1])
+        
+        ten2 = pystarm.ttm(ten1, mat2, 3) # On the last(4th) mode (3+1th mode)
+
+        arr3 = np.frombuffer(ten2, dtype=np.float64).reshape(ten2.getdims(), order='F', copy = False)
+        ten3 = ttb.tensor(arr1, copy=True).ttm(arr2, 3)
+        flag = np.allclose(ten3.data, arr3)
+        self.assertEqual(flag, True)
+
+    def test_ttm_middle_mode(self):
+        """Test ttm in a middle mode"""
+        ten_nelm = 120
+        ten_dims = (5, 4, 3, 2)
+        ten_ndim = len(ten_dims)
+        arr1 = np.arange(ten_nelm, dtype=np.float64).reshape(ten_dims, order='F')
+        ten1 = pystarm.Tensor(arr1, ten_ndim, ten_dims)
+
+        mat_nelm = 2*3 # 6 elements
+        mat_dims = (2, 3)
+        mat_ndim = len(ten_dims)
+        arr2 = np.arange(mat_nelm, dtype=np.float64).reshape(mat_dims, order='F')
+        mat2 = pystarm.Matrix(arr2, mat_dims[0], mat_dims[1])
+        
+        ten2 = pystarm.ttm(ten1, mat2, 2) # On the third mode (2+1th mode)
+
+        arr3 = np.frombuffer(ten2, dtype=np.float64).reshape(ten2.getdims(), order='F', copy = False)
+        ten3 = ttb.tensor(arr1, copy=True).ttm(arr2, 2)
+        flag = np.allclose(ten3.data, arr3)
+        self.assertEqual(flag, True)
 
 class MatrixTestCase(unittest.TestCase):
     def test_matrix_creation(self):
