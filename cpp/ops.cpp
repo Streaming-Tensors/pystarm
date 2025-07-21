@@ -10,6 +10,7 @@
 #include <iostream>
 #include <vector>
 #include <cassert>
+#include <tuple>
 #include <omp.h>
 #include <mkl.h>
 #include "matrix.cpp"
@@ -45,6 +46,85 @@ Matrix matmul(Matrix& A, Matrix& B){
 
     return C;
 }
+
+std::tuple<Matrix, std::vector<double>, Matrix> svd(Matrix A, 
+                                                    bool verbose=false) {
+  size_t r = std::min(A.nrow, A.ncol);
+  Matrix U(A.nrow*r, A.nrow, r);
+  Matrix Vt(r*A.ncol, r, A.ncol);
+  std::vector<double> s(r);
+
+  // sizes in int for DGESVD
+  int m = A.nrow, n = A.ncol;
+  int lda = m, ldu = m, ldvt = r;
+  
+  if (verbose) {
+    A.print();
+    printf("A.nrow, A.ncol, r: %d %d %d\n", A.nrow, A.ncol, r);
+    printf("m, n: %d %d\n", m, n);
+    printf("lda, ldu, ldvt: %d %d %d\n", lda, ldu, ldvt);
+  }
+
+  int info, lwork;
+  double *work, wkopt;
+
+  lwork = -1; // Optimal workspace query
+  
+  // Workspace query
+  dgesvd(
+    "S", // JOBU: Option for computing all or part of U. 'S' is the first (m,n) columns. 
+    "S", // JOBVT: Option for computing all or part of Vt. 'S' is the first (m,n) rows.
+    &m, // M: No. of rows of the input matrix.
+    &n, // N: No. of columns of the input matrix.
+    A.data_ptr, // A: Input matrix. Contents destroyed during the computation.
+    &lda, // LDA: Leading dimension of A.
+    s.data(), // S: Array holding the singular values of A.
+    U.data_ptr, // U: Matrix holding left singular vectors of A.
+    &ldu, // LDU: Leading dimension of U.
+    Vt.data_ptr, // Vt: Matrix holding the right singular vectors of A.
+    &ldvt, // LDVT: Leading dimension of Vt.
+    &wkopt, // WORK: Work array containing uncoverged elements on failure.
+    &lwork, // LWORK: Dimension of the array WORK.
+    &info // INFO: Exit code.
+  );
+
+  lwork = (int) wkopt;
+  work  = (double*) malloc(lwork * sizeof(double));
+
+  if (verbose) {
+    printf("Size of the array: %d\n", lwork);
+    printf("Exit code for DGESVD: %d\n", info);
+  }
+
+  // Compute the thin SVD
+  dgesvd(
+    "S", // JOBU: Option for computing all or part of U. 'S' is the first (m,n) columns. 
+    "S", // JOBVT: Option for computing all or part of Vt. 'S' is the first (m,n) rows.
+    &m, // M: No. of rows of the input matrix.
+    &n, // N: No. of columns of the input matrix.
+    A.data_ptr, // A: Input matrix. Contents destroyed during the computation.
+    &lda, // LDA: Leading dimension of A.
+    s.data(), // S: Array holding the singular values of A.
+    U.data_ptr, // U: Matrix holding left singular vectors of A.
+    &ldu, // LDU: Leading dimension of U.
+    Vt.data_ptr, // Vt: Matrix holding the right singular vectors of A.
+    &ldvt, // LDVT: Leading dimension of Vt.
+    work, // WORK: Work array containing uncoverged elements on failure.
+    &lwork, // LWORK: Dimension of the array WORK.
+    &info // INFO: Exit code.
+  );
+
+  if (verbose) {
+    printf("Exit code for DGESVD: %d\n", info);
+    A.print();
+  }
+
+  // Free workspace
+  free(work);
+
+  return std::make_tuple(U, s, Vt);
+}
+
 
 Tensor ttm_loop(Tensor& T, Matrix& M, size_t mode){
     std::vector<size_t> ten_dims = T.getdims();

@@ -142,5 +142,22 @@ class MatrixTestCase(unittest.TestCase):
         flag = np.allclose(arr3, arr4)
         self.assertEqual(flag, True)
 
+    def test_svd(self):
+        """Test matrix SVD"""
+        Apy = np.arange(12, dtype=np.float64).reshape((4,3), order='F')
+        Upy, spy, Vpyt = np.linalg.svd(Apy, full_matrices=False)
+
+        Amat = pystarm.Matrix(Apy, 4, 3)
+        Uc, sc, Vct = pystarm.svd(Amat, True)
+
+        # Check if the arrays are not overwritten
+        Apy2  = np.frombuffer(Amat, dtype=np.float64).reshape(Amat.getdims(), order='F', copy = False)
+        flag1 = np.allclose(Apy, Apy2)
+        self.assertEqual(flag1, True)
+
+        # Check if the singular values are the same
+        flag2 = np.allclose(sc, spy)
+        self.assertEqual(flag2, True)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

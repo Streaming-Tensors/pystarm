@@ -74,6 +74,13 @@ public:
         : nrow(m), ncol(n) {
         this->data_ptr = static_cast<double*>(ptr);
     }
+
+    // Copy constructor (deep copy of data)
+    Matrix(const Matrix &obj) : nrow(obj.nrow), ncol(obj.ncol) {
+      size_t buflen  = this->nrow * this->ncol;
+      this->data_ptr = (double*) malloc(buflen * sizeof(double));
+      std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+    }
     
     ~Matrix() {
         //// Commenting this out to avoid double free
