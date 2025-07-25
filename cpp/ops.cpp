@@ -55,8 +55,8 @@ std::tuple<Matrix, std::vector<double>, Matrix> svd(Matrix A,
   std::vector<double> s(r);
 
   // sizes in int for DGESVD
-  int m = A.nrow, n = A.ncol;
-  int lda = m, ldu = m, ldvt = r;
+  MKL_INT m = A.nrow, n = A.ncol;
+  MKL_INT lda = m, ldu = m, ldvt = r;
   
   if (verbose) {
     A.print();
@@ -65,7 +65,7 @@ std::tuple<Matrix, std::vector<double>, Matrix> svd(Matrix A,
     printf("lda, ldu, ldvt: %d %d %d\n", lda, ldu, ldvt);
   }
 
-  int info, lwork;
+  MKL_INT info, lwork;
   double *work, wkopt;
 
   lwork = -1; // Optimal workspace query
