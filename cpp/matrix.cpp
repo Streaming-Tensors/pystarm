@@ -98,6 +98,48 @@ public:
         *(this->data_ptr + i + j * this->nrow) = val;
     }
 
+    std::vector<double> getrow(size_t i) {
+      assert(i < this->nrow);
+
+      std::vector<double> row;
+      
+      for (size_t j = 0; j < this->ncol; j++) {
+        row.push_back(get(i, j));
+      }
+
+      return row;
+    }
+    
+    void setrow(size_t i, std::vector<double> row) {
+      assert(row.size() == this->ncol);
+      assert(i < this->nrow);
+
+      for (size_t j = 0; j < this->ncol; j++) {
+        set(i, j, row[j]);
+      }
+    }
+
+    std::vector<double> getcol(size_t j) {
+      assert(j < this->ncol);
+
+      std::vector<double> col;
+      
+      for (size_t i = 0; i < this->nrow; i++) {
+        col.push_back(get(i, j));
+      }
+
+      return col;
+    }
+
+    void setcol(size_t j, std::vector<double> col) {
+      assert(col.size() == this->nrow);
+      assert(j < this->ncol);
+
+      for (size_t i = 0; i < this->nrow; i++) {
+        set(i, j, col[i]);
+      }
+    }
+
     void clear(){
         std::cout << "Clearing matrix" << std::endl;
         if (this->data_ptr != NULL){

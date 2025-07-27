@@ -45,6 +45,10 @@ PYBIND11_MODULE(pystarm, m) {
         .def(py::init<py::buffer& , size_t, size_t>())
         .def("get", &Matrix::get, "Get (i,j) th entry of the matrix")
         .def("set", &Matrix::set, "Set (i,j) th entry of the matrix")
+        .def("getrow", &Matrix::getrow, "Get i-th row of the matrix")
+        .def("setrow", &Matrix::setrow, "Set i-th row of the matrix")
+        .def("getcol", &Matrix::getcol, "Get j-th column of the matrix")
+        .def("setcol", &Matrix::setcol, "Set j-th column of the matrix")
         .def("clear", &Matrix::clear, "Free memory of the underlying data buffer")
         .def("getdims", &Matrix::getdims, "Get matrix dimensions")
         .def("print", &Matrix::print, "Print contents of the matrix");
@@ -69,7 +73,9 @@ PYBIND11_MODULE(pystarm, m) {
         })
         .def(py::init<py::buffer& , size_t, std::vector<size_t> >())
         .def("clear", &Tensor::clear, "Free memory of the underlying data buffer")
-        .def("getdims", &Tensor::getdims, "Get tensor dimensions");
+        .def("getdims", &Tensor::getdims, "Get tensor dimensions")
+        .def("getfrontalslice", &Tensor::getfrontalslice, "Get frontal slice")
+        .def("setfrontalslice", &Tensor::setfrontalslice, "Set frontal slice");
 	m.def("matmul", &matmul, "Multiply two matrices and return a new result matrix");
 	m.def("svd", &svd, "Compute the thin SVD of a matrix and return a tuple of the factors.",
         py::arg("A"), py::arg("verbose") = false);

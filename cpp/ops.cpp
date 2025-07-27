@@ -55,8 +55,8 @@ std::tuple<Matrix, std::vector<double>, Matrix> svd(Matrix A,
   std::vector<double> s(r);
 
   // sizes in int for DGESVD
-  MKL_INT m = A.nrow, n = A.ncol;
-  MKL_INT lda = m, ldu = m, ldvt = r;
+  lapack_int m = A.nrow, n = A.ncol;
+  lapack_int lda = m, ldu = m, ldvt = r;
   
   if (verbose) {
     A.print();
@@ -65,7 +65,7 @@ std::tuple<Matrix, std::vector<double>, Matrix> svd(Matrix A,
     printf("lda, ldu, ldvt: %d %d %d\n", lda, ldu, ldvt);
   }
 
-  MKL_INT info, lwork;
+  lapack_int info, lwork;
   double *work, wkopt;
 
   lwork = -1; // Optimal workspace query
@@ -88,7 +88,7 @@ std::tuple<Matrix, std::vector<double>, Matrix> svd(Matrix A,
     &info // INFO: Exit code.
   );
 
-  lwork = (int) wkopt;
+  lwork = (lapack_int) wkopt;
   work  = (double*) malloc(lwork * sizeof(double));
 
   if (verbose) {
@@ -326,5 +326,9 @@ Tensor ttm(Tensor& T, Matrix& M, size_t mode){
 
     return TO;
 }
+
+//std::tuple<Tensor, Matrix, Tensor> svd(Tensor A, bool verbose=false) {
+//  // TODO: Call slice-wise SVDs
+//}
 
 #endif
