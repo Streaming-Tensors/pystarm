@@ -81,6 +81,8 @@ PYBIND11_MODULE(pystarm, m) {
         py::arg("A"), py::arg("verbose") = false);
 	m.def("ttm_loop", &ttm_loop, "Tensor times matrix multiply on a specific mode by looping");
 	m.def("ttm", &ttm, "Tensor times matrix multiply on a specific mode by batched BLAS");
+	m.def("slicewise_svd", &slicewise_svd, "Compute the slice-wise thin SVD of a tensor",
+        py::arg("A"), py::arg("verbose") = false);
 }
 
 #endif

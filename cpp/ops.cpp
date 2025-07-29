@@ -10,6 +10,7 @@
 #include <iostream>
 #include <vector>
 #include <cassert>
+#include <numeric>
 #include <tuple>
 #include <omp.h>
 #include <mkl.h>
@@ -327,8 +328,39 @@ Tensor ttm(Tensor& T, Matrix& M, size_t mode){
     return TO;
 }
 
-//std::tuple<Tensor, Matrix, Tensor> svd(Tensor A, bool verbose=false) {
-//  // TODO: Call slice-wise SVDs
-//}
+std::tuple<Tensor, Matrix, Tensor> slicewise_svd(Tensor A, bool verbose=false) {
+  size_t r = std::min(A.dims[0], A.dims[1]);
+
+  // Create the variables
+  std::vector<size_t> Udims = A.dims;
+  Udims[1] = r;
+  size_t Ubuflen = std::accumulate(Udims.begin(), Udims.end(), 1, std::multiplies<size_t>());
+  Tensor U(Ubuflen, A.ndim, Udims);
+
+  std::vector<size_t> Vtdims = A.dims;
+  Vtdims[0] = r;
+  size_t Vtbuflen = std::accumulate(Vtdims.begin(), Vtdims.end(), 1, std::multiplies<size_t>());
+  Tensor Vt(Vtbuflen, A.ndim, Vtdims);
+
+  Matrix S(r*A.nslices, r, A.nslices);
+  
+
+  // Call slice-wise SVDs
+  for (size_t i = 0; i < A.nslices; i++) {
+    Matrix Us(Udims[0] * r, Udims[0], r);
+    Matrix Vst(r * Vtdims[1], r, Vtdims[1]);
+    std::vector<double> s;
+
+    // Compute the SVD
+    std::tie(Us, s, Vst) = svd(A.getfrontalslice(i));
+
+    // Set the output tensors
+    U.setfrontalslice(Us, i);
+    S.setcol(s, i);
+    Vt.setfrontalslice(Vst, i);
+  }
+
+  return std::make_tuple(U, S, Vt);
+}
 
 #endif

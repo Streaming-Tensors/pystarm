@@ -110,7 +110,7 @@ public:
       return row;
     }
     
-    void setrow(size_t i, std::vector<double> row) {
+    void setrow(const std::vector<double> &row, size_t i) {
       assert(row.size() == this->ncol);
       assert(i < this->nrow);
 
@@ -131,7 +131,7 @@ public:
       return col;
     }
 
-    void setcol(size_t j, std::vector<double> col) {
+    void setcol(const std::vector<double> &col, size_t j) {
       assert(col.size() == this->nrow);
       assert(j < this->ncol);
 
