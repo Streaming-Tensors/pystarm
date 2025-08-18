@@ -162,6 +162,19 @@ class JaggedTensor{
         assert(i < this->nslices);
         return this->slices[i];
     }
+
+    void clear(){
+        for (auto &slice : this->slices) {
+            Matrix U = std::get<0>(slice);
+            std::vector<double> s = std::get<1>(slice);
+            Matrix Vt = std::get<2>(slice);
+            U.clear();
+            s.clear();
+            Vt.clear();
+        }
+        this->slices.clear();
+        this->nslices = 0;
+    }
 };
 
 #endif
