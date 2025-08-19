@@ -69,6 +69,16 @@ PYBIND11_MODULE(pystarm, m) {
         .def("getfrontalslice", &Tensor::getfrontalslice, "Get a frontal slice")
         .def("getfrontalslice_copy", &Tensor::getfrontalslice_copy, "Get a deep copy of a frontal slice")
         .def("setfrontalslice", &Tensor::setfrontalslice, "Set a frontal slice");
+
+    py::class_<JaggedTensor>(m, "JaggedTensor")
+        .def(py::init<>())
+        .def_readonly("nslices", &JaggedTensor::nslices, "Number of slices in the tensor")
+        .def("addfrontalslice", &JaggedTensor::addfrontalslice, "Add a frontal slice to the jagged tensor",
+            py::arg("U"), py::arg("s"), py::arg("Vt"), py::arg("tol") = 0.0)
+        .def("getfrontalslice", &JaggedTensor::getfrontalslice, "Get a frontal slice by index",
+            py::arg("i"))
+        .def("clear", &JaggedTensor::clear, "Clear all slices in the jagged tensor");
+
 	m.def("matmul", &matmul, "Multiply two matrices and return a new result matrix");
 	m.def("svd", &svd, "Compute the thin SVD of a matrix and return a tuple of the factors.",
         py::arg("A"), py::arg("verbose") = false);
