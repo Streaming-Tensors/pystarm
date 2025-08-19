@@ -146,11 +146,13 @@ class JaggedTensor{
         // Copy the data
         std::copy(U.data_ptr, U.data_ptr + U.nrow * r, slice_U.data_ptr);
         std::copy(s.begin(), s.begin() + r, slice_s.begin());
-        // Vt is column major, but we only want to copy r elements from each column
+        // Vt is column major, but we only want to copy the first r elements from each column
         size_t start = 0;
+        // todo: can use omp parallel for for performance
+        // #pragma omp parallel for schedule(static) private(start)
         for (size_t i = 0; i < Vt.ncol; i++) {
+            start = i * Vt.nrow;
             std::copy(Vt.data_ptr + start, Vt.data_ptr + start + r, slice_Vt.data_ptr + i*r);
-            start += Vt.nrow;
         }
         // Add slice to list
         this->slices.push_back(std::make_tuple(slice_U, slice_s, slice_Vt));
@@ -168,6 +170,7 @@ class JaggedTensor{
             Matrix U = std::get<0>(slice);
             std::vector<double> s = std::get<1>(slice);
             Matrix Vt = std::get<2>(slice);
+            // todo: ideally we should call destructors for U, s, and Vt, but just clearing for now
             U.clear();
             s.clear();
             Vt.clear();
