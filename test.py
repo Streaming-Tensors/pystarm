@@ -54,7 +54,7 @@ class TensorTestCase(unittest.TestCase):
         mat_ndim = len(ten_dims)
         arr2 = np.arange(mat_nelm, dtype=np.float64).reshape(mat_dims, order='F')
         mat2 = pystarm.Matrix(arr2, mat_dims[0], mat_dims[1])
-        
+
         ten2 = pystarm.ttm(ten1, mat2, 0) # On the first mode (0+1th mode)
 
         arr3 = np.frombuffer(ten2, dtype=np.float64).reshape(ten2.getdims(), order='F', copy = False)
@@ -75,7 +75,7 @@ class TensorTestCase(unittest.TestCase):
         mat_ndim = len(ten_dims)
         arr2 = np.arange(mat_nelm, dtype=np.float64).reshape(mat_dims, order='F')
         mat2 = pystarm.Matrix(arr2, mat_dims[0], mat_dims[1])
-        
+
         ten2 = pystarm.ttm(ten1, mat2, 3) # On the last(4th) mode (3+1th mode)
 
         arr3 = np.frombuffer(ten2, dtype=np.float64).reshape(ten2.getdims(), order='F', copy = False)
@@ -96,7 +96,7 @@ class TensorTestCase(unittest.TestCase):
         mat_ndim = len(ten_dims)
         arr2 = np.arange(mat_nelm, dtype=np.float64).reshape(mat_dims, order='F')
         mat2 = pystarm.Matrix(arr2, mat_dims[0], mat_dims[1])
-        
+
         ten2 = pystarm.ttm(ten1, mat2, 2) # On the third mode (2+1th mode)
 
         arr3 = np.frombuffer(ten2, dtype=np.float64).reshape(ten2.getdims(), order='F', copy = False)
@@ -106,7 +106,7 @@ class TensorTestCase(unittest.TestCase):
 
     def test_slicewise_svd(self):
         """Test slicewise SVD"""
-        
+
         def slicewise_svd(A):
             dims    = A.shape
             nslices = np.prod(dims[2:])
@@ -128,7 +128,7 @@ class TensorTestCase(unittest.TestCase):
               slice_idx += 1
 
             return U, S, Vt
-        
+
         def slicewise_checks(Apy, Aten):
             # Compute the slicewise SVD
             Uc, Sc, Vtc = pystarm.slicewise_svd(Aten)
@@ -151,14 +151,14 @@ class TensorTestCase(unittest.TestCase):
                 Vtsp = np.frombuffer(Vts, dtype=np.float64).reshape(Vts.getdims(), order='F', copy=False)
                 Ssp  = Spy2[:, ii]
                 Bsp  = Usp @ (np.diag(Ssp) @ Vtsp)
-        
+
                 Bpy = Upy[:, :, ii] @ (np.diag(Spy[:, ii]) @ Vtpy[:, :, ii])
 
                 # Check if the reconstructions are close
                 sflags[ii] = np.allclose(Bsp, Bpy)
 
             flag2 = np.all(sflags)
-              
+
             return flag1, flag2
 
         # Try two examples
@@ -168,11 +168,11 @@ class TensorTestCase(unittest.TestCase):
         ten_ndim = len(ten_dims)
         arr1 = np.arange(ten_nelm, dtype=np.float64).reshape(ten_dims, order='F')
         ten1 = pystarm.Tensor(arr1, ten_ndim, ten_dims)
-        
+
         [flag1, flag2] = slicewise_checks(arr1, ten1)
         self.assertEqual(flag1, True)
         self.assertEqual(flag2, True)
-      
+
         ## 4-dimensional example
         ten_nelm = 120
         ten_dims = (5, 4, 3, 2)
@@ -343,6 +343,45 @@ class MatrixTestCase(unittest.TestCase):
         # Check if the singular values are the same
         flag2 = np.allclose(sc, spy)
         self.assertEqual(flag2, True)
+
+class JaggedTensorTestCase(unittest.TestCase):
+    def test_jagged_tensor_creation(self):
+        """Test jagged tensor creation and operations"""
+        # Create a jagged tensor
+        jagged = pystarm.JaggedTensor()
+        frontal_slices = []
+        # Add frontal slices
+        for i in range(5):
+            # !! Note: U, s, and Vt are explicitly converted to column major order
+            U = np.asfortranarray(np.random.rand(3, 4))
+            s = np.asfortranarray(np.random.rand(4))
+            Vt = np.asfortranarray(np.random.rand(4, 2))
+            frontal_slices.append((U, s, Vt))
+            Umat = pystarm.Matrix(U, 3, 4)
+            Vtmat = pystarm.Matrix(Vt, 4, 2)
+            # todo: s is passed as a list not as a pystarm object
+            jagged.addfrontalslice(Umat, s.tolist(), Vtmat)
+        # Get frontal slices and check if allclose
+        for i in range(5):
+            # Get i-th frontal slice
+            (U0, s0, Vt0) = jagged.getfrontalslice(i)
+            # !! Note: reading U0, s0, and Vt0 as column major because pystarm.Matrix assumes data is column major
+            U0_arr = np.frombuffer(U0, dtype=np.float64).reshape(Umat.getdims(), order='F', copy=False)
+            s0_arr = np.frombuffer(np.array(s0), dtype=np.float64).reshape(s.shape, order='F', copy=False)
+            Vt0_arr = np.frombuffer(Vt0, dtype=np.float64).reshape(Vtmat.getdims(), order='F', copy=False)
+
+            (U, s, Vt) = frontal_slices[i]
+            flag1 = np.allclose(U0_arr, U)
+            flag2 = np.allclose(s0_arr, s)
+            flag3 = np.allclose(Vt0_arr, Vt)
+
+            self.assertEqual(flag1, True)
+            self.assertEqual(flag2, True)
+            self.assertEqual(flag3, True)
+        # Clear the jagged tensor
+        # todo: this does not catch double free errors nor does it check if data ptrs for (U, s, Vt) in each slice are invalidated
+        jagged.clear()
+        self.assertEqual(jagged.nslices, 0)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
