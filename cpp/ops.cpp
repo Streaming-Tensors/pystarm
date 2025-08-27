@@ -77,7 +77,7 @@ std::tuple<Matrix, std::vector<double>, Matrix> svd(Matrix A,
     "S", // JOBVT: Option for computing all or part of Vt. 'S' is the first (m,n) rows.
     &m, // M: No. of rows of the input matrix.
     &n, // N: No. of columns of the input matrix.
-    A.data_ptr, // A: Input matrix. Contents destroyed during the computation.
+    A.data_ptr, // A: Input matrix.
     &lda, // LDA: Leading dimension of A.
     s.data(), // S: Array holding the singular values of A.
     U.data_ptr, // U: Matrix holding left singular vectors of A.
@@ -120,8 +120,9 @@ std::tuple<Matrix, std::vector<double>, Matrix> svd(Matrix A,
     A.print();
   }
 
-  // Free workspace
+  // Free workspace and the copied matrix
   free(work);
+  A.clear();
 
   return std::make_tuple(U, s, Vt);
 }
@@ -328,7 +329,7 @@ Tensor ttm(Tensor& T, Matrix& M, size_t mode){
     return TO;
 }
 
-std::tuple<Tensor, Matrix, Tensor> slicewise_svd(Tensor A, bool verbose=false) {
+std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=false) {
   size_t r = std::min(A.dims[0], A.dims[1]);
 
   // Create the variables
@@ -343,22 +344,27 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd(Tensor A, bool verbose=false) {
   Tensor Vt(Vtbuflen, A.ndim, Vtdims);
 
   Matrix S(r*A.nslices, r, A.nslices);
-  
+ 
+  // Temporary slicewise SVD objects 
+  Matrix Us(Udims[0] * r, Udims[0], r);
+  Matrix Vst(r * Vtdims[1], r, Vtdims[1]);
+  std::vector<double> s;
 
   // Call slice-wise SVDs
   for (size_t i = 0; i < A.nslices; i++) {
-    Matrix Us(Udims[0] * r, Udims[0], r);
-    Matrix Vst(r * Vtdims[1], r, Vtdims[1]);
-    std::vector<double> s;
 
     // Compute the SVD
-    std::tie(Us, s, Vst) = svd(A.getfrontalslice(i));
+    std::tie(Us, s, Vst) = svd(A.getfrontalslice_copy(i));
 
     // Set the output tensors
     U.setfrontalslice(Us, i);
     S.setcol(s, i);
     Vt.setfrontalslice(Vst, i);
   }
+
+  // Clear temporary stuff
+  Us.clear();
+  Vst.clear();
 
   return std::make_tuple(U, S, Vt);
 }

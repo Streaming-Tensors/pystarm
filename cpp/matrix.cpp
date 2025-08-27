@@ -77,9 +77,67 @@ public:
 
     // Copy constructor (deep copy of data)
     Matrix(const Matrix &obj) : nrow(obj.nrow), ncol(obj.ncol) {
+      std::cout << "Copy constructor" << std::endl;
       size_t buflen  = this->nrow * this->ncol;
       this->data_ptr = (double*) malloc(buflen * sizeof(double));
       std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+    }
+
+    // Copy assignment operator
+    Matrix& operator=(const Matrix &obj) {
+      std::cout << "Copy assignment" << std::endl;
+
+      if (this != &obj) {
+        // Free current resource
+        this->clear();
+
+        // Copy the other object over
+        this->nrow     = obj.nrow;
+        this->ncol     = obj.ncol;
+
+        size_t buflen  = this->nrow * this->ncol;
+        this->data_ptr = (double*) malloc(buflen * sizeof(double));
+        std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+      }
+
+      return *this;
+    }
+
+    // Move constructor (shallow copy)
+    Matrix(Matrix &&obj) noexcept {
+      std::cout << "Move constructor" << std::endl;
+
+      // Point to the other object      
+      this->nrow = obj.nrow;
+      this->ncol = obj.ncol;
+      this->data_ptr = obj.data_ptr;
+
+      // Clear the other other object
+      obj.nrow     = 0;
+      obj.ncol     = 0;
+      obj.data_ptr = nullptr;
+    }
+    
+    // Move assignment operator
+    Matrix& operator=(Matrix &&obj) noexcept {
+      std::cout << "Move assignment" << std::endl;
+
+      if (this != &obj) {
+        // Free current resource
+        this->clear();
+
+        // Point to the other object
+        this->nrow     = obj.nrow;
+        this->ncol     = obj.ncol;
+        this->data_ptr = obj.data_ptr;
+
+        // Clear the other object
+        obj.nrow     = 0;
+        obj.ncol     = 0;
+        obj.data_ptr = nullptr;
+      }
+
+      return *this;
     }
     
     ~Matrix() {
@@ -141,8 +199,8 @@ public:
     }
 
     void clear(){
-        std::cout << "Clearing matrix" << std::endl;
-        if (this->data_ptr != NULL){
+        //std::cout << "Clearing matrix" << std::endl;
+        if (this->data_ptr != nullptr){
             free(this->data_ptr);
         }
     }
@@ -155,6 +213,8 @@ public:
     }
 
     void print(){
+        printf("Memory location: %x\n", this->data_ptr);        
+
         for (size_t i = 0; i < this->nrow; ++i) {
             for (size_t j = 0; j < this->ncol; ++j) {
                 printf("%.2lf\t", this->get(i, j) );

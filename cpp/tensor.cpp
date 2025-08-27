@@ -66,6 +66,7 @@ class Tensor{
 
     // Copy constructor (deep copy of date)
     Tensor(const Tensor &obj) : ndim(obj.ndim), dims(obj.dims), nslices(obj.nslices) {
+      std::cout << "Copy constructor" << std::endl;
       size_t buflen = 1;
       for (size_t i = 0; i < ndim; i++) {
         buflen = buflen * dims[i];
@@ -73,13 +74,106 @@ class Tensor{
       this->data_ptr = (double *) malloc(buflen * sizeof(double));
       std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
     }
+
+    // Copy assignment operator
+    Tensor& operator=(const Tensor &obj) {
+      std::cout << "Copy assignment" << std::endl;
+
+      if (this != &obj) {
+        // Free current resource
+        this->clear();
+
+        // Copy the other object over
+        this->dims    = obj.dims;
+        this->ndim    = obj.ndim;
+        this->nslices = obj.nslices;
+
+        size_t buflen  = 1;
+        for (size_t i = 0; i < ndim; i++) {
+          buflen = buflen * dims[i];
+        }
+
+        this->data_ptr = (double*) malloc(buflen * sizeof(double));
+        std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+      }
+
+      return *this;
+    }
     
+    // Move constructor (shallow copy)
+    Tensor(Tensor &&obj) noexcept {
+      std::cout << "Move constructor" << std::endl;
+     
+      // Point to the other object 
+      this->dims     = obj.dims;
+      this->ndim     = obj.ndim;
+      this->nslices  = obj.nslices;
+      this->data_ptr = obj.data_ptr;
+
+      // Clear the other other object
+      obj.dims.clear();
+      obj.ndim     = 0;
+      obj.nslices  = 0;
+      obj.data_ptr = nullptr;
+    }
+
+    // Move assignment operator
+    Tensor& operator=(Tensor &&obj) noexcept {
+      std::cout << "Move assignment" << std::endl;
+
+      if (this != &obj) {
+        // Free current resource
+        this->clear();
+
+        // Point to the other object 
+        this->dims     = obj.dims;
+        this->ndim     = obj.ndim;
+        this->nslices  = obj.nslices;
+        this->data_ptr = obj.data_ptr;
+
+        // Clear the other other object
+        obj.dims.clear();
+        obj.ndim     = 0;
+        obj.nslices  = 0;
+        obj.data_ptr = nullptr;
+      }
+
+      return *this;
+    }
+
     // Get tensor dimensions
     std::vector<size_t> getdims(){
         return this->dims;
     }
 
-    /* Get frontal slice
+    /* Get a deep copy of a frontal slice
+       Assuming natural ordering
+       Slices are linearly indexed (0-based indexing)
+    */
+    Matrix getfrontalslice_copy(size_t i) const {
+      size_t buflen  = this->dims[0] * this->dims[1];
+      
+      // Check if requesting a legal slice
+      assert(i < this->nslices);
+  
+      size_t start_idx = i * buflen;   
+      
+    
+      Matrix slice_mat(buflen, this->dims[0], this->dims[1]);
+      std::copy(this->data_ptr + start_idx, 
+        this->data_ptr + (start_idx + buflen), slice_mat.data_ptr);
+      
+      std::cout << "Tensor memory location: " << this->data_ptr
+                << std::endl
+                << "Data memory location: " << this->data_ptr + start_idx
+                << std::endl << "Matrix memory location: "
+                << slice_mat.data_ptr
+                << std::endl;
+
+      return slice_mat;
+    }
+
+    /* Get a frontal slice
        Assuming natural ordering
        Slices are linearly indexed (0-based indexing)
     */
@@ -89,11 +183,17 @@ class Tensor{
       // Check if requesting a legal slice
       assert(i < this->nslices);
   
-      size_t start_idx = i * buflen;   
+      size_t start_idx = i * buflen;
     
-      Matrix slice_mat(buflen, this->dims[0], this->dims[1]);
-      std::copy(this->data_ptr + start_idx, 
-        this->data_ptr + (start_idx + buflen), slice_mat.data_ptr);
+      Matrix slice_mat(this->data_ptr + start_idx, 
+                          this->dims[0], this->dims[1]);
+
+      std::cout << "Tensor memory location: " << this->data_ptr
+                << std::endl
+                << "Data memory location: " << this->data_ptr + start_idx
+                << std::endl << "Matrix memory location: "
+                << slice_mat.data_ptr
+                << std::endl;
 
       return slice_mat;
     }
@@ -114,8 +214,8 @@ class Tensor{
     }
 
     void clear(){
-        std::cout << "Clearing tensor" << std::endl;
-        if (this->data_ptr != NULL){
+        //std::cout << "Clearing tensor" << std::endl;
+        if (this->data_ptr != nullptr){
             free(this->data_ptr);
         }
     }

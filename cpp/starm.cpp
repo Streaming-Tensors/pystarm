@@ -74,8 +74,9 @@ PYBIND11_MODULE(pystarm, m) {
         .def(py::init<py::buffer& , size_t, std::vector<size_t> >())
         .def("clear", &Tensor::clear, "Free memory of the underlying data buffer")
         .def("getdims", &Tensor::getdims, "Get tensor dimensions")
-        .def("getfrontalslice", &Tensor::getfrontalslice, "Get frontal slice")
-        .def("setfrontalslice", &Tensor::setfrontalslice, "Set frontal slice");
+        .def("getfrontalslice", &Tensor::getfrontalslice, "Get a frontal slice")
+        .def("getfrontalslice_copy", &Tensor::getfrontalslice_copy, "Get a deep copy of a frontal slice")
+        .def("setfrontalslice", &Tensor::setfrontalslice, "Set a frontal slice");
 	m.def("matmul", &matmul, "Multiply two matrices and return a new result matrix");
 	m.def("svd", &svd, "Compute the thin SVD of a matrix and return a tuple of the factors.",
         py::arg("A"), py::arg("verbose") = false);
