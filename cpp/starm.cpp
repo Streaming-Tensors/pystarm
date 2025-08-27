@@ -14,8 +14,8 @@
 #include <cassert>
 #include <omp.h>
 #include <mkl.h>
-#include "matrix.cpp"
-#include "tensor.cpp"
+#include "matrix.hpp"
+#include "tensor.hpp"
 #include "ops.cpp"
 
 namespace py = pybind11;

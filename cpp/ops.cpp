@@ -14,8 +14,8 @@
 #include <tuple>
 #include <omp.h>
 #include <mkl.h>
-#include "matrix.cpp"
-#include "tensor.cpp"
+#include "matrix.hpp"
+#include "tensor.hpp"
 
 Matrix matmul(Matrix& A, Matrix& B){
     Matrix C(A.nrow*B.ncol, A.nrow, B.ncol);
