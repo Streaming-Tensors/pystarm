@@ -4,16 +4,9 @@
 #ifndef OPS_CPP
 #define OPS_CPP
 
-#include <cstdio>
-#include <memory>
-#include <cstddef>
-#include <iostream>
-#include <vector>
-#include <cassert>
 #include <numeric>
 #include <tuple>
-#include <omp.h>
-#include <mkl.h>
+#include "utils.hpp"
 #include "matrix.hpp"
 #include "tensor.hpp"
 
@@ -61,11 +54,12 @@ std::tuple<Matrix, std::vector<double>, Matrix> svd(Matrix A,
   
   if (verbose) {
     A.print();
-    printf("A.nrow, A.ncol, r: %d %d %d\n", A.nrow, A.ncol, r);
+    printf("A.nrow, A.ncol, r: %zu %zu %zu\n", A.nrow, A.ncol, r);
     printf("m, n: %d %d\n", m, n);
     printf("lda, ldu, ldvt: %d %d %d\n", lda, ldu, ldvt);
   }
 
+  // Workspace options
   lapack_int info, lwork;
   double *work, wkopt;
 
@@ -124,9 +118,118 @@ std::tuple<Matrix, std::vector<double>, Matrix> svd(Matrix A,
   free(work);
   A.clear();
 
-  return std::make_tuple(U, s, Vt);
+  return std::make_tuple(std::move(U), std::move(s), std::move(Vt));
 }
 
+std::tuple<Matrix, std::vector<double>, Matrix> svdx(Matrix A, size_t k,
+                                                    bool verbose=false) {
+  Matrix U(A.nrow*k, A.nrow, k);
+  Matrix Vt(k*A.ncol, k, A.ncol);
+  std::vector<double> s(std::min(A.nrow, A.ncol));
+
+  // sizes in int for DGESVDX
+  lapack_int m = A.nrow, n = A.ncol;
+  lapack_int lda = m, ldu = m, ldvt = k;
+  
+  if (verbose) {
+    A.print();
+    printf("A.nrow, A.ncol, k: %zu %zu %zu\n", A.nrow, A.ncol, k);
+    printf("m, n: %d %d\n", m, n);
+    printf("lda, ldu, ldvt: %d %d %d\n", lda, ldu, ldvt);
+  }
+
+  // Workspace options
+  lapack_int info, lwork;
+  lapack_int *iwork;
+  double *work, wkopt;
+
+  lwork = -1; // Optimal workspace query
+  iwork = (lapack_int*) malloc((12 * std::min(m, n)) * sizeof(lapack_int));
+
+  // Options for DGESVDX
+  double vl = 0.0, vu = 0.0;
+  lapack_int il = 1, iu = k, ns;
+  
+  // Workspace query
+  dgesvdx(
+    "V", // JOBU: Option for computing all or part of U. 'V' is the columns specified by RANGE. 
+    "V", // JOBVT: Option for computing all or part of Vt. 'S' is the rows specified by RANGE.
+    "I", // RANGE: Option for computing range of singular values. 'I' is [IL, IU] range.
+    &m, // M: No. of rows of the input matrix.
+    &n, // N: No. of columns of the input matrix.
+    A.data_ptr, // A: Input matrix.
+    &lda, // LDA: Leading dimension of A.
+    &vl, // VL: Lower bound for singular value to search. Not referenced for RANGE "I".
+    &vu, // VU: Upper bound for singular value to search. Not referenced for RANGE "I".
+    &il, // IL: Lower index of singular values returned. 1 <= IL <= IU <= min(M, N).
+    &iu, // IU: Upper index of singular values returned. 1 <= IL <= IU <= min(M, N).
+    &ns, // NS: Number of singular values found. Should be IU - IL + 1.
+    s.data(), // S: Array holding the singular values of A.
+    U.data_ptr, // U: Matrix holding left singular vectors of A.
+    &ldu, // LDU: Leading dimension of U.
+    Vt.data_ptr, // Vt: Matrix holding the right singular vectors of A.
+    &ldvt, // LDVT: Leading dimension of Vt.
+    &wkopt, // WORK: Work array containing size of extra memory needed.
+    &lwork, // LWORK: Dimension of the array WORK.
+    iwork, // IWORK: Iwork array containing indices of uncoverged elements on failure.
+    &info // INFO: Exit code.
+  );
+
+  lwork = (lapack_int) wkopt;
+  work  = (double*) malloc(lwork * sizeof(double));
+
+  if (verbose) {
+    printf("Size of the work array: %d\n", lwork);
+    printf("Size of the iwork array: %d\n", 12 * std::min(m, n));
+    printf("Exit code for DGESVDX: %d\n", info);
+  }
+
+  // Compute the truncated SVD
+  dgesvdx(
+    "V", // JOBU: Option for computing all or part of U. 'V' is the columns specified by RANGE. 
+    "V", // JOBVT: Option for computing all or part of Vt. 'S' is the rows specified by RANGE.
+    "I", // RANGE: Option for computing range of singular values. 'I' is [IL, IU] range.
+    &m, // M: No. of rows of the input matrix.
+    &n, // N: No. of columns of the input matrix.
+    A.data_ptr, // A: Input matrix. Contents destroyed during the computation.
+    &lda, // LDA: Leading dimension of A.
+    &vl, // VL: Lower bound for singular value to search. Not referenced for RANGE "I".
+    &vu, // VU: Upper bound for singular value to search. Not referenced for RANGE "I".
+    &il, // IL: Lower index of singular values returned. 1 <= IL <= IU <= min(M, N).
+    &iu, // IU: Upper index of singular values returned. 1 <= IL <= IU <= min(M, N).
+    &ns, // NS: Number of singular values found. Should be IU - IL + 1.
+    s.data(), // S: Array holding the singular values of A.
+    U.data_ptr, // U: Matrix holding left singular vectors of A.
+    &ldu, // LDU: Leading dimension of U.
+    Vt.data_ptr, // Vt: Matrix holding the right singular vectors of A.
+    &ldvt, // LDVT: Leading dimension of Vt.
+    work, // WORK: Additional scratch space.
+    &lwork, // LWORK: Dimension of the array WORK.
+    iwork, // IWORK: Iwork array containing indices of uncoverged elements on failure.
+    &info // INFO: Exit code.
+  );
+
+  if (verbose) {
+    printf("Exit code for DGESVDX: %d\n", info);
+    #ifdef _MEMPRINT
+    printf("Memory location of work: %p\n", work);
+    printf("Memory location of iwork: %p\n", iwork);
+    #endif
+    A.print();
+    U.print();
+    Vt.print();
+  }
+
+  // Resize the singular values to k
+  s.resize(k);
+
+  // Free workspace and the copied matrix
+  free(work);
+  free(iwork);
+  A.clear();
+
+  return std::make_tuple(std::move(U), std::move(s), std::move(Vt));
+}
 
 Tensor ttm_loop(Tensor& T, Matrix& M, size_t mode){
     std::vector<size_t> ten_dims = T.getdims();

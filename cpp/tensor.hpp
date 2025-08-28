@@ -1,19 +1,12 @@
-// tensor.cpp
+// tensor.hpp
 // Tensor class implementation
 
-#ifndef TENSOR_CPP
-#define TENSOR_CPP
+#ifndef TENSOR_HPP
+#define TENSOR_HPP
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <cstdio>
-#include <memory>
-#include <cstddef>
-#include <iostream>
-#include <vector>
-#include <cassert>
-#include <omp.h>
-#include <mkl.h>
+#include "utils.hpp"
 #include "matrix.hpp"
 
 namespace py = pybind11;
@@ -66,7 +59,9 @@ class Tensor{
 
     // Copy constructor (deep copy of date)
     Tensor(const Tensor &obj) : ndim(obj.ndim), dims(obj.dims), nslices(obj.nslices) {
+      #ifdef _MEMPRINT
       std::cout << "Copy constructor" << std::endl;
+      #endif
       size_t buflen = 1;
       for (size_t i = 0; i < ndim; i++) {
         buflen = buflen * dims[i];
@@ -77,7 +72,9 @@ class Tensor{
 
     // Copy assignment operator
     Tensor& operator=(const Tensor &obj) {
+      #ifdef _MEMPRINT
       std::cout << "Copy assignment" << std::endl;
+      #endif
 
       if (this != &obj) {
         // Free current resource
@@ -102,16 +99,17 @@ class Tensor{
     
     // Move constructor (shallow copy)
     Tensor(Tensor &&obj) noexcept {
+      #ifdef _MEMPRINT
       std::cout << "Move constructor" << std::endl;
+      #endif
      
       // Point to the other object 
-      this->dims     = obj.dims;
+      this->dims     = std::move(obj.dims);
       this->ndim     = obj.ndim;
       this->nslices  = obj.nslices;
       this->data_ptr = obj.data_ptr;
 
       // Clear the other other object
-      obj.dims.clear();
       obj.ndim     = 0;
       obj.nslices  = 0;
       obj.data_ptr = nullptr;
@@ -119,20 +117,21 @@ class Tensor{
 
     // Move assignment operator
     Tensor& operator=(Tensor &&obj) noexcept {
+      #ifdef _MEMPRINT
       std::cout << "Move assignment" << std::endl;
+      #endif
 
       if (this != &obj) {
         // Free current resource
         this->clear();
 
         // Point to the other object 
-        this->dims     = obj.dims;
+        this->dims     = std::move(obj.dims);
         this->ndim     = obj.ndim;
         this->nslices  = obj.nslices;
         this->data_ptr = obj.data_ptr;
 
         // Clear the other other object
-        obj.dims.clear();
         obj.ndim     = 0;
         obj.nslices  = 0;
         obj.data_ptr = nullptr;
@@ -163,12 +162,14 @@ class Tensor{
       std::copy(this->data_ptr + start_idx, 
         this->data_ptr + (start_idx + buflen), slice_mat.data_ptr);
       
+      #ifdef _MEMPRINT
       std::cout << "Tensor memory location: " << this->data_ptr
                 << std::endl
                 << "Data memory location: " << this->data_ptr + start_idx
                 << std::endl << "Matrix memory location: "
                 << slice_mat.data_ptr
                 << std::endl;
+      #endif
 
       return slice_mat;
     }
@@ -188,12 +189,14 @@ class Tensor{
       Matrix slice_mat(this->data_ptr + start_idx, 
                           this->dims[0], this->dims[1]);
 
+      #ifdef _MEMPRINT
       std::cout << "Tensor memory location: " << this->data_ptr
                 << std::endl
                 << "Data memory location: " << this->data_ptr + start_idx
                 << std::endl << "Matrix memory location: "
                 << slice_mat.data_ptr
                 << std::endl;
+      #endif
 
       return slice_mat;
     }
@@ -214,10 +217,13 @@ class Tensor{
     }
 
     void clear(){
-        //std::cout << "Clearing tensor" << std::endl;
+        #ifdef _MEMPRINT
+        std::cout << "Clearing tensor" << std::endl;
+        #endif
         if (this->data_ptr != nullptr){
             free(this->data_ptr);
         }
+        this->data_ptr = nullptr;
     }
 };
 

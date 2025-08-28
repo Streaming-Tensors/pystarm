@@ -1,19 +1,12 @@
-// matrix.cpp
+// matrix.hpp
 // Matrix class implementation
 
-#ifndef MATRIX_CPP
-#define MATRIX_CPP
+#ifndef MATRIX_HPP
+#define MATRIX_HPP
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <cstdio>
-#include <memory>
-#include <cstddef>
-#include <iostream>
-#include <vector>
-#include <cassert>
-#include <omp.h>
-#include <mkl.h>
+#include "utils.hpp"
 
 namespace py = pybind11;
 
@@ -77,7 +70,9 @@ public:
 
     // Copy constructor (deep copy of data)
     Matrix(const Matrix &obj) : nrow(obj.nrow), ncol(obj.ncol) {
+      #ifdef _MEMPRINT
       std::cout << "Copy constructor" << std::endl;
+      #endif
       size_t buflen  = this->nrow * this->ncol;
       this->data_ptr = (double*) malloc(buflen * sizeof(double));
       std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
@@ -85,7 +80,9 @@ public:
 
     // Copy assignment operator
     Matrix& operator=(const Matrix &obj) {
+      #ifdef _MEMPRINT
       std::cout << "Copy assignment" << std::endl;
+      #endif
 
       if (this != &obj) {
         // Free current resource
@@ -105,7 +102,9 @@ public:
 
     // Move constructor (shallow copy)
     Matrix(Matrix &&obj) noexcept {
+      #ifdef _MEMPRINT
       std::cout << "Move constructor" << std::endl;
+      #endif
 
       // Point to the other object      
       this->nrow = obj.nrow;
@@ -120,7 +119,9 @@ public:
     
     // Move assignment operator
     Matrix& operator=(Matrix &&obj) noexcept {
+      #ifdef _MEMPRINT
       std::cout << "Move assignment" << std::endl;
+      #endif
 
       if (this != &obj) {
         // Free current resource
@@ -141,11 +142,14 @@ public:
     }
     
     ~Matrix() {
-        //// Commenting this out to avoid double free
-        //std::cout << "Matrix desctructor" << std::endl;
-        //if (this->data_ptr != NULL){
-            //free(this->data_ptr);
-        //}
+        // Commenting this out to avoid double free
+      #ifdef _MEMPRINT
+      std::cout << "Matrix destructor" << std::endl;
+      std::cout << "Pointing to: " << this->data_ptr << std::endl;
+      #endif
+      //if (this->data_ptr != NULL){
+        //free(this->data_ptr);
+      //}
     }
     
     double get(size_t i, size_t j){
@@ -199,10 +203,17 @@ public:
     }
 
     void clear(){
-        //std::cout << "Clearing matrix" << std::endl;
+        #ifdef _MEMPRINT
+        std::cout << "Clearing matrix" << std::endl;
+        std::cout << "Pointing to: " << this->data_ptr << std::endl;
+        #endif
         if (this->data_ptr != nullptr){
             free(this->data_ptr);
         }
+        this->data_ptr = nullptr;
+        #ifdef _MEMPRINT
+        std::cout << "Pointing to: " << this->data_ptr << std::endl;
+        #endif
     }
 
     std::vector<size_t> getdims(){
@@ -213,7 +224,9 @@ public:
     }
 
     void print(){
-        printf("Memory location: %x\n", this->data_ptr);        
+        #ifdef _MEMPRINT
+        printf("Memory location: %p\n", this->data_ptr);        
+        #endif
 
         for (size_t i = 0; i < this->nrow; ++i) {
             for (size_t j = 0; j < this->ncol; ++j) {

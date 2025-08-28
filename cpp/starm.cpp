@@ -4,16 +4,8 @@
 #define STARM_CPP
 
 #include <pybind11/pybind11.h>
-//#include <pybind11/numpy.h>
 #include <pybind11/stl.h>
-#include <cstdio>
-#include <memory>
-#include <cstddef>
-#include <iostream>
-#include <vector>
-#include <cassert>
-#include <omp.h>
-#include <mkl.h>
+#include "utils.hpp"
 #include "matrix.hpp"
 #include "tensor.hpp"
 #include "ops.cpp"
@@ -80,6 +72,8 @@ PYBIND11_MODULE(pystarm, m) {
 	m.def("matmul", &matmul, "Multiply two matrices and return a new result matrix");
 	m.def("svd", &svd, "Compute the thin SVD of a matrix and return a tuple of the factors.",
         py::arg("A"), py::arg("verbose") = false);
+	m.def("svdx", &svdx, "Compute the truncated SVD of a matrix and return a tuple of the factors.",
+        py::arg("A"), py::arg("k"), py::arg("verbose") = false);
 	m.def("ttm_loop", &ttm_loop, "Tensor times matrix multiply on a specific mode by looping");
 	m.def("ttm", &ttm, "Tensor times matrix multiply on a specific mode by batched BLAS");
 	m.def("slicewise_svd", &slicewise_svd, "Compute the slice-wise thin SVD of a tensor",
