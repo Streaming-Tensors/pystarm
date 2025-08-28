@@ -451,7 +451,7 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=f
   // Temporary slicewise SVD objects 
   Matrix Us(Udims[0] * r, Udims[0], r);
   Matrix Vst(r * Vtdims[1], r, Vtdims[1]);
-  std::vector<double> s;
+  std::vector<double> s(r);
 
   // Call slice-wise SVDs
   for (size_t i = 0; i < A.nslices; i++) {
@@ -469,7 +469,46 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=f
   Us.clear();
   Vst.clear();
 
-  return std::make_tuple(U, S, Vt);
+  return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
+}
+
+std::tuple<Tensor, Matrix, Tensor> slicewise_svdx(const Tensor &A, size_t k,
+                                                    bool verbose=false) {
+  // Create the variables
+  std::vector<size_t> Udims = A.dims;
+  Udims[1] = k;
+  size_t Ubuflen = std::accumulate(Udims.begin(), Udims.end(), 1, std::multiplies<size_t>());
+  Tensor U(Ubuflen, A.ndim, Udims);
+
+  std::vector<size_t> Vtdims = A.dims;
+  Vtdims[0] = k;
+  size_t Vtbuflen = std::accumulate(Vtdims.begin(), Vtdims.end(), 1, std::multiplies<size_t>());
+  Tensor Vt(Vtbuflen, A.ndim, Vtdims);
+
+  Matrix S(k*A.nslices, k, A.nslices);
+ 
+  // Temporary slicewise SVD objects 
+  Matrix Us(Udims[0] * k, Udims[0], k);
+  Matrix Vst(k * Vtdims[1], k, Vtdims[1]);
+  std::vector<double> s(k);
+
+  // Call slice-wise SVDs
+  for (size_t i = 0; i < A.nslices; i++) {
+
+    // Compute the SVD
+    std::tie(Us, s, Vst) = svdx(A.getfrontalslice_copy(i), k);
+
+    // Set the output tensors
+    U.setfrontalslice(Us, i);
+    S.setcol(s, i);
+    Vt.setfrontalslice(Vst, i);
+  }
+
+  // Clear temporary stuff
+  Us.clear();
+  Vst.clear();
+
+  return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
 }
 
 #endif
