@@ -72,13 +72,39 @@ PYBIND11_MODULE(pystarm, m) {
         .def("norm", &Tensor::norm, "Returns the norm of the tensor")
         .def("generate_random", &Tensor::generate_random, "Randomly generates entries of the tensor");
 
-    py::class_<JaggedTensor>(m, "JaggedTensor")
-        .def(py::init<>())
+    py::class_<JaggedTensor>(m, "JaggedTensor", py::buffer_protocol())
+        .def_buffer([](JaggedTensor& ten) -> py::buffer_info{
+            size_t nval = 0;
+            size_t nrows = 1;
+            for (size_t i = 0; i < ten.ndim - 1; i++){
+                nrows = nrows * ten.dims[i];
+            }
+            // We assume that the slice ranks are correctly set
+            // and that the data_ptr has enough memory allocated
+            // to hold all the slices
+            for (size_t r : ten.slice_ranks) {
+                nval += nrows * r;
+            }
+            return py::buffer_info(
+                ten.data_ptr,
+                sizeof(double),
+                py::format_descriptor<double>::format(),
+                1, // Always return as 1d array buffer
+                { nval },
+                {
+                    sizeof(double) // Because always returning as 1d array buffer
+                }
+            );
+        })
+        .def(py::init<py::buffer&, size_t, std::vector<size_t>, std::vector<size_t>>())
         .def_readonly("nslices", &JaggedTensor::nslices, "Number of slices in the tensor")
-        .def("addfrontalslice", &JaggedTensor::addfrontalslice, "Add a frontal slice to the jagged tensor",
-            py::arg("U"), py::arg("s"), py::arg("Vt"), py::arg("tol") = 0.0)
-        .def("getfrontalslice", &JaggedTensor::getfrontalslice, "Get a frontal slice by index",
-            py::arg("i"))
+        .def_readonly("ndim", &JaggedTensor::ndim, "Number of modes in the tensor")
+        .def_readonly("dims", &JaggedTensor::dims, "Dimensions of the first ndim - 1 modes")
+        .def_readonly("slice_ranks", &JaggedTensor::slice_ranks, "Ranks of each slice in the last mode")
+        //.def_readonly("last_mode_jagged", &JaggedTensor::last_mode_jagged, "  Whether the last mode is jagged. If false, then first mode is jagged") --- IGNORE ---
+        .def("getdims", &JaggedTensor::getdims, "Get tensor dimensions and slice ranks")
+        .def("setfrontalslice", &JaggedTensor::setfrontalslice, "set a frontal slice in the jagged tensor")
+        .def("getfrontalslice", &JaggedTensor::getfrontalslice, "Get a frontal slice from the jagged tensor by index")
         .def("clear", &JaggedTensor::clear, "Clear all slices in the jagged tensor");
 
 	m.def("matmul", &matmul, "Multiply two matrices and return a new result matrix");
