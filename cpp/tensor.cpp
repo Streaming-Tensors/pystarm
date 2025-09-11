@@ -131,12 +131,12 @@ class JaggedTensor{
     size_t ndim;
     size_t nslices;  // Number of slices
     // Whether the last mode is jagged. If false, then first mode is jagged
-    std::vector<size_t> dims; // Dimensions of the first ndim - 1 tensor
+    std::vector<size_t> dims;  // Dimensions of the first ndim - 1 tensor
     // !!! We assume that only the last dimension can vary
-    std::vector<size_t> slice_ranks; // Each element is the rank of the corresponding slice
+    std::vector<size_t> slice_ranks;  // Each element is the rank of the corresponding slice
     double *data_ptr;
 
-    JaggedTensor() : ndim(0), nslices(0) {}
+    // JaggedTensor() : ndim(0), nslices(0) {}
 
     JaggedTensor(py::buffer &buf, size_t ndim, std::vector<size_t> dims, std::vector<size_t> slice_ranks)
         : ndim(ndim), nslices(slice_ranks.size()) {
@@ -149,7 +149,6 @@ class JaggedTensor{
         for (size_t i = 0; i < this->nslices; i++) {
             this->slice_ranks[i] = slice_ranks[i];
         }
-        // TODO: do we want this to be a deep copy instead?
         this->data_ptr = static_cast<double*>(buf_info.ptr);
     }
 

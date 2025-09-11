@@ -347,41 +347,42 @@ class MatrixTestCase(unittest.TestCase):
 class JaggedTensorTestCase(unittest.TestCase):
     def test_jagged_tensor_creation(self):
         """Test jagged tensor creation and operations"""
-        # Create a jagged tensor
-        jagged = pystarm.JaggedTensor()
-        frontal_slices = []
-        # Add frontal slices
-        for i in range(5):
-            # !! Note: U, s, and Vt are explicitly converted to column major order
-            U = np.asfortranarray(np.random.rand(3, 4))
-            s = np.asfortranarray(np.random.rand(4))
-            Vt = np.asfortranarray(np.random.rand(4, 2))
-            frontal_slices.append((U, s, Vt))
-            Umat = pystarm.Matrix(U, 3, 4)
-            Vtmat = pystarm.Matrix(Vt, 4, 2)
-            # todo: s is passed as a list not as a pystarm object
-            jagged.addfrontalslice(Umat, s.tolist(), Vtmat)
-        # Get frontal slices and check if allclose
-        for i in range(5):
-            # Get i-th frontal slice
-            (U0, s0, Vt0) = jagged.getfrontalslice(i)
-            # !! Note: reading U0, s0, and Vt0 as column major because pystarm.Matrix assumes data is column major
-            U0_arr = np.frombuffer(U0, dtype=np.float64).reshape(Umat.getdims(), order='F', copy=False)
-            s0_arr = np.frombuffer(np.array(s0), dtype=np.float64).reshape(s.shape, order='F', copy=False)
-            Vt0_arr = np.frombuffer(Vt0, dtype=np.float64).reshape(Vtmat.getdims(), order='F', copy=False)
+        # Create a python jagged tensor
+        ndim = 3
+        dims = tuple(np.random.randint(1, 20, ndim))
+        slice_ranks = np.random.randint(1, 10, dims[-1])
+        nelements = sum(np.prod(dims[:-1]) * slice_ranks)
+        vals = np.random.rand(nelements)
+        jagged_ten = pystarm.JaggedTensor(vals, ndim, dims, slice_ranks)
+        jagged_ten_vals = np.frombuffer(jagged_ten, dtype=np.float64)
+        flag = np.allclose(vals, jagged_ten_vals)
+        self.assertEqual(flag, True)
 
-            (U, s, Vt) = frontal_slices[i]
-            flag1 = np.allclose(U0_arr, U)
-            flag2 = np.allclose(s0_arr, s)
-            flag3 = np.allclose(Vt0_arr, Vt)
-
-            self.assertEqual(flag1, True)
-            self.assertEqual(flag2, True)
-            self.assertEqual(flag3, True)
-        # Clear the jagged tensor
-        # todo: this does not catch double free errors nor does it check if data ptrs for (U, s, Vt) in each slice are invalidated
-        jagged.clear()
-        self.assertEqual(jagged.nslices, 0)
+    def test_jagged_tensor_getslice(self):
+        """Test jagged tensor get slice"""
+        # Create a python jagged tensor
+        ndim = 3
+        dims = tuple(np.random.randint(1, 20, ndim))
+        slice_ranks = np.random.randint(1, 10, dims[-1])
+        nelements = sum(np.prod(dims[:-1]) * slice_ranks)
+        vals = np.random.rand(nelements)
+        jagged_ten = pystarm.JaggedTensor(vals, ndim, dims, slice_ranks)
+        # compute nrows for each slice
+        nrows = 1
+        for i in range(ndim - 1):
+            nrows *= dims[i]
+        # get each slice and check again python vals
+        # need to use offsets since vals is a 1D array
+        start_idx = 0
+        end_idx = 0
+        for i in range(dims[-1]):
+            end_idx += nrows * slice_ranks[i]
+            slice = jagged_ten.getfrontalslice(i)
+            slice_vals = np.frombuffer(slice, dtype=np.float64)
+            py_slice_vals = vals[start_idx:end_idx]
+            flag = np.allclose(slice_vals, py_slice_vals)
+            start_idx = end_idx
+            self.assertEqual(flag, True)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
