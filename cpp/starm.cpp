@@ -75,15 +75,11 @@ PYBIND11_MODULE(pystarm, m) {
     py::class_<JaggedTensor>(m, "JaggedTensor", py::buffer_protocol())
         .def_buffer([](JaggedTensor& ten) -> py::buffer_info{
             size_t nval = 0;
-            size_t nrows = 1;
-            for (size_t i = 0; i < ten.ndim - 1; i++){
-                nrows = nrows * ten.dims[i];
-            }
             // We assume that the slice ranks are correctly set
             // and that the data_ptr has enough memory allocated
             // to hold all the slices
             for (size_t r : ten.slice_ranks) {
-                nval += nrows * r;
+                nval += ten.fixed_dim_size * r;
             }
             return py::buffer_info(
                 ten.data_ptr,
@@ -96,13 +92,11 @@ PYBIND11_MODULE(pystarm, m) {
                 }
             );
         })
-        .def(py::init<py::buffer&, size_t, std::vector<size_t>, std::vector<size_t>>())
+        .def(py::init<py::buffer&, size_t, std::vector<size_t>, bool>(), py::arg("buf"), py::arg("fixed_dim_size"), py::arg("slice_ranks"), py::arg("variable_first_mode") = false)
         .def_readonly("nslices", &JaggedTensor::nslices, "Number of slices in the tensor")
-        .def_readonly("ndim", &JaggedTensor::ndim, "Number of modes in the tensor")
-        .def_readonly("dims", &JaggedTensor::dims, "Dimensions of the first ndim - 1 modes")
+        .def_readonly("fixed_dim_size", &JaggedTensor::fixed_dim_size, "Number of modes in the tensor")
         .def_readonly("slice_ranks", &JaggedTensor::slice_ranks, "Ranks of each slice in the last mode")
         //.def_readonly("last_mode_jagged", &JaggedTensor::last_mode_jagged, "  Whether the last mode is jagged. If false, then first mode is jagged") --- IGNORE ---
-        .def("getdims", &JaggedTensor::getdims, "Get tensor dimensions and slice ranks")
         .def("setfrontalslice", &JaggedTensor::setfrontalslice, "set a frontal slice in the jagged tensor")
         .def("getfrontalslice", &JaggedTensor::getfrontalslice, "Get a frontal slice from the jagged tensor by index")
         .def("clear", &JaggedTensor::clear, "Clear all slices in the jagged tensor");

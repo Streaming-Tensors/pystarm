@@ -337,12 +337,12 @@ class JaggedTensorTestCase(unittest.TestCase):
     def test_jagged_tensor_creation(self):
         """Test jagged tensor creation and operations"""
         # Create a python jagged tensor
-        ndim = 3
-        dims = tuple(np.random.randint(1, 20, ndim))
-        slice_ranks = np.random.randint(1, 10, dims[-1])
-        nelements = sum(np.prod(dims[:-1]) * slice_ranks)
+        fixed_dim = np.random.randint(1, 20)
+        nslices = np.random.randint(1, 20)
+        slice_ranks = np.random.randint(1, 10, nslices)
+        nelements = sum(fixed_dim * slice_ranks)
         vals = np.random.rand(nelements)
-        jagged_ten = pystarm.JaggedTensor(vals, ndim, dims, slice_ranks)
+        jagged_ten = pystarm.JaggedTensor(vals, fixed_dim, slice_ranks)
         jagged_ten_vals = np.frombuffer(jagged_ten, dtype=np.float64)
         flag = np.allclose(vals, jagged_ten_vals)
         self.assertEqual(flag, True)
@@ -350,22 +350,19 @@ class JaggedTensorTestCase(unittest.TestCase):
     def test_jagged_tensor_getslice(self):
         """Test jagged tensor get slice"""
         # Create a python jagged tensor
-        ndim = 3
-        dims = tuple(np.random.randint(1, 20, ndim))
-        slice_ranks = np.random.randint(1, 10, dims[-1])
-        nelements = sum(np.prod(dims[:-1]) * slice_ranks)
+        fixed_dim = np.random.randint(1, 20)
+        nslices = np.random.randint(1, 20)
+        slice_ranks = np.random.randint(1, 10, nslices)
+        nelements = sum(fixed_dim * slice_ranks)
         vals = np.random.rand(nelements)
-        jagged_ten = pystarm.JaggedTensor(vals, ndim, dims, slice_ranks)
+        jagged_ten = pystarm.JaggedTensor(vals, fixed_dim, slice_ranks)
         # compute nrows for each slice
-        nrows = 1
-        for i in range(ndim - 1):
-            nrows *= dims[i]
         # get each slice and check again python vals
         # need to use offsets since vals is a 1D array
         start_idx = 0
         end_idx = 0
-        for i in range(dims[-1]):
-            end_idx += nrows * slice_ranks[i]
+        for i in range(nslices):
+            end_idx += fixed_dim * slice_ranks[i]
             slice = jagged_ten.getfrontalslice(i)
             slice_vals = np.frombuffer(slice, dtype=np.float64)
             py_slice_vals = vals[start_idx:end_idx]
