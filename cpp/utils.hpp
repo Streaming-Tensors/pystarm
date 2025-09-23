@@ -11,9 +11,9 @@
 #include <omp.h>
 #include <mkl.h>
 
-// Debug printing
-#ifndef _MEMPRINT
-#define _MEMPRINT 1
-#endif
+// Debug printing (uncomment for prints)
+// #ifndef _MEMPRINT
+// #define _MEMPRINT 1
+// #endif
 
 #endif
