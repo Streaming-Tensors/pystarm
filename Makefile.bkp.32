@@ -3,7 +3,7 @@
 ## Compiler and flags
 CFLAGS = -O3 -Wall -shared -std=c++11 -fPIC -fopenmp 
 
-LIB = -m64 -L${MKLROOT}/lib -Wl,--no-as-needed -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lgomp -lpthread -lm -ldl
+LIB = -m64  -L${MKLROOT}/lib -Wl,--no-as-needed -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lgomp -lpthread -lm -ldl
 
 # Source files
 SRC = cpp/starm.cpp 

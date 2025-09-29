@@ -4,18 +4,10 @@
 #define STARM_CPP
 
 #include <pybind11/pybind11.h>
-//#include <pybind11/numpy.h>
 #include <pybind11/stl.h>
-#include <cstdio>
-#include <memory>
-#include <cstddef>
-#include <iostream>
-#include <vector>
-#include <cassert>
-#include <omp.h>
-#include <mkl.h>
-#include "matrix.cpp"
-#include "tensor.cpp"
+#include "utils.hpp"
+#include "matrix.hpp"
+#include "tensor.hpp"
 #include "ops.cpp"
 
 namespace py = pybind11;
@@ -45,6 +37,10 @@ PYBIND11_MODULE(pystarm, m) {
         .def(py::init<py::buffer& , size_t, size_t>())
         .def("get", &Matrix::get, "Get (i,j) th entry of the matrix")
         .def("set", &Matrix::set, "Set (i,j) th entry of the matrix")
+        .def("getrow", &Matrix::getrow, "Get i-th row of the matrix")
+        .def("setrow", &Matrix::setrow, "Set i-th row of the matrix")
+        .def("getcol", &Matrix::getcol, "Get j-th column of the matrix")
+        .def("setcol", &Matrix::setcol, "Set j-th column of the matrix")
         .def("clear", &Matrix::clear, "Free memory of the underlying data buffer")
         .def("getdims", &Matrix::getdims, "Get matrix dimensions")
         .def("print", &Matrix::print, "Print contents of the matrix");
@@ -69,10 +65,21 @@ PYBIND11_MODULE(pystarm, m) {
         })
         .def(py::init<py::buffer& , size_t, std::vector<size_t> >())
         .def("clear", &Tensor::clear, "Free memory of the underlying data buffer")
-        .def("getdims", &Tensor::getdims, "Get tensor dimensions");
+        .def("getdims", &Tensor::getdims, "Get tensor dimensions")
+        .def("getfrontalslice", &Tensor::getfrontalslice, "Get a frontal slice")
+        .def("getfrontalslice_copy", &Tensor::getfrontalslice_copy, "Get a deep copy of a frontal slice")
+        .def("setfrontalslice", &Tensor::setfrontalslice, "Set a frontal slice");
 	m.def("matmul", &matmul, "Multiply two matrices and return a new result matrix");
+	m.def("svd", &svd, "Compute the thin SVD of a matrix and return a tuple of the factors.",
+        py::arg("A"), py::arg("verbose") = false);
+	m.def("svdx", &svdx, "Compute the truncated SVD of a matrix and return a tuple of the factors.",
+        py::arg("A"), py::arg("k"), py::arg("verbose") = false);
 	m.def("ttm_loop", &ttm_loop, "Tensor times matrix multiply on a specific mode by looping");
 	m.def("ttm", &ttm, "Tensor times matrix multiply on a specific mode by batched BLAS");
+	m.def("slicewise_svd", &slicewise_svd, "Compute the slice-wise thin SVD of a tensor",
+        py::arg("A"), py::arg("verbose") = false);
+	m.def("slicewise_svdx", &slicewise_svdx, "Compute the truncated slice-wise SVD of a tensor",
+        py::arg("A"), py::arg("k"), py::arg("verbose") = false);
 }
 
 #endif
