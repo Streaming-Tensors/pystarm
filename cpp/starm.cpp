@@ -80,6 +80,7 @@ PYBIND11_MODULE(pystarm, m) {
         py::arg("A"), py::arg("verbose") = false);
 	m.def("slicewise_svdx", &slicewise_svdx, "Compute the truncated slice-wise SVD of a tensor",
         py::arg("A"), py::arg("k"), py::arg("verbose") = false);
+	m.def("slicewise_matmul", &slicewise_matmul, "Compute the slice-wise multiplication of the output of slicewise_svd - U, VT and S");
 }
 
 #endif

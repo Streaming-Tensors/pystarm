@@ -1,7 +1,7 @@
 ## Following: https://pybind11.readthedocs.io/en/stable/compiling.html#building-manually
 
 ## Compiler and flags
-CFLAGS = -O3 -Wall -shared -std=c++11 -fPIC -fopenmp 
+CFLAGS = -O0 -Wall -shared -std=c++11 -fPIC -fopenmp 
 
 LIB = -m64 -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a \
 	  ${MKLROOT}/lib/intel64/libmkl_gnu_thread.a \

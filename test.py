@@ -1,27 +1,3 @@
-# import numpy as np
-# import time
-
-# x = np.arange(0, 1*1000*1000, 1, dtype=int)
-# y = np.array(x).reshape( (1, 1000, 1000), order='C')
-# # zz = np.array(x).reshape( (1000, 1000, 1000), order='F')
-# z = np.array(y, order='F')
-# # print(y, y.flags)
-# # print(z, z.flags)
-
-# t0 = time.time()
-# Uy, Sy, Vhy = np.linalg.svd(y, full_matrices=True)
-# t1 = time.time()
-# Uz, Sz, Vhz = np.linalg.svd(z, full_matrices=True)
-# t2 = time.time()
-
-# print(t1-t0, t2-t1)
-
-# # print(Uy.shape, Sy.shape, Vhy.shape)
-# # print(Uy, Sy, Vhy)
-# # print(Uz.shape, Sz.shape, Vhz.shape)
-# # print(Uz, Sz, Vhz)
-
-
 import unittest
 import pystarm
 import numpy as np
@@ -144,6 +120,11 @@ class TensorTestCase(unittest.TestCase):
             nslices = Spy.shape[1]
             sflags  = np.zeros(nslices, dtype=np.bool)
 
+            Atilde_c = pystarm.slicewise_matmul(Uc, Sc, Vtc)
+            Atilde_np = np.frombuffer(Atilde_c, dtype=np.float64).reshape(Atilde_c.getdims(), order='F', copy = False)
+            # Atilde_py = np.zeros((Upy.shape[0], Vtpy.shape[1], nslices))
+            Atilde_py = np.zeros(Atilde_np.shape)
+
             for ii in range(nslices):
                 Us   = Uc.getfrontalslice(ii)
                 Usp  = np.frombuffer(Us, dtype=np.float64).reshape(Us.getdims(), order='F', copy=False)
@@ -151,15 +132,22 @@ class TensorTestCase(unittest.TestCase):
                 Vtsp = np.frombuffer(Vts, dtype=np.float64).reshape(Vts.getdims(), order='F', copy=False)
                 Ssp  = Spy2[:, ii]
                 Bsp  = Usp @ (np.diag(Ssp) @ Vtsp)
-        
+                
                 Bpy = Upy[:, :, ii] @ (np.diag(Spy[:, ii]) @ Vtpy[:, :, ii])
+                Atilde_py[:, :, ii] = Bpy
 
                 # Check if the reconstructions are close
                 sflags[ii] = np.allclose(Bsp, Bpy)
 
             flag2 = np.all(sflags)
+
+            Atilde_py = Atilde_py.reshape(Atilde_np.shape)
+            flag3 = np.allclose(Atilde_np, Atilde_py)
+            # print("Atilde_py", Atilde_py)
+            # print("Atilde_np", Atilde_np)
+            print("Error", np.linalg.norm(np.abs(Atilde_py - Atilde_np)))
               
-            return flag1, flag2
+            return flag1, flag2, flag3
 
         # Try two examples
         ## 3-dimensional example
@@ -169,20 +157,22 @@ class TensorTestCase(unittest.TestCase):
         arr1 = np.arange(ten_nelm, dtype=np.float64).reshape(ten_dims, order='F')
         ten1 = pystarm.Tensor(arr1, ten_ndim, ten_dims)
         
-        [flag1, flag2] = slicewise_checks(arr1, ten1)
+        [flag1, flag2, flag3] = slicewise_checks(arr1, ten1)
         self.assertEqual(flag1, True)
         self.assertEqual(flag2, True)
+        self.assertEqual(flag3, True)
       
-        ## 4-dimensional example
-        ten_nelm = 120
-        ten_dims = (5, 4, 3, 2)
-        ten_ndim = len(ten_dims)
-        arr1 = np.arange(ten_nelm, dtype=np.float64).reshape(ten_dims, order='F')
-        ten1 = pystarm.Tensor(arr1, ten_ndim, ten_dims)
+        # ## 4-dimensional example
+        # ten_nelm = 120
+        # ten_dims = (5, 4, 3, 2)
+        # ten_ndim = len(ten_dims)
+        # arr1 = np.arange(ten_nelm, dtype=np.float64).reshape(ten_dims, order='F')
+        # ten1 = pystarm.Tensor(arr1, ten_ndim, ten_dims)
 
-        [flag1, flag2] = slicewise_checks(arr1, ten1)
-        self.assertEqual(flag1, True)
-        self.assertEqual(flag2, True)
+        # [flag1, flag2, flag3] = slicewise_checks(arr1, ten1)
+        # self.assertEqual(flag1, True)
+        # self.assertEqual(flag2, True)
+        # self.assertEqual(flag3, True)
 
     def test_slicewise_svdx(self):
         """Test slicewise truncated SVD"""

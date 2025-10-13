@@ -33,6 +33,19 @@ class Tensor{
           nslices = nslices * this->dims[ii];
         }
         this->nslices = (this->ndim > 2)? nslices : 0;
+        
+        // Following few lines are to test whether memory is contiguous or not
+        //size_t n_elem = 1;
+        //for(size_t i = 0; i < ndim; i++){
+            //n_elem = n_elem * dims[i];
+        //}
+        
+        //double * temp = new double[n_elem];
+        //for(size_t i = 0; i < n_elem; i++){
+            //printf("%lld\n", i);
+            //temp[i] = this->data_ptr[i];
+        //}
+
     }
 
     // Constructor that allocates new buffer

@@ -231,6 +231,114 @@ std::tuple<Matrix, std::vector<double>, Matrix> svdx(Matrix A, size_t k,
   return std::make_tuple(std::move(U), std::move(s), std::move(Vt));
 }
 
+Tensor slicewise_matmul(Tensor& U, Matrix& S, Tensor& VT){
+    // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch.html
+    // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
+    assert(U.nslices == VT.nslices);
+    assert(U.nslices == S.ncol);
+    assert(U.dims[1] == S.nrow);
+
+    // Scale U with S
+    std::vector<size_t> USdims(U.dims); // US is the scaled version of U
+                                        // where columns of the frontal slices of U is scaled by singular values of the corresponding slice in S
+                                        // Dimensions of US would be same as U
+    size_t USbuflen = 1;
+    for (int i = 0; i < USdims.size(); i++){
+        USbuflen = USbuflen * USdims[i];
+    }
+    Tensor US(USbuflen, U.ndim, USdims);
+
+    {
+        // Multiplying each slice of U with the diagonal matrix corresponding to the corresponding column of matrix S (which is compact format of tensor S)
+        // Use MKL ddgmm_batch_strided: https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
+        auto cblas_layout = CblasColMajor;
+        auto cblas_left_right = CblasRight;
+        auto cblas_m = U.dims[0];
+        auto cblas_n = U.dims[1];
+        auto cblas_a = U.data_ptr;
+        auto cblas_lda = U.dims[0];
+        auto cblas_stridea = U.dims[0] * U.dims[1];
+        auto cblas_x = S.data_ptr;
+        auto cblas_incx = 1;
+        auto cblas_stridex = S.nrow; //Same as U.dims[1]
+        auto cblas_c = US.data_ptr;
+        auto cblas_ldc = US.dims[0];
+        auto cblas_stridec = US.dims[0] * US.dims[1];
+        auto cblas_batch_size = U.nslices;
+        
+        cblas_ddgmm_batch_strided(
+                cblas_layout,
+                cblas_left_right,
+                cblas_m,
+                cblas_n,
+                cblas_a,
+                cblas_lda,
+                cblas_stridea,
+                cblas_x,
+                cblas_incx,
+                cblas_stridex,
+                cblas_c,
+                cblas_ldc,
+                cblas_stridec,
+                cblas_batch_size
+                );
+
+    }
+
+    std::vector<size_t> TOdims(US.dims);
+    TOdims[0] = US.dims[0];
+    TOdims[1] = VT.dims[1];
+    //printf("TOdims[1]: %lld\n", TOdims[1]);
+    size_t TObuflen = std::accumulate(TOdims.begin(), TOdims.end(), (size_t)1, std::multiplies<size_t>());
+    //printf("TO buflen: %lld\n", TObuflen);
+    Tensor TO(TObuflen, US.ndim, TOdims);
+
+    {
+        // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-0/cblas-gemm-batch-strided.html
+        auto cblas_layout = CblasColMajor;
+        auto cblas_transa = CblasNoTrans;
+        auto cblas_transb = CblasNoTrans;
+        auto cblas_m = US.dims[0];
+        auto cblas_k = US.dims[1]; 
+        auto cblas_n = VT.dims[1];
+        auto cblas_alpha = 1.0;
+        auto cblas_beta = 0.0;
+        auto cblas_a = US.data_ptr;
+        auto cblas_lda = US.dims[0];
+        auto cblas_stridea = US.dims[0] * US.dims[1];
+        auto cblas_b = VT.data_ptr;
+        auto cblas_ldb = VT.dims[0];
+        auto cblas_strideb = VT.dims[0] * VT.dims[1];
+        auto cblas_c = TO.data_ptr; 
+        auto cblas_ldc = TO.dims[0];
+        auto cblas_stridec = TO.dims[0] * TO.dims[1];
+        auto cblas_batch_size = TO.nslices;
+
+        cblas_dgemm_batch_strided(
+            cblas_layout, // Column major order. `Layout` parameter of MKL cblas call.
+            cblas_transa, // A matrix is not transpose. `transa` param of MKL cblas call.
+            cblas_transb, // B matrix is transpose. `transb` param of MKL cblas call.
+            cblas_m, // Number of rows of A or C. `m` param of MKL cblas call.
+            cblas_n, // Number of cols of B or C. `n` param of MKL cblas call.
+            cblas_k, // Inner dimension - number of columns of A or number of rows of B. `k` param of MKL cblas call.
+            cblas_alpha, // Scalar `alpha` param of MKL cblas call.
+            cblas_a, // Data buffer of A. `a` param of MKL cblas call.
+            cblas_lda, // Leading dimension of A. `lda` param of MKL cblas call.
+            cblas_stridea,
+            cblas_b, // Data buffer of B. `b` param of MKL cblas call.
+            cblas_ldb, // Leading dimension of B. `ldb` param of MKL cblas call.
+            cblas_strideb,
+            cblas_beta, // Scalar `beta` param of MKL cblas call.
+            cblas_c, // Data buffer of C. `c` param of MKL cblas call.
+            cblas_ldc, // Leading dimension of C. `ldc` param of MKL cblas call.
+            cblas_stridec,
+            cblas_batch_size
+        );
+    }
+    US.clear();
+    return TO;
+}
+
 Tensor ttm_loop(Tensor& T, Matrix& M, size_t mode){
     std::vector<size_t> ten_dims = T.getdims();
     std::vector<size_t> mat_dims = M.getdims();
@@ -428,7 +536,7 @@ Tensor ttm(Tensor& T, Matrix& M, size_t mode){
         );
 
     }
-
+    
     return TO;
 }
 
@@ -438,12 +546,12 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=f
   // Create the variables
   std::vector<size_t> Udims = A.dims;
   Udims[1] = r;
-  size_t Ubuflen = std::accumulate(Udims.begin(), Udims.end(), 1, std::multiplies<size_t>());
+  size_t Ubuflen = std::accumulate(Udims.begin(), Udims.end(), (size_t)1, std::multiplies<size_t>());
   Tensor U(Ubuflen, A.ndim, Udims);
 
   std::vector<size_t> Vtdims = A.dims;
   Vtdims[0] = r;
-  size_t Vtbuflen = std::accumulate(Vtdims.begin(), Vtdims.end(), 1, std::multiplies<size_t>());
+  size_t Vtbuflen = std::accumulate(Vtdims.begin(), Vtdims.end(), (size_t)1, std::multiplies<size_t>());
   Tensor Vt(Vtbuflen, A.ndim, Vtdims);
 
   Matrix S(r*A.nslices, r, A.nslices);
@@ -477,36 +585,39 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svdx(const Tensor &A, size_t k,
   // Create the variables
   std::vector<size_t> Udims = A.dims;
   Udims[1] = k;
-  size_t Ubuflen = std::accumulate(Udims.begin(), Udims.end(), 1, std::multiplies<size_t>());
+  size_t Ubuflen = std::accumulate(Udims.begin(), Udims.end(), (size_t)1, std::multiplies<size_t>());
   Tensor U(Ubuflen, A.ndim, Udims);
 
   std::vector<size_t> Vtdims = A.dims;
   Vtdims[0] = k;
-  size_t Vtbuflen = std::accumulate(Vtdims.begin(), Vtdims.end(), 1, std::multiplies<size_t>());
+  size_t Vtbuflen = std::accumulate(Vtdims.begin(), Vtdims.end(), (size_t)1, std::multiplies<size_t>());
   Tensor Vt(Vtbuflen, A.ndim, Vtdims);
 
   Matrix S(k*A.nslices, k, A.nslices);
- 
-  // Temporary slicewise SVD objects 
-  Matrix Us(Udims[0] * k, Udims[0], k);
-  Matrix Vst(k * Vtdims[1], k, Vtdims[1]);
-  std::vector<double> s(k);
 
   // Call slice-wise SVDs
-  for (size_t i = 0; i < A.nslices; i++) {
+#pragma omp parallel
+  {
+    // Temporary slicewise SVD objects 
+    Matrix Us(Udims[0] * k, Udims[0], k);
+    Matrix Vst(k * Vtdims[1], k, Vtdims[1]);
+    std::vector<double> s(k);
+#pragma omp for
+    for (size_t i = 0; i < A.nslices; i++) {
 
-    // Compute the SVD
-    std::tie(Us, s, Vst) = svdx(A.getfrontalslice_copy(i), k);
+        // Compute the SVD
+        std::tie(Us, s, Vst) = svdx(A.getfrontalslice_copy(i), k, false);
 
-    // Set the output tensors
-    U.setfrontalslice(Us, i);
-    S.setcol(s, i);
-    Vt.setfrontalslice(Vst, i);
+        // Set the output tensors
+        U.setfrontalslice(Us, i);
+        S.setcol(s, i);
+        Vt.setfrontalslice(Vst, i);
+    }
+
+    // Clear temporary stuff
+    Us.clear();
+    Vst.clear();
   }
-
-  // Clear temporary stuff
-  Us.clear();
-  Vst.clear();
 
   return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
 }
