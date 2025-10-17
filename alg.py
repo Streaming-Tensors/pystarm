@@ -26,13 +26,14 @@ def video_to_gray_array(path, max_frames=None):
     # In this video data, we keep the height and width dimension to be in the same order, just push the time dimension to the end (1,2,0)
     # Because the numpy array that contains the video frames stacked one after another is having each frame as contiguous
     h_w_t = np.transpose(t_h_w, (1, 2, 0)) # H x W x T
-    # print(h_w_t.flags)
-
-    x = np.arange(h_w_t.size, dtype=np.float64).reshape(h_w_t.shape, order='F')
+    print(h_w_t.flags)
+    
+    # Do not do reshape. It would cause x to not own it's data which causes potential memory error
+    x = np.zeros(h_w_t.shape, dtype=np.float64, order='F')
     for i in range(h_w_t.shape[2]):
         x[:,:,i] = h_w_t[:,:,i]
 
-    # print(x.flags)
+    print(x.flags)
 
     # return np.asfortranarray(h_w_t)
     return x
@@ -169,9 +170,7 @@ if __name__ == "__main__":
     t1 = time.perf_counter()
     print("Time to generate the DCT matrix:", t1-t0)
 
-    # U_hat, S_hat, V_hat = pystarm.slicewise_svdx(A, 10) # k=10
-
-    (U,S,VT) = tsvdm_3way(A, M, MT, 10)
+    (U,S,VT) = tsvdm_3way(A, M, MT, 100)
     print(U.getdims())
     print(S.getdims())
     print(VT.getdims())
@@ -196,8 +195,3 @@ if __name__ == "__main__":
     norm_rec = np.linalg.norm(arr_reconst)
 
     print(err, norm_arr, norm_rec)
-
-
-
-
-
