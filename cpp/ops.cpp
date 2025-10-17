@@ -242,29 +242,30 @@ Tensor slicewise_matmul(Tensor& U, Matrix& S, Tensor& VT){
     std::vector<size_t> USdims(U.dims); // US is the scaled version of U
                                         // where columns of the frontal slices of U is scaled by singular values of the corresponding slice in S
                                         // Dimensions of US would be same as U
-    size_t USbuflen = 1;
-    for (int i = 0; i < USdims.size(); i++){
-        USbuflen = USbuflen * USdims[i];
-    }
+    size_t USbuflen = std::accumulate(USdims.begin(), USdims.end(), (size_t)1, std::multiplies<size_t>());
+    //size_t USbuflen = 1;
+    //for (int i = 0; i < USdims.size(); i++){
+        //USbuflen = USbuflen * USdims[i];
+    //}
     Tensor US(USbuflen, U.ndim, USdims);
 
     {
         // Multiplying each slice of U with the diagonal matrix corresponding to the corresponding column of matrix S (which is compact format of tensor S)
         // Use MKL ddgmm_batch_strided: https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
-        auto cblas_layout = CblasColMajor;
-        auto cblas_left_right = CblasRight;
-        auto cblas_m = U.dims[0];
-        auto cblas_n = U.dims[1];
-        auto cblas_a = U.data_ptr;
-        auto cblas_lda = U.dims[0];
-        auto cblas_stridea = U.dims[0] * U.dims[1];
-        auto cblas_x = S.data_ptr;
-        auto cblas_incx = 1;
-        auto cblas_stridex = S.nrow; //Same as U.dims[1]
-        auto cblas_c = US.data_ptr;
-        auto cblas_ldc = US.dims[0];
-        auto cblas_stridec = US.dims[0] * US.dims[1];
-        auto cblas_batch_size = U.nslices;
+        CBLAS_LAYOUT cblas_layout = CblasColMajor;
+        CBLAS_SIDE cblas_left_right = CblasRight;
+        MKL_INT cblas_m = (MKL_INT) U.dims[0];
+        MKL_INT cblas_n = (MKL_INT) U.dims[1];
+        double* cblas_a = U.data_ptr;
+        MKL_INT cblas_lda = (MKL_INT) U.dims[0];
+        MKL_INT cblas_stridea = (MKL_INT) (U.dims[0] * U.dims[1]);
+        double* cblas_x = S.data_ptr;
+        MKL_INT cblas_incx = 1;
+        MKL_INT cblas_stridex = (MKL_INT) S.nrow; //Same as U.dims[1]
+        double* cblas_c = US.data_ptr;
+        MKL_INT cblas_ldc = (MKL_INT) US.dims[0];
+        MKL_INT cblas_stridec = (MKL_INT) (US.dims[0] * US.dims[1]);
+        MKL_INT cblas_batch_size = (MKL_INT) U.nslices;
         
         cblas_ddgmm_batch_strided(
                 cblas_layout,
@@ -295,24 +296,24 @@ Tensor slicewise_matmul(Tensor& U, Matrix& S, Tensor& VT){
 
     {
         // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-0/cblas-gemm-batch-strided.html
-        auto cblas_layout = CblasColMajor;
-        auto cblas_transa = CblasNoTrans;
-        auto cblas_transb = CblasNoTrans;
-        auto cblas_m = US.dims[0];
-        auto cblas_k = US.dims[1]; 
-        auto cblas_n = VT.dims[1];
-        auto cblas_alpha = 1.0;
-        auto cblas_beta = 0.0;
-        auto cblas_a = US.data_ptr;
-        auto cblas_lda = US.dims[0];
-        auto cblas_stridea = US.dims[0] * US.dims[1];
-        auto cblas_b = VT.data_ptr;
-        auto cblas_ldb = VT.dims[0];
-        auto cblas_strideb = VT.dims[0] * VT.dims[1];
-        auto cblas_c = TO.data_ptr; 
-        auto cblas_ldc = TO.dims[0];
-        auto cblas_stridec = TO.dims[0] * TO.dims[1];
-        auto cblas_batch_size = TO.nslices;
+        CBLAS_LAYOUT cblas_layout = CblasColMajor;
+        CBLAS_TRANSPOSE cblas_transa = CblasNoTrans;
+        CBLAS_TRANSPOSE cblas_transb = CblasNoTrans;
+        MKL_INT cblas_m = (MKL_INT) US.dims[0];
+        MKL_INT cblas_k = (MKL_INT) US.dims[1]; 
+        MKL_INT cblas_n = (MKL_INT) VT.dims[1];
+        double cblas_alpha = 1.0;
+        double cblas_beta = 0.0;
+        double* cblas_a = US.data_ptr;
+        MKL_INT cblas_lda = (MKL_INT) US.dims[0];
+        MKL_INT cblas_stridea = (MKL_INT)(US.dims[0] * US.dims[1]);
+        double* cblas_b = VT.data_ptr;
+        MKL_INT cblas_ldb = (MKL_INT) VT.dims[0];
+        MKL_INT cblas_strideb = (MKL_INT)(VT.dims[0] * VT.dims[1]);
+        double* cblas_c = TO.data_ptr; 
+        MKL_INT cblas_ldc = (MKL_INT) TO.dims[0];
+        MKL_INT cblas_stridec = (MKL_INT)(TO.dims[0] * TO.dims[1]);
+        MKL_INT cblas_batch_size = (MKL_INT)  TO.nslices;
 
         cblas_dgemm_batch_strided(
             cblas_layout, // Column major order. `Layout` parameter of MKL cblas call.
@@ -353,20 +354,20 @@ Tensor ttm_loop(Tensor& T, Matrix& M, size_t mode){
 
     if(mode == 0) {
         // TTM on first mode
-        size_t cblas_m = mat_dims[0];
-        size_t cblas_k = ten_dims[mode]; // Or mat_dims[1]
-        size_t cblas_n = 1;
+        MKL_INT cblas_m = (MKL_INT) mat_dims[0];
+        MKL_INT cblas_k = (MKL_INT) ten_dims[mode]; // Or mat_dims[1]
+        MKL_INT cblas_n = 1;
         for (size_t i = mode+1; i<out_ten_dims.size(); i++){
-            cblas_n = cblas_n * out_ten_dims[i];
+            cblas_n = cblas_n * (MKL_INT) out_ten_dims[i];
         }
-        float cblas_alpha = 1.0;
-        float cblas_beta = 0.0;
-        auto cblas_a = M.data_ptr;
-        auto cblas_lda = mat_dims[0];
-        auto cblas_b = T.data_ptr;
-        auto cblas_ldb = ten_dims[0];
-        auto cblas_c = TO.data_ptr; 
-        auto cblas_ldc = out_ten_dims[0]; // Number of rows of the matrix
+        double cblas_alpha = 1.0;
+        double cblas_beta = 0.0;
+        double* cblas_a = M.data_ptr;
+        MKL_INT cblas_lda = (MKL_INT) mat_dims[0];
+        double* cblas_b = T.data_ptr;
+        MKL_INT cblas_ldb = (MKL_INT) ten_dims[0];
+        double* cblas_c = TO.data_ptr; 
+        MKL_INT cblas_ldc = (MKL_INT) out_ten_dims[0]; // Number of rows of the matrix
                                          
         cblas_dgemm(
             CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
@@ -401,17 +402,17 @@ Tensor ttm_loop(Tensor& T, Matrix& M, size_t mode){
         size_t T_stride_len = Mk * ten_dims[mode];
         size_t TO_stride_len = Mk * out_ten_dims[mode];
         for(size_t l = 0; l < Pk; l++){
-            size_t cblas_m = Mk;
-            size_t cblas_k = ten_dims[mode]; // Or mat_dims[1]
-            size_t cblas_n = mat_dims[0];
-            float cblas_alpha = 1.0;
-            float cblas_beta = 0.0;
-            auto cblas_a = T.data_ptr + T_stride_len * l;
-            auto cblas_lda = Mk;
-            auto cblas_b = M.data_ptr;
-            auto cblas_ldb = mat_dims[0];
-            auto cblas_c = TO.data_ptr + TO_stride_len * l; 
-            auto cblas_ldc = Mk;
+            MKL_INT cblas_m = (MKL_INT) Mk;
+            MKL_INT cblas_k = (MKL_INT) ten_dims[mode]; // Or mat_dims[1]
+            MKL_INT cblas_n = (MKL_INT) mat_dims[0];
+            double cblas_alpha = 1.0;
+            double cblas_beta = 0.0;
+            double* cblas_a = T.data_ptr + T_stride_len * l;
+            MKL_INT cblas_lda = (MKL_INT) Mk;
+            double* cblas_b = M.data_ptr;
+            MKL_INT cblas_ldb = (MKL_INT) mat_dims[0];
+            double* cblas_c = TO.data_ptr + TO_stride_len * l; 
+            MKL_INT cblas_ldc = (MKL_INT) Mk;
           
             cblas_dgemm(
                 CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
@@ -451,20 +452,20 @@ Tensor ttm(Tensor& T, Matrix& M, size_t mode){
 
     if(mode == 0) {
         // TTM on first mode
-        size_t cblas_m = mat_dims[0];
-        size_t cblas_k = ten_dims[mode]; // Or mat_dims[1]
-        size_t cblas_n = 1;
+        MKL_INT cblas_m = (MKL_INT) mat_dims[0];
+        MKL_INT cblas_k = (MKL_INT) ten_dims[mode]; // Or mat_dims[1]
+        MKL_INT cblas_n = 1;
         for (size_t i = mode+1; i<out_ten_dims.size(); i++){
-            cblas_n = cblas_n * out_ten_dims[i];
+            cblas_n = cblas_n * (MKL_INT) out_ten_dims[i];
         }
-        float cblas_alpha = 1.0;
-        float cblas_beta = 0.0;
-        auto cblas_a = M.data_ptr;
-        auto cblas_lda = mat_dims[0];
-        auto cblas_b = T.data_ptr;
-        auto cblas_ldb = ten_dims[0];
-        auto cblas_c = TO.data_ptr; 
-        auto cblas_ldc = out_ten_dims[0]; // Number of rows of the matrix
+        double cblas_alpha = 1.0;
+        double cblas_beta = 0.0;
+        double* cblas_a = M.data_ptr;
+        MKL_INT cblas_lda = (MKL_INT) mat_dims[0];
+        double* cblas_b = T.data_ptr;
+        MKL_INT cblas_ldb = (MKL_INT) ten_dims[0];
+        double* cblas_c = TO.data_ptr; 
+        MKL_INT cblas_ldc = (MKL_INT) out_ten_dims[0]; // Number of rows of the matrix
                                          
         cblas_dgemm(
             CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
@@ -498,21 +499,21 @@ Tensor ttm(Tensor& T, Matrix& M, size_t mode){
 
         // MKL Strided Batched BLAS documentation: 
         // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-0/cblas-gemm-batch-strided.html
-        size_t cblas_m = Mk;
-        size_t cblas_k = ten_dims[mode]; // Or mat_dims[1]
-        size_t cblas_n = mat_dims[0];
-        float cblas_alpha = 1.0;
-        float cblas_beta = 0.0;
-        auto cblas_a = T.data_ptr;
-        auto cblas_lda = Mk;
-        auto cblas_stridea = Mk * ten_dims[mode];
-        auto cblas_b = M.data_ptr;
-        auto cblas_ldb = mat_dims[0];
-        auto cblas_strideb = 0;
-        auto cblas_c = TO.data_ptr; 
-        auto cblas_ldc = Mk;
-        auto cblas_stridec = Mk * out_ten_dims[mode];
-        auto cblas_batch_size = Pk;
+        MKL_INT cblas_m = (MKL_INT) Mk;
+        MKL_INT cblas_k = (MKL_INT) ten_dims[mode]; // Or mat_dims[1]
+        MKL_INT cblas_n = (MKL_INT) mat_dims[0];
+        double cblas_alpha = 1.0;
+        double cblas_beta = 0.0;
+        double* cblas_a = T.data_ptr;
+        MKL_INT cblas_lda = (MKL_INT) Mk;
+        MKL_INT cblas_stridea = (MKL_INT) (Mk * ten_dims[mode]);
+        double* cblas_b = M.data_ptr;
+        MKL_INT cblas_ldb = (MKL_INT) mat_dims[0];
+        MKL_INT cblas_strideb = 0;
+        double* cblas_c = TO.data_ptr; 
+        MKL_INT cblas_ldc = Mk;
+        MKL_INT cblas_stridec = Mk * out_ten_dims[mode];
+        MKL_INT cblas_batch_size = Pk;
 
         cblas_dgemm_batch_strided(
             CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
