@@ -554,29 +554,32 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=f
   Vtdims[0] = r;
   size_t Vtbuflen = std::accumulate(Vtdims.begin(), Vtdims.end(), (size_t)1, std::multiplies<size_t>());
   Tensor Vt(Vtbuflen, A.ndim, Vtdims);
-
   Matrix S(r*A.nslices, r, A.nslices);
- 
-  // Temporary slicewise SVD objects 
-  Matrix Us(Udims[0] * r, Udims[0], r);
-  Matrix Vst(r * Vtdims[1], r, Vtdims[1]);
-  std::vector<double> s(r);
 
   // Call slice-wise SVDs
-  for (size_t i = 0; i < A.nslices; i++) {
+#pragma omp parallel
+  {
+      // Temporary slicewise SVD objects 
+      Matrix Us(Udims[0] * r, Udims[0], r);
+      Matrix Vst(r * Vtdims[1], r, Vtdims[1]);
+      std::vector<double> s(r);
+#pragma omp for
+      for (size_t i = 0; i < A.nslices; i++) {
 
-    // Compute the SVD
-    std::tie(Us, s, Vst) = svd(A.getfrontalslice_copy(i));
+        // Compute the SVD
+        std::tie(Us, s, Vst) = svd(A.getfrontalslice_copy(i));
 
-    // Set the output tensors
-    U.setfrontalslice(Us, i);
-    S.setcol(s, i);
-    Vt.setfrontalslice(Vst, i);
+        // Set the output tensors
+        U.setfrontalslice(Us, i);
+        S.setcol(s, i);
+        Vt.setfrontalslice(Vst, i);
+      }
+
+      // Clear temporary stuff
+      Us.clear();
+      Vst.clear();
   }
 
-  // Clear temporary stuff
-  Us.clear();
-  Vst.clear();
 
   return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
 }

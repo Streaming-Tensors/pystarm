@@ -26,14 +26,13 @@ def video_to_gray_array(path, max_frames=None):
     # In this video data, we keep the height and width dimension to be in the same order, just push the time dimension to the end (1,2,0)
     # Because the numpy array that contains the video frames stacked one after another is having each frame as contiguous
     h_w_t = np.transpose(t_h_w, (1, 2, 0)) # H x W x T
-    print(h_w_t.flags)
+    # print(h_w_t.flags)
     
-    # Do not do reshape. It would cause x to not own it's data which causes potential memory error
+    # Do not do reshape. It would cause x to not own it's data which causes potential memory error when the execution of the function ends
     x = np.zeros(h_w_t.shape, dtype=np.float64, order='F')
     for i in range(h_w_t.shape[2]):
         x[:,:,i] = h_w_t[:,:,i]
-
-    print(x.flags)
+    # print(x.flags)
 
     # return np.asfortranarray(h_w_t)
     return x
@@ -91,64 +90,44 @@ def write_mp4_opencv(arr: np.ndarray, out_path: str, fps: float = 30.0,
         # arr = arr.astype(np.float32) / 255.0
     # return np.asfortranarray(arr)   # convert to Fortran (column-major) order
 
-def tsvdm_3way(A, M, Minv, k):
+def tsvdm_I_compress(A, M, k):
     t0 = time.perf_counter()
     A_hat = pystarm.ttm(A, M, len(A.getdims())-1) 
     t1 = time.perf_counter()
-    print("[tsvdm_3way] Time for TTM A x M:", t1-t0)
-    
-    # A_hat_np = np.frombuffer(A_hat, dtype=np.float64).reshape(A_hat.getdims(), order='F', copy = False)
-    # plt.imshow(A_hat_np[:,:,500], cmap='viridis')
-    # plt.savefig('data/iniesta_500_A_hat.png')
-    # A2 = pystarm.ttm(A_hat, Minv, len(A_hat.getdims())-1)
-    # A2_np = np.frombuffer(A2, dtype=np.float64).reshape(A2.getdims(), order='F', copy = False)
-    # plt.imshow(A2_np[:,:,500], cmap='viridis')
-    # plt.savefig('data/iniesta_500_A2.png')
+    print("[tsvdm_I_compress] Time for TTM A x M:", t1-t0)
 
     t0 = time.perf_counter()
     U_hat, S_hat, V_hat = pystarm.slicewise_svdx(A_hat, k)
     # U_hat, S_hat, V_hat = pystarm.slicewise_svd(A_hat)
     t1 = time.perf_counter()
-    print("[tsvdm_3way] Time for slicewise SVD:", t1-t0)
-
-    t0 = time.perf_counter()
-    U = pystarm.ttm(U_hat, Minv, len(U_hat.getdims())-1 )
-    t1 = time.perf_counter()
-    print("[tsvdm_3way] Time for TTM U_hat x Minv:", t1-t0)
-
-    t0 = time.perf_counter()
-    S = pystarm.matmul(S_hat, Minv )
-    t1 = time.perf_counter()
-    print("[tsvdm_3way] Time for matmul S_hat x Minv:", t1-t0)
-
-    t0 = time.perf_counter()
-    V = pystarm.ttm(V_hat, Minv, len(U_hat.getdims())-1 )
-    t1 = time.perf_counter()
-    print("[tsvdm_3way] Time for TTM V_hat x Minv:", t1-t0)
+    print("[tsvdm_I_compress] Time for slicewise SVD:", t1-t0)
     
-    return (U,S,V)
+    return (U_hat,S_hat,V_hat)
+
+def tsvdm_I_reconstruct(U_hat, S_hat, V_hat, Minv):
+    t0 = time.perf_counter()
+    A_hat = pystarm.slicewise_matmul(U_hat, S_hat, VT_hat)
+    t1 = time.perf_counter()
+    print("[tsvdm_I_reconstruct] Time to reconstruct A_hat:", t1-t0)
+
+    t0 = time.perf_counter()
+    Atilde = pystarm.ttm(A_hat, Minv, len(A_hat.getdims())-1) 
+    t1 = time.perf_counter()
+    print("[tsvdm_I_reconstruct] Time for TTM A_hat x Minv:", t1-t0)
     
+    return Atilde
 
 
 if __name__ == "__main__":
-    # usage
     t0 = time.perf_counter()
     arr_gry = video_to_gray_array("data/iniesta.mp4")
-    # rng = np.random.default_rng(seed=42)
-    # arr_gry = rng.random(arr_gry.shape, dtype=np.float64)
     t1 = time.perf_counter()
     print("Time to read data into numpy:", t1-t0)
     arr_gry_shape = arr_gry.shape
-    # arr_gry_shape = (arr_gry_shape[0], arr_gry_shape[1], 10) 
     print("Grayscale tensor shape:", arr_gry.shape) 
-
-    # print(arr_gry[:,:,1])
-    # plt.imshow(arr_gry[:,:,500], cmap='viridis')
-    # plt.savefig('data/iniesta_500.png')
 
     t0 = time.perf_counter()
     A = pystarm.Tensor(arr_gry, len(arr_gry_shape), arr_gry_shape)
-    # A = pystarm.Tensor(arr_gry, len(arr_gry_shape), (arr_gry_shape[0], arr_gry_shape[1], 10))
     t1 = time.perf_counter()
     print("Time to convert to Pystarm tensor:", t1-t0)
 
@@ -157,41 +136,27 @@ if __name__ == "__main__":
     mat_nelm = n * n
     mat_dims = (n, n)
     mat_ndim = len(mat_dims)
-    # arr1 = np.arange(n*n, dtype=np.float64).reshape(mat_dims, order='F')
     DC = dct(np.eye(n), axis=0, norm="ortho")
     DF = np.asfortranarray(DC)
     DFT = np.asfortranarray(DF.T)
 
     M = pystarm.Matrix(DF, mat_dims[0], mat_dims[1])
     MT = pystarm.Matrix(DFT, mat_dims[0], mat_dims[1])
-    # I = np.asfortranarray(np.identity(n))
-    # M = pystarm.Matrix(I, n, n)
-    # MT = pystarm.Matrix(I, n, n)
     t1 = time.perf_counter()
     print("Time to generate the DCT matrix:", t1-t0)
 
-    (U,S,VT) = tsvdm_3way(A, M, MT, 100)
-    print(U.getdims())
-    print(S.getdims())
-    print(VT.getdims())
-
-    # U_np = np.frombuffer(U, dtype=np.float64).reshape(U.getdims(), order='F', copy = False)
-    # S_np = np.frombuffer(S, dtype=np.float64).reshape(S.getdims(), order='F', copy = False)
-    # VT_np = np.frombuffer(VT, dtype=np.float64).reshape(VT.getdims(), order='F', copy = False)
-    # print(U_np.shape)
-    # print(S_np.shape)
-    # print(VT_np.shape)
-
-    t0 = time.perf_counter()
-    Atilde = pystarm.slicewise_matmul(U, S, VT)
-    t1 = time.perf_counter()
-    print("Time to reconstruct:", t1-t0)
+    (U_hat,S_hat,VT_hat) = tsvdm_I_compress(A, M, 100)
+    Atilde = tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, MT)
 
     arr_reconst = np.frombuffer(Atilde, dtype=np.float64).reshape(Atilde.getdims(), order='F', copy = False)
-    # # write_mp4_opencv(arr_reconst, "data/iniesta_reconst.mp4")
+    write_mp4_opencv(arr_reconst, "data/iniesta_reconst.mp4")
 
-    err = np.linalg.norm(np.abs(arr_reconst - arr_gry))
-    norm_arr = np.linalg.norm(arr_gry)
-    norm_rec = np.linalg.norm(arr_reconst)
+    arr_diff = arr_gry - arr_reconst
+    norm_arr_diff = np.linalg.norm(arr_diff)
+    norm_arr_gry = np.linalg.norm(arr_gry)
+    norm_arr_reconst = np.linalg.norm(arr_reconst)
 
-    print(err, norm_arr, norm_rec)
+    print("Absolute err:", norm_arr_diff)
+    print("Relative err:", norm_arr_diff/norm_arr_gry)
+    print("Norm of original array:", norm_arr_gry)
+    print("Norm of reconstructed array:", norm_arr_reconst)
