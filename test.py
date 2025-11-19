@@ -349,9 +349,13 @@ class JaggedTensorTestCase(unittest.TestCase):
         """Test jagged tensor creation and operations"""
         # Create a python jagged tensor
         fixed_dim = np.random.randint(1, 20)
+        # print("fixed_dim", fixed_dim)
         nslices = np.random.randint(1, 20)
+        # print("nslices", nslices)
         slice_ranks = np.random.randint(1, 10, nslices)
+        # print("slice_ranks", slice_ranks)
         nelements = sum(fixed_dim * slice_ranks)
+        # print("nelements", nelements)
         vals = np.random.rand(nelements)
         jagged_ten = pystarm.JaggedTensor(vals, fixed_dim, slice_ranks)
         jagged_ten_vals = np.frombuffer(jagged_ten, dtype=np.float64)
@@ -380,6 +384,42 @@ class JaggedTensorTestCase(unittest.TestCase):
             flag = np.allclose(slice_vals, py_slice_vals)
             start_idx = end_idx
             self.assertEqual(flag, True)
+
+    def test_jagged_tensor_setslice(self):
+        """Test jagged tensor set slice"""
+        # Create a python jagged tensor
+        fixed_dim = np.random.randint(1, 20)
+        nslices = np.random.randint(1, 20)
+        slice_ranks = np.random.randint(1, 10, nslices)
+        nelements = sum(fixed_dim * slice_ranks)
+        vals = np.random.rand(nelements)
+        jagged_ten = pystarm.JaggedTensor(vals, fixed_dim, slice_ranks)
+        # compute nrows for each slice
+        # get each slice and check again python vals
+        # need to use offsets since vals is a 1D array
+        start_idx = 0
+        end_idx = 0
+        new_vals = np.zeros_like(vals)
+        for i in range(nslices):
+            end_idx += fixed_dim * slice_ranks[i]
+
+            mat_nelm = fixed_dim*slice_ranks[i]
+            mat_dims = (fixed_dim, slice_ranks[i])
+            mat_ndim = len(mat_dims)
+            arr = np.arange(mat_nelm, dtype=np.float64).reshape(mat_dims, order='F')
+            # print("Setting slice:", i)
+            # print(arr)
+            new_vals[start_idx:end_idx] = arr.flatten(order='F')
+            # print(new_vals[start_idx:end_idx])
+            mat = pystarm.Matrix(arr, mat_dims[0], mat_dims[1])
+            jagged_ten.setfrontalslice(mat, i)
+            start_idx = end_idx
+
+        jagged_ten_vals = np.frombuffer(jagged_ten, dtype=np.float64)
+        flag = np.allclose(jagged_ten_vals, new_vals)
+        # print("jagged_ten_vals", jagged_ten_vals)
+        # print("new_vals", new_vals)
+        self.assertEqual(flag, True)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

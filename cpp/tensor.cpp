@@ -134,7 +134,7 @@ class JaggedTensor{
     double *data_ptr;
 
     JaggedTensor(py::buffer &buf, size_t fixed_dim_size, std::vector<size_t> slice_ranks, bool variable_first_mode = false)
-        : fixed_dim_size(fixed_dim_size), nslices(slice_ranks.size()) {
+        : fixed_dim_size(fixed_dim_size), nslices(slice_ranks.size()), variable_first_mode(variable_first_mode) {
         py::buffer_info buf_info = buf.request();
         this->slice_ranks.resize(this->nslices);
         for (size_t i = 0; i < this->nslices; i++) {
