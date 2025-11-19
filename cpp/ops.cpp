@@ -567,7 +567,7 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=f
       for (size_t i = 0; i < A.nslices; i++) {
 
         // Compute the SVD
-        std::tie(Us, s, Vst) = svd(A.getfrontalslice_copy(i));
+        std::tie(Us, s, Vst) = svd(A.getfrontalslice_copy(i), verbose);
 
         // Set the output tensors
         U.setfrontalslice(Us, i);
@@ -610,7 +610,7 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svdx(const Tensor &A, size_t k,
     for (size_t i = 0; i < A.nslices; i++) {
 
         // Compute the SVD
-        std::tie(Us, s, Vst) = svdx(A.getfrontalslice_copy(i), k, false);
+        std::tie(Us, s, Vst) = svdx(A.getfrontalslice_copy(i), k, verbose);
 
         // Set the output tensors
         U.setfrontalslice(Us, i);

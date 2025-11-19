@@ -31,8 +31,14 @@ public:
     // py::buffer instead of py:array_t to prevent any chance of silent data copy
     Matrix(py::buffer &buf, size_t m, size_t n)
         : nrow(m), ncol(n) {
+        #ifdef _MEMPRINT
+        std::cout << "Reg constructor (pybuffer)" << std::endl;
+        #endif
         py::buffer_info buf_info = buf.request();
         data_ptr = static_cast<double*>(buf_info.ptr);
+        #ifdef _MEMPRINT
+        std::cout << "Pointing to: " << data_ptr << std::endl;
+        #endif
         //size_t size = buf_info.size; // Total number of elements
         //size_t itemsize = buf_info.itemsize; //Byte-size of each element
         //std::string format = buf_info.format; // Datatype of each element
@@ -59,12 +65,22 @@ public:
     // Constructor that allocates new buffer
     Matrix(size_t buflen, size_t m, size_t n)
         : nrow(m), ncol(n) {
+        #ifdef _MEMPRINT
+        std::cout << "Reg constructor (malloc)" << std::endl;
+        #endif
         this->data_ptr = (double*) malloc(buflen * sizeof(double) );
+        #ifdef _MEMPRINT
+        std::cout << "Pointing to: " << data_ptr << std::endl;
+        #endif
     }
     
     // Constructor that takes a preallocated buffer
     Matrix(double* ptr, size_t m, size_t n)
         : nrow(m), ncol(n) {
+        #ifdef _MEMPRINT
+        std::cout << "Reg constructor (buffer)" << std::endl;
+        std::cout << "Pointing to: " << ptr << std::endl;
+        #endif
         this->data_ptr = static_cast<double*>(ptr);
     }
 
@@ -76,6 +92,10 @@ public:
       size_t buflen  = this->nrow * this->ncol;
       this->data_ptr = (double*) malloc(buflen * sizeof(double));
       std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+      #ifdef _MEMPRINT
+      std::cout << "Copying from: " << obj.data_ptr << std::endl;
+      std::cout << "Pointing to: " << this->data_ptr << std::endl;
+      #endif
     }
 
     // Copy assignment operator
@@ -97,6 +117,11 @@ public:
         std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
       }
 
+      #ifdef _MEMPRINT
+      std::cout << "Copying from: " << obj.data_ptr << std::endl;
+      std::cout << "Pointing to: " << this->data_ptr << std::endl;
+      #endif
+
       return *this;
     }
 
@@ -104,6 +129,7 @@ public:
     Matrix(Matrix &&obj) noexcept {
       #ifdef _MEMPRINT
       std::cout << "Move constructor" << std::endl;
+      std::cout << "Pointing to: " << obj.data_ptr << std::endl;
       #endif
 
       // Point to the other object      
@@ -121,6 +147,8 @@ public:
     Matrix& operator=(Matrix &&obj) noexcept {
       #ifdef _MEMPRINT
       std::cout << "Move assignment" << std::endl;
+      std::cout << "Current memory: " << this->data_ptr << std::endl;
+      std::cout << "Pointing to: " << obj.data_ptr << std::endl;
       #endif
 
       if (this != &obj) {
