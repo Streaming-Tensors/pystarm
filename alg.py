@@ -1,11 +1,10 @@
 import time
-import pystarm
 import numpy as np
 import scipy as sp
 from scipy.fft import dct
 import cv2
-import numpy as np
 import matplotlib.pyplot as plt
+import pystarm
 
 def video_to_gray_array(path, max_frames=None):
     cap = cv2.VideoCapture(path)
