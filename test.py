@@ -145,7 +145,7 @@ class TensorTestCase(unittest.TestCase):
             flag3 = np.allclose(Atilde_np, Atilde_py)
             # print("Atilde_py", Atilde_py)
             # print("Atilde_np", Atilde_np)
-            print("Error", np.linalg.norm(np.abs(Atilde_py - Atilde_np)))
+            # print("Error", np.linalg.norm(np.abs(Atilde_py - Atilde_np)))
               
             return flag1, flag2, flag3
 

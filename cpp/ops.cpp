@@ -450,6 +450,13 @@ Tensor ttm(Tensor& T, Matrix& M, size_t mode){
 
     Tensor TO(buflen, out_ten_dims.size(), out_ten_dims);
 
+    #ifdef _MEMPRINT
+    std::cout << "ttm" << std::endl;
+    std::cout << "T Pointing to: " << T.data_ptr << std::endl;
+    std::cout << "M Pointing to: " << M.data_ptr << std::endl;
+    std::cout << "TO Pointing to: " << TO.data_ptr << std::endl;
+    #endif
+
     if(mode == 0) {
         // TTM on first mode
         MKL_INT cblas_m = (MKL_INT) mat_dims[0];
@@ -560,8 +567,10 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=f
 #pragma omp parallel
   {
       // Temporary slicewise SVD objects 
-      Matrix Us(Udims[0] * r, Udims[0], r);
-      Matrix Vst(r * Vtdims[1], r, Vtdims[1]);
+      //Matrix Us(Udims[0] * r, Udims[0], r);
+      //Matrix Vst(r * Vtdims[1], r, Vtdims[1]);
+      Matrix Us;
+      Matrix Vst;
       std::vector<double> s(r);
 #pragma omp for
       for (size_t i = 0; i < A.nslices; i++) {
@@ -603,8 +612,10 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svdx(const Tensor &A, size_t k,
 #pragma omp parallel
   {
     // Temporary slicewise SVD objects 
-    Matrix Us(Udims[0] * k, Udims[0], k);
-    Matrix Vst(k * Vtdims[1], k, Vtdims[1]);
+    //Matrix Us(Udims[0] * k, Udims[0], k);
+    //Matrix Vst(k * Vtdims[1], k, Vtdims[1]);
+    Matrix Us;
+    Matrix Vst;
     std::vector<double> s(k);
 #pragma omp for
     for (size_t i = 0; i < A.nslices; i++) {

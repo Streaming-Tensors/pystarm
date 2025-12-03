@@ -73,6 +73,12 @@ public:
         std::cout << "Pointing to: " << data_ptr << std::endl;
         #endif
     }
+
+    // Empty constructor
+    Matrix()
+        : nrow(0), ncol(0) {
+        this->data_ptr = nullptr;
+    }
     
     // Constructor that takes a preallocated buffer
     Matrix(double* ptr, size_t m, size_t n)
