@@ -6,6 +6,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <random>
 #include "utils.hpp"
 #include "matrix.hpp"
 
@@ -16,6 +17,7 @@ class Tensor{
     size_t ndim;
     std::vector<size_t> dims;
     size_t nslices;
+    size_t buflen;
     double* data_ptr = nullptr; // Expects the data to be in column major order
 
     // Takes a preallocated buffer by Python
@@ -27,7 +29,11 @@ class Tensor{
       #endif
         this->ndim = ndim;
         this->dims.resize(ndim);
-        for(size_t i = 0; i < ndim; i++) this->dims[i] = dims[i];
+        this->buflen = 1;
+        for(size_t i = 0; i < ndim; i++){
+            this->dims[i] = dims[i];
+            this->buflen *= dims[i];
+        }
         py::buffer_info buf_info = buf.request();
         this->data_ptr = static_cast<double*>(buf_info.ptr);
 
@@ -73,7 +79,8 @@ class Tensor{
         }
         assert(x == buflen);
 
-        this->data_ptr = (double*) malloc(buflen * sizeof(double) );
+        this->buflen = buflen;
+        this->data_ptr = (double*) malloc(this->buflen * sizeof(double) );
 
         // Count the number of slices
         size_t nslices = 1;
@@ -87,18 +94,18 @@ class Tensor{
     }
 
     // Copy constructor (deep copy of date)
-    Tensor(const Tensor &obj) : ndim(obj.ndim), dims(obj.dims), nslices(obj.nslices) {
+    Tensor(const Tensor &obj) : ndim(obj.ndim), dims(obj.dims), nslices(obj.nslices), buflen(obj.buflen) {
       #ifdef _MEMPRINT
       std::cout << "Tensor Copy constructor" << std::endl;
       std::cout << "Pointing to before copy: " << this->data_ptr << std::endl;
       std::cout << "Copying from: " << obj.data_ptr << std::endl;
       #endif
-      size_t buflen = 1;
-      for (size_t i = 0; i < ndim; i++) {
-        buflen = buflen * dims[i];
-      }
-      this->data_ptr = (double *) malloc(buflen * sizeof(double));
-      std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+      //size_t buflen = 1;
+      //for (size_t i = 0; i < ndim; i++) {
+        //buflen = buflen * dims[i];
+      //}
+      this->data_ptr = (double *) malloc(this->buflen * sizeof(double));
+      std::copy(obj.data_ptr, obj.data_ptr + this->buflen, this->data_ptr);
 
       #ifdef _MEMPRINT
       std::cout << "Pointing to after copy: " << this->data_ptr << std::endl;
@@ -121,14 +128,15 @@ class Tensor{
         this->dims    = obj.dims;
         this->ndim    = obj.ndim;
         this->nslices = obj.nslices;
+        this->buflen  = obj.buflen;
 
-        size_t buflen  = 1;
-        for (size_t i = 0; i < ndim; i++) {
-          buflen = buflen * dims[i];
-        }
+        //size_t buflen  = 1;
+        //for (size_t i = 0; i < ndim; i++) {
+          //buflen = buflen * dims[i];
+        //}
 
-        this->data_ptr = (double*) malloc(buflen * sizeof(double));
-        std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+        this->data_ptr = (double*) malloc(this->buflen * sizeof(double));
+        std::copy(obj.data_ptr, obj.data_ptr + this->buflen, this->data_ptr);
       }
 
       #ifdef _MEMPRINT
@@ -150,11 +158,13 @@ class Tensor{
       this->dims     = std::move(obj.dims);
       this->ndim     = obj.ndim;
       this->nslices  = obj.nslices;
+      this->buflen   = obj.buflen;
       this->data_ptr = obj.data_ptr;
 
       // Clear the other other object
       obj.ndim     = 0;
       obj.nslices  = 0;
+      obj.buflen  = 0;
       obj.data_ptr = nullptr;
 
       #ifdef _MEMPRINT
@@ -178,11 +188,13 @@ class Tensor{
         this->dims     = std::move(obj.dims);
         this->ndim     = obj.ndim;
         this->nslices  = obj.nslices;
+        this->buflen   = obj.buflen;
         this->data_ptr = obj.data_ptr;
 
         // Clear the other other object
         obj.ndim     = 0;
         obj.nslices  = 0;
+        obj.buflen   = 0;
         obj.data_ptr = nullptr;
       }
 
@@ -279,6 +291,53 @@ class Tensor{
         }
         this->data_ptr = nullptr;
     }
+
+    void print(){
+        #ifdef _MEMPRINT
+        printf("Memory location: %p\n", this->data_ptr);        
+        #endif
+
+        size_t buflen = 1;
+        for (size_t i = 0; i < ndim; i++) {
+            buflen = buflen * this->dims[i];
+        }
+        for (size_t i = 0; i < buflen; ++i) {
+                printf("%.2lf\t", this->data_ptr[i] );
+        }  
+        printf("\n");
+    }
+
+    double norm() const {
+        #ifdef _MEMPRINT
+        printf("Memory location: %p\n", this->data_ptr);        
+        #endif
+
+        size_t buflen = 1;
+        for (size_t i = 0; i < ndim; i++) {
+            buflen = buflen * this->dims[i];
+        }
+
+        MKL_INT cblas_n = (MKL_INT) this->buflen;
+        MKL_INT cblas_incx = (MKL_INT)(1);
+        double* cblas_x = this->data_ptr;
+        return cblas_dnrm2(cblas_n, cblas_x, cblas_incx);
+        //double norm = 0.0;
+        //for (size_t i = 0; i < buflen; ++i) {
+            //norm += this->data_ptr[i] * this->data_ptr[i];
+        //}
+        //return std::sqrt(norm);
+    }
+
+    void generate_random(){
+		std::mt19937 rng(1234);
+		std::uniform_real_distribution<double> dist(0.0, 100.0);
+        for(size_t i = 0; i < this->buflen; i++){
+            this->data_ptr[i] = dist(rng);
+        }
+        return;
+    }
+
+
 };
 
 #endif

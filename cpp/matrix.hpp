@@ -275,6 +275,19 @@ public:
         //}  
 
     }
+
+    double norm() const {
+        #ifdef _MEMPRINT
+        printf("Memory location: %p\n", this->data_ptr);        
+        #endif
+
+        size_t buflen = this->nrow * this->ncol;
+        double norm = 0.0;
+        for (size_t i = 0; i < buflen; ++i) {
+            norm += this->data_ptr[i] * this->data_ptr[i];
+        }
+        return std::sqrt(norm);
+    }
 };
 
 #endif

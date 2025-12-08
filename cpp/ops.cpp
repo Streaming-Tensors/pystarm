@@ -231,7 +231,7 @@ std::tuple<Matrix, std::vector<double>, Matrix> svdx(Matrix A, size_t k,
   return std::make_tuple(std::move(U), std::move(s), std::move(Vt));
 }
 
-Tensor slicewise_matmul(Tensor& U, Matrix& S, Tensor& VT){
+Tensor slicewise_matmul(const Tensor& U, const Matrix& S, const Tensor& VT){
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch.html
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
     assert(U.nslices == VT.nslices);
@@ -518,9 +518,9 @@ Tensor ttm(Tensor& T, Matrix& M, size_t mode){
         MKL_INT cblas_ldb = (MKL_INT) mat_dims[0];
         MKL_INT cblas_strideb = 0;
         double* cblas_c = TO.data_ptr; 
-        MKL_INT cblas_ldc = Mk;
-        MKL_INT cblas_stridec = Mk * out_ten_dims[mode];
-        MKL_INT cblas_batch_size = Pk;
+        MKL_INT cblas_ldc = (MKL_INT) Mk;
+        MKL_INT cblas_stridec = (MKL_INT) (Mk * out_ten_dims[mode]);
+        MKL_INT cblas_batch_size = (MKL_INT) Pk;
 
         cblas_dgemm_batch_strided(
             CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
@@ -547,6 +547,149 @@ Tensor ttm(Tensor& T, Matrix& M, size_t mode){
     
     return TO;
 }
+
+Tensor ttm_to_existing_buffer(const Tensor& T, Matrix& M, size_t mode, Tensor& TO){
+    std::vector<size_t> ten_dims = T.dims;
+    //auto ten_dims = T.getdims();
+    std::vector<size_t> mat_dims = M.getdims();
+    assert(mat_dims[1] == ten_dims[mode]);
+
+    std::vector<size_t> out_ten_dims = TO.dims;
+    //auto out_ten_dims = TO.getdims();
+    //out_ten_dims[mode] = mat_dims[0];
+    //size_t buflen = 1;
+    //for (size_t i = 0; i<out_ten_dims.size(); i++) buflen = buflen * out_ten_dims[i];
+
+    //Tensor TO(buflen, out_ten_dims.size(), out_ten_dims);
+
+    #ifdef _MEMPRINT
+    std::cout << "ttm" << std::endl;
+    std::cout << "T Pointing to: " << T.data_ptr << std::endl;
+    std::cout << "M Pointing to: " << M.data_ptr << std::endl;
+    std::cout << "TO Pointing to: " << TO.data_ptr << std::endl;
+    #endif
+
+    if(mode == 0) {
+        // TTM on first mode
+        MKL_INT cblas_m = (MKL_INT) mat_dims[0];
+        MKL_INT cblas_k = (MKL_INT) ten_dims[mode]; // Or mat_dims[1]
+        MKL_INT cblas_n = 1;
+        for (size_t i = mode+1; i<out_ten_dims.size(); i++){
+            cblas_n = cblas_n * (MKL_INT) out_ten_dims[i];
+        }
+        double cblas_alpha = 1.0;
+        double cblas_beta = 0.0;
+        double* cblas_a = M.data_ptr;
+        MKL_INT cblas_lda = (MKL_INT) mat_dims[0];
+        double* cblas_b = T.data_ptr;
+        MKL_INT cblas_ldb = (MKL_INT) ten_dims[0];
+        double* cblas_c = TO.data_ptr; 
+        MKL_INT cblas_ldc = (MKL_INT) out_ten_dims[0]; // Number of rows of the matrix
+                                         
+        cblas_dgemm(
+            CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
+            CblasNoTrans, // A matrix is not transpose. `transa` param of MKL cblas call.
+            CblasNoTrans, // B matrix is not transpose. `transb` param of MKL cblas call.
+            cblas_m, // Number of rows of A or C. `m` param of MKL cblas call.
+            cblas_n, // Number of cols of B or C. `n` param of MKL cblas call.
+            cblas_k, // Inner dimension - number of columns of A or number of rows of B. `k` param of MKL cblas call.
+            cblas_alpha, // Scalar `alpha` param of MKL cblas call.
+            cblas_a, // Data buffer of A. `a` param of MKL cblas call.
+            cblas_lda, // Leading dimension of A. `lda` param of MKL cblas call.
+            cblas_b, // Data buffer of B. `b` param of MKL cblas call.
+            cblas_ldb, // Leading dimension of B. `ldb` param of MKL cblas call.
+            cblas_beta, // Scalar `beta` param of MKL cblas call.
+            cblas_c, // Data buffer of C. `c` param of MKL cblas call.
+            cblas_ldc // Leading dimension of C. `ldc` param of MKL cblas call.
+        );
+    }
+    else {
+        // Variable names are following Algorithm 3.1 from Tensor textbook
+        size_t Mk = 1;
+        for (size_t i = 0; i<mode; i++){
+            Mk = Mk * ten_dims[i];
+        }
+        size_t Pk = 1;
+        for (size_t i = mode+1; i<ten_dims.size(); i++){
+            Pk = Pk * ten_dims[i];
+        }
+        //size_t T_stride_len = Mk * ten_dims[mode];
+        //size_t TO_stride_len = Mk * out_ten_dims[mode];
+
+        // MKL Strided Batched BLAS documentation: 
+        // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-0/cblas-gemm-batch-strided.html
+        MKL_INT cblas_m = (MKL_INT) Mk;
+        MKL_INT cblas_k = (MKL_INT) ten_dims[mode]; // Or mat_dims[1]
+        MKL_INT cblas_n = (MKL_INT) mat_dims[0];
+        double cblas_alpha = 1.0;
+        double cblas_beta = 0.0;
+        double* cblas_a = T.data_ptr;
+        MKL_INT cblas_lda = (MKL_INT) Mk;
+        MKL_INT cblas_stridea = (MKL_INT) (Mk * ten_dims[mode]);
+        double* cblas_b = M.data_ptr;
+        MKL_INT cblas_ldb = (MKL_INT) mat_dims[0];
+        MKL_INT cblas_strideb = 0;
+        double* cblas_c = TO.data_ptr; 
+        MKL_INT cblas_ldc = Mk;
+        MKL_INT cblas_stridec = Mk * out_ten_dims[mode];
+        MKL_INT cblas_batch_size = Pk;
+
+        cblas_dgemm_batch_strided(
+            CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
+            CblasNoTrans, // A matrix is not transpose. `transa` param of MKL cblas call.
+            CblasTrans, // B matrix is transpose. `transb` param of MKL cblas call.
+            cblas_m, // Number of rows of A or C. `m` param of MKL cblas call.
+            cblas_n, // Number of cols of B or C. `n` param of MKL cblas call.
+            cblas_k, // Inner dimension - number of columns of A or number of rows of B. `k` param of MKL cblas call.
+            cblas_alpha, // Scalar `alpha` param of MKL cblas call.
+            cblas_a, // Data buffer of A. `a` param of MKL cblas call.
+            cblas_lda, // Leading dimension of A. `lda` param of MKL cblas call.
+            cblas_stridea,
+            cblas_b, // Data buffer of B. `b` param of MKL cblas call.
+            cblas_ldb, // Leading dimension of B. `ldb` param of MKL cblas call.
+            cblas_strideb,
+            cblas_beta, // Scalar `beta` param of MKL cblas call.
+            cblas_c, // Data buffer of C. `c` param of MKL cblas call.
+            cblas_ldc, // Leading dimension of C. `ldc` param of MKL cblas call.
+            cblas_stridec,
+            cblas_batch_size
+        );
+
+    }
+    printf("Norm difference after TTM: %.16e\n", (T.norm()-TO.norm()) / T.norm() );   
+    return TO;
+}
+
+
+Tensor transform(const Tensor& T, std::vector<Matrix> M, std::vector<int> order){
+    //printf("[transform]\n");
+    assert( M.size() == order.size() );
+    for(int i =0; i < order.size(); i++){
+        assert( order[i] < T.ndim );
+    }
+
+    size_t buflen  = 1;
+    for (size_t i = 0; i < T.ndim; i++) {
+      buflen = buflen * T.dims[i];
+    }
+    
+    Tensor TO(buflen, T.ndim, T.dims);
+    if(M.size() == 1){
+        ttm_to_existing_buffer(T, M[0], order[0], TO);
+    }
+    else{
+        Tensor TO_temp(buflen, T.ndim, T.dims);
+        TO_temp = T; // Should be copy
+        for(int i=0; i < order.size(); i++){
+            ttm_to_existing_buffer(TO_temp, M[i], order[i], TO);
+            //TO.print();
+            std::swap(TO.data_ptr, TO_temp.data_ptr);
+        }
+    }
+    return TO;
+}
+
+
 
 std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=false) {
   size_t r = std::min(A.dims[0], A.dims[1]);
@@ -635,6 +778,113 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svdx(const Tensor &A, size_t k,
   }
 
   return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
+}
+
+std::tuple<Tensor, Matrix, Tensor> tsvdmi_compress(const Tensor &A, std::vector<Matrix> M, int k) {
+    std::vector<int> order;
+    for(int i = 0; i < A.ndim; i++){
+        if(i < 2) continue;
+        else order.push_back(i);
+    }
+    Tensor A_hat = transform(A, M, order);
+    return slicewise_svdx(A_hat, k);
+}
+
+Tensor tsvdmi_reconstruct(const Tensor& U, const Matrix& S, const Tensor& VT, std::vector<Matrix> M){
+    Tensor A_hat = slicewise_matmul(U, S, VT);   
+    std::vector<int> order;
+    for(int i = 0; i < A_hat.ndim; i++){
+        if(i < 2) continue;
+        else order.push_back(i);
+    }
+    Tensor A_tilde = transform(A_hat, M, order);
+    return A_tilde;
+}
+
+void check(){
+    std::vector<size_t> dims(5);
+    //dims[0] = 253;
+    //dims[1] = 253;
+    //dims[2] = 253;
+    dims[0] = 80;
+    dims[1] = 80;
+    dims[2] = 80;
+    dims[3] = 4;
+    dims[4] = 6;
+    //size_t buflen = 253 * 253 * 253 * 4 * 6;
+    size_t buflen = 80 * 80 * 80 * 4 * 6;
+    printf("buflen: %lld\n", buflen);
+    Tensor T(buflen, dims.size(), dims);
+    printf("Tensor allocated\n");
+    T.generate_random();
+    printf("Tensor generated\n");
+
+    double a, b, c, d;
+    //a = 0.5000000000000001;
+    //b = 0.6532814824381883;
+    //c = 0.2705980800730985;
+    a = 0.500000000000000;
+    b = 0.653281482438188;
+    c = 0.270598080073099;
+    d = 1 / std::sqrt(2);
+    Matrix M(16, 4, 4);
+    M.set(0,0,a);
+    M.set(0,1,a);
+    M.set(0,2,a);
+    M.set(0,3,a);
+    M.set(1,0,b);
+    M.set(1,1,c);
+    M.set(1,2,-c);
+    M.set(1,3,-b);
+    M.set(2,0,a);
+    M.set(2,1,-a);
+    M.set(2,2,-a);
+    M.set(2,3,a); 
+    M.set(3,0,c); 
+    M.set(3,1,-b);
+    M.set(3,2,b); 
+    M.set(3,3,-c);
+
+    //M.set(0,0,1);
+    //M.set(0,1,2e-15);
+    //M.set(0,2,0);
+    //M.set(0,3,0);
+    //M.set(1,0,0);
+    //M.set(1,1,1);
+    //M.set(1,2,0);
+    //M.set(1,3,0);
+    //M.set(2,0,0);
+    //M.set(2,1,0);
+    //M.set(2,2,1);
+    //M.set(2,3,0); 
+    //M.set(3,0,0); 
+    //M.set(3,1,0);
+    //M.set(3,2,0); 
+    //M.set(3,3,1);
+
+    //M.set(0,0,d);
+    //M.set(0,1,-d);
+    //M.set(0,2,0);
+    //M.set(0,3,0);
+    //M.set(1,0,d);
+    //M.set(1,1,d);
+    //M.set(1,2,0);
+    //M.set(1,3,0);
+    //M.set(2,0,0);
+    //M.set(2,1,0);
+    //M.set(2,2,d);
+    //M.set(2,3,-d); 
+    //M.set(3,0,0); 
+    //M.set(3,1,0);
+    //M.set(3,2,d); 
+    //M.set(3,3,d);
+    
+    printf("Matrix norm: %0.16e\n", M.norm());
+    printf("Norm before: %0.16e\n", T.norm());
+    Tensor TO = ttm_loop(T, M, 3);
+    printf("Norm after: %0.16e\n", TO.norm());
+    printf("Norm diff: %0.16e\n", (TO.norm()-T.norm())/T.norm() );
+    return;
 }
 
 #endif

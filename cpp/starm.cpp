@@ -68,7 +68,9 @@ PYBIND11_MODULE(pystarm, m) {
         .def("getdims", &Tensor::getdims, "Get tensor dimensions")
         .def("getfrontalslice", &Tensor::getfrontalslice, "Get a frontal slice")
         .def("getfrontalslice_copy", &Tensor::getfrontalslice_copy, "Get a deep copy of a frontal slice")
-        .def("setfrontalslice", &Tensor::setfrontalslice, "Set a frontal slice");
+        .def("setfrontalslice", &Tensor::setfrontalslice, "Set a frontal slice")
+        .def("norm", &Tensor::norm, "Returns the norm of the tensor")
+        .def("generate_random", &Tensor::generate_random, "Randomly generates entries of the tensor");
 	m.def("matmul", &matmul, "Multiply two matrices and return a new result matrix");
 	m.def("svd", &svd, "Compute the thin SVD of a matrix and return a tuple of the factors.",
         py::arg("A"), py::arg("verbose") = false);
@@ -81,6 +83,10 @@ PYBIND11_MODULE(pystarm, m) {
 	m.def("slicewise_svdx", &slicewise_svdx, "Compute the truncated slice-wise SVD of a tensor",
         py::arg("A"), py::arg("k"), py::arg("verbose") = false);
 	m.def("slicewise_matmul", &slicewise_matmul, "Compute the slice-wise multiplication of the output of slicewise_svd - U, VT and S");
+	m.def("transform", &transform, "Transform tensor with (multi)ttm in a specified order");
+	m.def("tsvdmi_compress", &tsvdmi_compress, "Compress using TSVDM-I algorithm");
+	m.def("tsvdmi_reconstruct", &tsvdmi_reconstruct, "Reconstruct output of TSVDM-I algorithm");
+	m.def("check", &check, "Check");
 }
 
 #endif
