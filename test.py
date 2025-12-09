@@ -286,31 +286,17 @@ class MatrixTestCase(unittest.TestCase):
     def test_matrix_gc_behavior(self):
         """Test if garbage collection of the original numpy object changes the underlying buffer of pystarm matrix"""
 
-        # Create a numpy array with 12 elements (contents: 0,1,2,...,11), treat it as 4x3 matrix in column major order
         arr1 = np.arange(12, dtype=np.float64).reshape((4,3), order='F')
-        print()
-        print(arr1)
-        # Create a pystarm.Matrix from the buffer
         mat1 = pystarm.Matrix(arr1, 4, 3)
-        mat1.print()
         
-        # delete the numpy object from which pystarm.Matrix is created
         del arr1
-        # arr1 = None
-        # Explicitly call garbage collector to destroy the numpy object
         gc.collect()
 
-        # time.sleep(5)
-        # print(arr1)
-        # mat1.print()
+        arr3 = np.ones(12, dtype=np.float64)
 
+        arr4 = np.arange(12, dtype=np.float64).reshape((4,3), order='F')
         arr2 = np.frombuffer(mat1, dtype=np.float64).reshape(mat1.getdims(), order='F', copy = False)
-        # print(arr2)
-
-        arr3 = np.arange(12, dtype=np.float64).reshape((4,3), order='F')
-        # print(arr3)
-        # print(arr2-arr3)
-        flag = np.allclose(arr3, arr2)
+        flag = np.allclose(arr4, arr2)
         self.assertEqual(flag, True)
 
     def test_matmul(self):
