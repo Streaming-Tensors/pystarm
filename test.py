@@ -4,6 +4,8 @@ import numpy as np
 import pyttb as ttb
 import os
 import itertools
+import gc
+import time
 
 class TensorTestCase(unittest.TestCase):
     def test_tensor_creation(self):
@@ -279,6 +281,36 @@ class MatrixTestCase(unittest.TestCase):
         mat1.set(3,2,0) # Set 0 to the element at index (3,2)
         arr2 = np.frombuffer(mat1, dtype=np.float64).reshape(mat1.getdims(), order='F', copy = False)
         flag = np.allclose(arr1, arr2)
+        self.assertEqual(flag, True)
+
+    def test_matrix_gc_behavior(self):
+        """Test if garbage collection of the original numpy object changes the underlying buffer of pystarm matrix"""
+
+        # Create a numpy array with 12 elements (contents: 0,1,2,...,11), treat it as 4x3 matrix in column major order
+        arr1 = np.arange(12, dtype=np.float64).reshape((4,3), order='F')
+        print()
+        print(arr1)
+        # Create a pystarm.Matrix from the buffer
+        mat1 = pystarm.Matrix(arr1, 4, 3)
+        mat1.print()
+        
+        # delete the numpy object from which pystarm.Matrix is created
+        del arr1
+        # arr1 = None
+        # Explicitly call garbage collector to destroy the numpy object
+        gc.collect()
+
+        # time.sleep(5)
+        # print(arr1)
+        # mat1.print()
+
+        arr2 = np.frombuffer(mat1, dtype=np.float64).reshape(mat1.getdims(), order='F', copy = False)
+        # print(arr2)
+
+        arr3 = np.arange(12, dtype=np.float64).reshape((4,3), order='F')
+        # print(arr3)
+        # print(arr2-arr3)
+        flag = np.allclose(arr3, arr2)
         self.assertEqual(flag, True)
 
     def test_matmul(self):
