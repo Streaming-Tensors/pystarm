@@ -259,15 +259,29 @@ public:
 
     void print(){
         #ifdef _MEMPRINT
+        printf("Matrix::print()\n");        
         printf("Memory location: %p\n", this->data_ptr);        
         #endif
 
         for (size_t i = 0; i < this->nrow; ++i) {
             for (size_t j = 0; j < this->ncol; ++j) {
-                printf("%.2lf\t", this->get(i, j) );
+                printf("%.16e\t", this->get(i, j) );
             }
             printf("\n");
         }  
+
+        //for (size_t i = 0; i < 1; ++i) {
+            //for (size_t j = 0; j < 10; ++j) {
+                //printf("%.16e\t", this->get(i, j) );
+            //}
+            //printf("\n");
+        //}  
+        //for (size_t i = this->nrow-1; i < this->nrow; ++i) {
+            //for (size_t j = 0; j < 10; ++j) {
+                //printf("%.16e\t", this->get(i, j) );
+            //}
+            //printf("\n");
+        //}  
 //#pragma omp parallel
         //for (size_t i = 0; i < this->nrow; ++i) {
             //int t = omp_get_thread_num();
@@ -282,11 +296,16 @@ public:
         #endif
 
         size_t buflen = this->nrow * this->ncol;
-        double norm = 0.0;
-        for (size_t i = 0; i < buflen; ++i) {
-            norm += this->data_ptr[i] * this->data_ptr[i];
-        }
-        return std::sqrt(norm);
+        //double norm = 0.0;
+        //for (size_t i = 0; i < buflen; ++i) {
+            //norm += this->data_ptr[i] * this->data_ptr[i];
+        //}
+        //return std::sqrt(norm);
+
+        MKL_INT cblas_n = (MKL_INT) buflen;
+        MKL_INT cblas_incx = (MKL_INT)(1);
+        double* cblas_x = this->data_ptr;
+        return cblas_dnrm2(cblas_n, cblas_x, cblas_incx);
     }
 };
 

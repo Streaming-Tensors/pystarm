@@ -679,12 +679,19 @@ Tensor transform(const Tensor& T, std::vector<Matrix> M, std::vector<int> order)
     }
     else{
         Tensor TO_temp(buflen, T.ndim, T.dims);
-        TO_temp = T; // Should be copy
-        for(int i=0; i < order.size(); i++){
+        //TO_temp = T; // Should be copy
+        
+        //printf("[transform ]Norm diff: %0.16e\n", (T.norm()-TO_temp.norm())/T.norm());
+        ttm_to_existing_buffer(T, M[0], order[0], TO);
+        //if (order.size() > 1)  std::swap(TO.data_ptr, TO_temp.data_ptr);
+
+        for(int i=1; i < order.size(); i++){
+            std::swap(TO.data_ptr, TO_temp.data_ptr);
             ttm_to_existing_buffer(TO_temp, M[i], order[i], TO);
             //TO.print();
-            std::swap(TO.data_ptr, TO_temp.data_ptr);
+            //if(i < order.size()-1) std::swap(TO.data_ptr, TO_temp.data_ptr);
         }
+        TO_temp.clear();
     }
     return TO;
 }
@@ -825,7 +832,8 @@ void check(){
     //c = 0.2705980800730985;
     a = 0.500000000000000;
     b = 0.653281482438188;
-    c = 0.270598080073099;
+    //c = 0.270598080073099;
+    c = 0.270598050073099;
     d = 1 / std::sqrt(2);
     Matrix M(16, 4, 4);
     M.set(0,0,a);
@@ -844,6 +852,8 @@ void check(){
     M.set(3,1,-b);
     M.set(3,2,b); 
     M.set(3,3,-c);
+
+    M.print();
 
     //M.set(0,0,1);
     //M.set(0,1,2e-15);
@@ -881,7 +891,8 @@ void check(){
     
     printf("Matrix norm: %0.16e\n", M.norm());
     printf("Norm before: %0.16e\n", T.norm());
-    Tensor TO = ttm_loop(T, M, 3);
+    //Tensor TO = ttm_loop(T, M, 3);
+    Tensor TO = ttm(T, M, 3);
     printf("Norm after: %0.16e\n", TO.norm());
     printf("Norm diff: %0.16e\n", (TO.norm()-T.norm())/T.norm() );
     return;

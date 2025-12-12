@@ -46,33 +46,21 @@ if __name__ == "__main__":
     A_hat = None
     Ms = []
     MTs = []
-    # ttm_modes = [2,3,4]
-    ttm_modes = [4,3,2]
+    ttm_modes = [2,3,4]
+    # ttm_modes = [4,3,2]
     # ttm_modes = [1]
+
+    Adims = [A.getdims()[mode] for mode in ttm_modes]
+    DFs = [np.asfortranarray(dct(np.eye(n, dtype=np.float64), axis=0, norm="ortho")) for n in Adims]
+    DFTs = [np.asfortranarray(DF.T) for DF in DFs]
+    Ms = [pystarm.Matrix(DF, DF.shape[0], DF.shape[1]) for DF in DFs]
+    MTs = [pystarm.Matrix(DFT, DFT.shape[0], DFT.shape[1]) for DFT in DFTs]
+
     for i in range(len(ttm_modes)):
         # print("[", i, "]")
         mode = ttm_modes[i]
         n = A.getdims()[mode]
         print("Dimension in mode", mode, "is", n)
-
-        t0 = time.perf_counter()
-        mat_nelm = n * n
-        mat_dims = (n, n)
-        mat_ndim = len(mat_dims)
-        DC = dct(np.eye(n, dtype=np.float64), axis=0, norm="ortho")
-        # DC, _ = np.linalg.qr(np.random.randn(n, n))
-        DF = np.asfortranarray(DC)
-        DFT = np.asfortranarray(DF.T)
-
-        # print(np.matmul(DF, DFT))
-
-        M = pystarm.Matrix(DF, mat_dims[0], mat_dims[1])
-        MT = pystarm.Matrix(DFT, mat_dims[0], mat_dims[1])
-        t1 = time.perf_counter()
-        print("Time to generate the DCT matrix of dim", n, ":", t1-t0)
-
-        Ms.append(M)
-        MTs.append(MT)
         
         t0 = time.perf_counter()
         if i == 0:
@@ -90,23 +78,6 @@ if __name__ == "__main__":
             A_hat.clear()
         A_hat = A_hat_temp
         print("Time for TTM on mode", mode, ":", t1-t0)
-
-    # ### Test against pyttb multi-ttm
-    # ttb_Ms = []
-    # for M in Ms:
-        # ttb_M = np.frombuffer(M, dtype=np.float64).reshape(M.getdims(), order='F', copy = False)
-        # ttb_Ms.append(ttb_M)
-    # ttb_A = ttb.tensor(full_array, copy=True)
-    # ttb_A_hat = ttb_A.ttm(ttb_Ms, ttm_modes)
-    # ttb_A_hat = ttb_A_hat.data
-    # np_A_hat = np.frombuffer(A_hat, dtype=np.float64).reshape(A_hat.getdims(), order='F', copy = False)
-    # A_hat_diff = ttb_A_hat - np_A_hat
-    # print(A_hat_diff)
-    # norm_A_hat_diff = np.linalg.norm(A_hat_diff)
-    # print("TTM difference:", norm_A_hat_diff)
-
-    # print("ttb A_hat:", ttb_A_hat)
-    # print("np A_hat:", np_A_hat)
 
     t0 = time.perf_counter()
     U_hat, S_hat, VT_hat = pystarm.slicewise_svdx(A_hat, k)
@@ -135,19 +106,6 @@ if __name__ == "__main__":
         n = A_hat.getdims()[mode]
         print("Dimension in mode", mode, "is", n)
 
-        # t0 = time.perf_counter()
-        # mat_nelm = n * n
-        # mat_dims = (n, n)
-        # mat_ndim = len(mat_dims)
-        # DC = dct(np.eye(n), axis=0, norm="ortho")
-        # DF = np.asfortranarray(DC)
-        # DFT = np.asfortranarray(DF.T)
-
-        # M = pystarm.Matrix(DF, mat_dims[0], mat_dims[1])
-        # MT = pystarm.Matrix(DFT, mat_dims[0], mat_dims[1])
-        # t1 = time.perf_counter()
-        # print("Time to generate the DCT matrix of dim", n, ":", t1-t0)
-        
         t0 = time.perf_counter()
         if i == 0:
             A_tilde_temp = pystarm.ttm(A_hat, MTs[i], mode) 
