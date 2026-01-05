@@ -1,11 +1,11 @@
 import unittest
-import pystarm
 import numpy as np
 import pyttb as ttb
 import os
 import itertools
 import gc
 import time
+import pystarm
 
 class TensorTestCase(unittest.TestCase):
     def test_tensor_creation(self):
@@ -318,6 +318,23 @@ class MatrixTestCase(unittest.TestCase):
 
         Amat = pystarm.Matrix(Apy, 4, 3)
         Uc, sc, Vct = pystarm.svd(Amat)
+
+        # Check if the arrays are not overwritten
+        Apy2  = np.frombuffer(Amat, dtype=np.float64).reshape(Amat.getdims(), order='F', copy = False)
+        flag1 = np.allclose(Apy, Apy2)
+        self.assertEqual(flag1, True)
+
+        # Check if the singular values are the same
+        flag2 = np.allclose(sc, spy)
+        self.assertEqual(flag2, True)
+
+    def test_svdvals(self):
+        """Test matrix SVD (singular values only)"""
+        Apy = np.arange(12, dtype=np.float64).reshape((4,3), order='F')
+        _, spy, _ = np.linalg.svd(Apy, full_matrices=False)
+
+        Amat = pystarm.Matrix(Apy, 4, 3)
+        sc   = pystarm.svdvals(Amat)
 
         # Check if the arrays are not overwritten
         Apy2  = np.frombuffer(Amat, dtype=np.float64).reshape(Amat.getdims(), order='F', copy = False)

@@ -121,6 +121,83 @@ std::tuple<Matrix, std::vector<double>, Matrix> svd(Matrix A,
   return std::make_tuple(std::move(U), std::move(s), std::move(Vt));
 }
 
+std::vector<double> svdvals(Matrix A, bool verbose=false) {
+  size_t r = std::min(A.nrow, A.ncol);
+  std::vector<double> s(r);
+
+  // sizes in int for DGESVD
+  lapack_int m = A.nrow, n = A.ncol;
+  lapack_int lda = m, ldu = m, ldvt = r;
+  
+  if (verbose) {
+    A.print();
+    printf("A.nrow, A.ncol, r: %zu %zu %zu\n", A.nrow, A.ncol, r);
+    printf("m, n: %d %d\n", m, n);
+    printf("lda, ldu, ldvt: %d %d %d\n", lda, ldu, ldvt);
+  }
+
+  // Workspace options
+  lapack_int info, lwork;
+  double *work, wkopt;
+
+  lwork = -1; // Optimal workspace query
+  
+  // Workspace query
+  dgesvd(
+    "N", // JOBU: Option for computing all or part of U. 'N' is no columns. 
+    "N", // JOBVT: Option for computing all or part of Vt. 'N' is the no rows.
+    &m, // M: No. of rows of the input matrix.
+    &n, // N: No. of columns of the input matrix.
+    A.data_ptr, // A: Input matrix.
+    &lda, // LDA: Leading dimension of A.
+    s.data(), // S: Array holding the singular values of A.
+    NULL, // U: Matrix holding left singular vectors of A.
+    &ldu, // LDU: Leading dimension of U.
+    NULL, // Vt: Matrix holding the right singular vectors of A.
+    &ldvt, // LDVT: Leading dimension of Vt.
+    &wkopt, // WORK: Work array containing uncoverged elements on failure.
+    &lwork, // LWORK: Dimension of the array WORK.
+    &info // INFO: Exit code.
+  );
+
+  lwork = (lapack_int) wkopt;
+  work  = (double*) malloc(lwork * sizeof(double));
+
+  if (verbose) {
+    printf("Size of the array: %d\n", lwork);
+    printf("Exit code for DGESVD: %d\n", info);
+  }
+
+  // Compute the thin SVD
+  dgesvd(
+    "N", // JOBU: Option for computing all or part of U. 'S' is no columns. 
+    "N", // JOBVT: Option for computing all or part of Vt. 'S' is no rows.
+    &m, // M: No. of rows of the input matrix.
+    &n, // N: No. of columns of the input matrix.
+    A.data_ptr, // A: Input matrix. Contents destroyed during the computation.
+    &lda, // LDA: Leading dimension of A.
+    s.data(), // S: Array holding the singular values of A.
+    NULL, // U: Matrix holding left singular vectors of A.
+    &ldu, // LDU: Leading dimension of U.
+    NULL, // Vt: Matrix holding the right singular vectors of A.
+    &ldvt, // LDVT: Leading dimension of Vt.
+    work, // WORK: Work array containing uncoverged elements on failure.
+    &lwork, // LWORK: Dimension of the array WORK.
+    &info // INFO: Exit code.
+  );
+
+  if (verbose) {
+    printf("Exit code for DGESVD: %d\n", info);
+    A.print();
+  }
+
+  // Free workspace and the copied matrix
+  free(work);
+  A.clear();
+
+  return s;
+}
+
 std::tuple<Matrix, std::vector<double>, Matrix> svdx(Matrix A, size_t k,
                                                     bool verbose=false) {
   Matrix U(A.nrow*k, A.nrow, k);

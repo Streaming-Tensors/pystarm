@@ -112,6 +112,8 @@ PYBIND11_MODULE(pystarm, m) {
         .def("clear", &JaggedTensor::clear, "Clear all slices in the jagged tensor");
 
 	m.def("matmul", &matmul, "Multiply two matrices and return a new result matrix");
+	m.def("svdvals", &svdvals, "Compute the singular values of a matrix.",
+        py::arg("A"), py::arg("verbose") = false);
 	m.def("svd", &svd, "Compute the thin SVD of a matrix and return a tuple of the factors.",
         py::arg("A"), py::arg("verbose") = false);
 	m.def("svdx", &svdx, "Compute the truncated SVD of a matrix and return a tuple of the factors.",
