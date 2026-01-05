@@ -19,12 +19,10 @@ class Tensor{
     size_t nslices;
     size_t buflen;
     double* data_ptr = nullptr; // Expects the data to be in column major order
-    py::buffer pybuffer;
 
     // Takes a preallocated buffer by Python
     // py::buffer instead of py:array_t to prevent any chance of silent data copy
     Tensor(py::buffer &buf, size_t ndim, std::vector<size_t> dims){
-      pybuffer = buf;
       #ifdef _MEMPRINT
       std::cout << "Tensor python constructor" << std::endl;
       std::cout << "Pointing to before owning buffer: " << this->data_ptr << std::endl;

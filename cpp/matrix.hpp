@@ -26,13 +26,11 @@ public:
     size_t nrow;
     size_t ncol;
     double* data_ptr; // Expects the data to be in column major order
-    py::buffer pybuffer;
     
     // Takes a preallocated buffer by Python
     // py::buffer instead of py:array_t to prevent any chance of silent data copy
     Matrix(py::buffer &buf, size_t m, size_t n)
         : nrow(m), ncol(n) {
-        pybuffer = buf;
         #ifdef _MEMPRINT
         std::cout << "Reg constructor (pybuffer)" << std::endl;
         #endif

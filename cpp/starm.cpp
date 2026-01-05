@@ -34,7 +34,10 @@ PYBIND11_MODULE(pystarm, m) {
                 }
             );
         })
-        .def(py::init<py::buffer& , size_t, size_t>())
+        .def(py::init<py::buffer& , size_t, size_t>(), 
+             py::keep_alive<1, 2>() // Keep the argument 2 (py::buffer) alive at least as long as 
+                                    // the argument 1 (the C++ constructed object) is alive
+        )
         .def("get", &Matrix::get, "Get (i,j) th entry of the matrix")
         .def("set", &Matrix::set, "Set (i,j) th entry of the matrix")
         .def("getrow", &Matrix::getrow, "Get i-th row of the matrix")
@@ -63,7 +66,10 @@ PYBIND11_MODULE(pystarm, m) {
                 }
             );
         })
-        .def(py::init<py::buffer& , size_t, std::vector<size_t> >())
+        .def(py::init<py::buffer& , size_t, std::vector<size_t> >(),
+             py::keep_alive<1, 2>() // Keep the argument 2 (py::buffer) alive at least as long as 
+                                    // the argument 1 (the C++ constructed object) is alive
+        )
         .def("clear", &Tensor::clear, "Free memory of the underlying data buffer")
         .def("getdims", &Tensor::getdims, "Get tensor dimensions")
         .def("getfrontalslice", &Tensor::getfrontalslice, "Get a frontal slice")
@@ -92,7 +98,11 @@ PYBIND11_MODULE(pystarm, m) {
                 }
             );
         })
-        .def(py::init<py::buffer&, size_t, std::vector<size_t>, bool>(), py::arg("buf"), py::arg("fixed_dim_size"), py::arg("slice_ranks"), py::arg("variable_first_mode") = false)
+        .def(py::init<py::buffer&, size_t, std::vector<size_t>, bool>(), 
+             py::arg("buf"), py::arg("fixed_dim_size"), py::arg("slice_ranks"), py::arg("variable_first_mode") = false,
+             py::keep_alive<1, 2>() // Keep the argument 2 (py::buffer) alive at least as long as 
+                                    // the argument 1 (the C++ constructed object) is alive
+        )
         .def_readonly("nslices", &JaggedTensor::nslices, "Number of slices in the tensor")
         .def_readonly("fixed_dim_size", &JaggedTensor::fixed_dim_size, "Number of modes in the tensor")
         .def_readonly("slice_ranks", &JaggedTensor::slice_ranks, "Ranks of each slice in the last mode")
