@@ -10,6 +10,7 @@ from alg import tsvdm_I_compress
 from alg import tsvdm_I_reconstruct
 import sys
 import pyttb as ttb
+import gc
 
 
 if __name__ == "__main__":
@@ -47,10 +48,12 @@ if __name__ == "__main__":
     A_hat = None
     Ms = []
     MTs = []
-    # ttm_modes = [2,3,4]
-    ttm_modes = [4,3,2]
+    ttm_modes = [2,3,4]
+    # ttm_modes = [4,3,2]
     # ttm_modes = [1]
     for i in range(len(ttm_modes)):
+        gc.collect()
+
         # print("[", i, "]")
         mode = ttm_modes[i]
         n = A.getdims()[mode]
@@ -91,6 +94,7 @@ if __name__ == "__main__":
             A_hat.clear()
         A_hat = A_hat_temp
         print("Time for TTM on mode", mode, ":", t1-t0)
+
 
     # Inverse transform
     A_tilde = None
