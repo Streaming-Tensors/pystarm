@@ -445,5 +445,18 @@ class JaggedTensorTestCase(unittest.TestCase):
         # print("new_vals", new_vals)
         self.assertEqual(flag, True)
 
+class JaggedMatrixTestCase(unittest.TestCase):
+    def test_jagged_matrix_creation(self):
+        """Test jagged matrix creation and operations"""
+        # print("fixed_dim", fixed_dim)
+        ncol = 4
+        col_ranks = [2,3,2,2] 
+        nelements = 9 
+        vals = np.random.rand(nelements)
+        jagged_mat = pystarm.JaggedMatrix(vals, col_ranks)
+        jagged_mat_vals = np.frombuffer(jagged_mat, dtype=np.float64)
+        flag = np.allclose(vals, jagged_mat_vals)
+        self.assertEqual(flag, True)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

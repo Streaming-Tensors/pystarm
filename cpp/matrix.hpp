@@ -4,6 +4,7 @@
 #ifndef MATRIX_HPP
 #define MATRIX_HPP
 
+#include <numeric>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include "utils.hpp"
@@ -306,6 +307,49 @@ public:
         MKL_INT cblas_incx = (MKL_INT)(1);
         double* cblas_x = this->data_ptr;
         return cblas_dnrm2(cblas_n, cblas_x, cblas_incx);
+    }
+};
+
+class JaggedMatrix{
+    // This class supports jaggedness of a matrix in the columns
+    public:
+    size_t ncol;  // Number of columns in the matrix
+    std::vector<size_t> col_ranks;  // Each element is the rank of the corresponding column
+    std::vector<size_t> col_offset;  // Contains offset to data_ptr for each column. Contains 1 more element to store the buffer length. 
+    double *data_ptr;
+
+    JaggedMatrix(py::buffer &buf, std::vector<size_t> col_ranks)
+        : ncol(col_ranks.size()) {
+        py::buffer_info buf_info = buf.request();
+        this->col_ranks.resize(this->ncol);
+        this->col_offset.resize(this->ncol+1, 0);
+        for (size_t i = 0; i < this->ncol; i++) {
+            this->col_ranks[i] = col_ranks[i];
+        }
+        std::partial_sum(col_ranks.begin(), col_ranks.end(), col_offset.begin()+1);
+        this->data_ptr = static_cast<double*>(buf_info.ptr);
+    }
+
+    JaggedMatrix(size_t buflen, std::vector<size_t> col_ranks)
+        : ncol(col_ranks.size()) {
+        this->col_ranks.resize(this->ncol);
+        this->col_offset.resize(this->ncol+1, 0);
+        for (size_t i = 0; i < this->ncol; i++) {
+            this->col_ranks[i] = col_ranks[i];
+        }
+        std::partial_sum(col_ranks.begin(), col_ranks.end(), col_offset.begin()+1);
+        size_t expected_buflen = this->col_offset[this->ncol];
+        assert(buflen == expected_buflen);
+        this->data_ptr = static_cast<double*>(malloc(buflen*sizeof(double)));
+    }
+
+    void clear(){
+        std::cout << "Clearing jagged matrix" << std::endl;
+        if (this->data_ptr != nullptr){
+            free(this->data_ptr);
+        }
+        this->col_ranks.clear();
+        this->col_offset.clear();
     }
 };
 

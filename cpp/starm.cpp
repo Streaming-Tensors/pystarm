@@ -78,6 +78,27 @@ PYBIND11_MODULE(pystarm, m) {
         .def("norm", &Tensor::norm, "Returns the norm of the tensor")
         .def("generate_random", &Tensor::generate_random, "Randomly generates entries of the tensor");
 
+    py::class_<JaggedMatrix>(m, "JaggedMatrix", py::buffer_protocol())
+        .def_buffer([](JaggedMatrix& mat) -> py::buffer_info{
+            return py::buffer_info(
+                mat.data_ptr,
+                sizeof(double),
+                py::format_descriptor<double>::format(),
+                1, // Always return as 1d array buffer
+                { mat.col_offset[mat.ncol] },
+                {
+                    sizeof(double) // Because always returning as 1d array buffer
+                }
+            );
+        })
+        .def(py::init<py::buffer&, std::vector<size_t> >(), 
+             py::keep_alive<1, 2>() // Keep the argument 2 (py::buffer) alive at least as long as 
+                                    // the argument 1 (the C++ constructed object) is alive
+        )
+        .def_readonly("ncol", &JaggedMatrix::ncol, "Number of columns in the matrix")
+        .def_readonly("col_ranks", &JaggedMatrix::col_ranks, "Ranks of each column in the matrix")
+        .def("clear", &JaggedMatrix::clear, "Clear the entire buffer of the jagged matrix");
+
     py::class_<JaggedTensor>(m, "JaggedTensor", py::buffer_protocol())
         .def_buffer([](JaggedTensor& ten) -> py::buffer_info{
             size_t nval = 0;
