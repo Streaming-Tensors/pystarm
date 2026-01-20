@@ -478,6 +478,180 @@ Tensor slicewise_matmul(const Tensor& U, const Matrix& S, const Tensor& VT){
     return TO;
 }
 
+Tensor slicewise_matmulx(const JaggedTensor& U, const JaggedMatrix& S, const JaggedTensor& VT){
+    // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch.html
+    // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
+    assert(U.nslices == VT.nslices);
+    assert(U.nslices == S.ncol);
+    
+    // US would have same size as U just scaled by S
+    size_t USbuflen = 0;
+    for (size_t i = 0; i < U.nslices; i++){
+        USbuflen = USbuflen + U.fixed_dim_size * U.slice_ranks[i];
+    }
+    JaggedTensor US(USbuflen, U.fixed_dim_size, U.slice_ranks, U.variable_first_mode);
+
+    {
+        // Multiplying each slice of U with the diagonal matrix corresponding to the corresponding column of matrix S (which is compact format of tensor S)
+        // Use MKL ddgmm_batch: https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch.html
+        MKL_INT cblas_group_count = (MKL_INT)US.nslices;
+        MKL_INT* cblas_group_size = new MKL_INT[cblas_group_count];
+
+        CBLAS_LAYOUT cblas_layout = CblasColMajor;
+        CBLAS_SIDE* cblas_left_right_array = new CBLAS_SIDE[cblas_group_count];
+        MKL_INT* cblas_m_array = new MKL_INT[cblas_group_count];
+        MKL_INT* cblas_n_array = new MKL_INT[cblas_group_count];
+        const double** cblas_a_array = new const double*[cblas_group_count];
+        MKL_INT* cblas_lda_array = new MKL_INT[cblas_group_count];
+        const double** cblas_x_array = new const double*[cblas_group_count];
+        MKL_INT* cblas_incx_array = new MKL_INT[cblas_group_count];
+        double** cblas_c_array = new double*[cblas_group_count];
+        MKL_INT* cblas_ldc_array = new MKL_INT[cblas_group_count];
+
+        for(MKL_INT i = 0; i < cblas_group_count; i++){ 
+            cblas_left_right_array[i] = CblasRight; 
+            cblas_m_array[i] = US.fixed_dim_size; 
+            cblas_n_array[i] = US.slice_ranks[i]; 
+            if (i == 0)
+                cblas_a_array[i] = U.data_ptr ; 
+            else
+                cblas_a_array[i] = cblas_a_array[i-1] + U.fixed_dim_size * U.slice_ranks[i-1] ; 
+            cblas_lda_array[i] = U.fixed_dim_size; 
+            if (i == 0)
+                cblas_x_array[i] = S.data_ptr ; 
+            else
+                cblas_x_array[i] = cblas_x_array[i-1] +  US.slice_ranks[i-1] ; 
+            cblas_incx_array[i] = 1; 
+            if (i == 0)
+                cblas_c_array[i] = US.data_ptr; 
+            else
+                cblas_c_array[i] = cblas_c_array[i-1] + US.fixed_dim_size * US.slice_ranks[i-1] ; 
+            cblas_ldc_array[i] = US.fixed_dim_size; 
+            cblas_group_size[i] = 1;
+        }
+
+        cblas_ddgmm_batch (
+                cblas_layout, 
+                cblas_left_right_array, 
+                cblas_m_array, 
+                cblas_n_array, 
+                cblas_a_array, 
+                cblas_lda_array, 
+                cblas_x_array, 
+                cblas_incx_array, 
+                cblas_c_array, 
+                cblas_ldc_array, 
+                cblas_group_count, 
+                cblas_group_size
+        );
+
+        delete[] cblas_left_right_array;
+        delete[] cblas_m_array;
+        delete[] cblas_n_array;
+        delete[] cblas_a_array;
+        delete[] cblas_lda_array;
+        delete[] cblas_x_array;
+        delete[] cblas_incx_array;
+        delete[] cblas_c_array;
+        delete[] cblas_ldc_array;
+        delete[] cblas_group_size;
+
+    }
+    
+    // Because JaggedTensors are simplified as 3-way tensors, TO would be a 3-way regular tensor
+    std::vector<size_t> TOdims(3);
+    TOdims[0] = US.fixed_dim_size;
+    TOdims[1] = VT.fixed_dim_size;
+    TOdims[2] = US.nslices;
+    size_t TObuflen = std::accumulate(TOdims.begin(), TOdims.end(), (size_t)1, std::multiplies<size_t>());
+    Tensor TO(TObuflen, 3, TOdims);
+
+    {
+        // Use cblas_dgemm_batch: https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-0/cblas-gemm-batch.html
+        
+        MKL_INT cblas_group_count = (MKL_INT)US.nslices;
+        MKL_INT* cblas_group_size = new MKL_INT[cblas_group_count];
+
+        CBLAS_LAYOUT cblas_layout = CblasColMajor;
+        CBLAS_TRANSPOSE* cblas_transa_array = new CBLAS_TRANSPOSE[cblas_group_count];
+        CBLAS_TRANSPOSE* cblas_transb_array = new CBLAS_TRANSPOSE[cblas_group_count];
+        MKL_INT* cblas_m_array = new MKL_INT[cblas_group_count];
+        MKL_INT* cblas_n_array = new MKL_INT[cblas_group_count];
+        MKL_INT* cblas_k_array = new MKL_INT[cblas_group_count];
+        double* cblas_alpha_array = new double[cblas_group_count];
+        const double** cblas_a_array = new const double*[cblas_group_count];
+        MKL_INT* cblas_lda_array = new MKL_INT[cblas_group_count];
+        const double** cblas_b_array = new const double*[cblas_group_count];
+        MKL_INT* cblas_ldb_array = new MKL_INT[cblas_group_count];
+        double* cblas_beta_array = new double[cblas_group_count];
+        double** cblas_c_array = new double*[cblas_group_count];
+        MKL_INT* cblas_ldc_array = new MKL_INT[cblas_group_count];
+
+        for(MKL_INT i = 0; i < cblas_group_count; i++){ 
+            cblas_group_size[i] = 1;
+            cblas_transa_array[i] = CblasNoTrans;
+            cblas_transb_array[i] = CblasTrans;
+            cblas_m_array[i] = US.fixed_dim_size; 
+            cblas_k_array[i] = US.slice_ranks[i]; 
+            cblas_n_array[i] = VT.fixed_dim_size; 
+            if (i == 0)
+                cblas_a_array[i] = US.data_ptr; 
+            else
+                cblas_a_array[i] = cblas_a_array[i-1] + US.fixed_dim_size * US.slice_ranks[i-1] ; 
+            cblas_lda_array[i] = US.fixed_dim_size; 
+            if (i == 0)
+                cblas_b_array[i] = VT.data_ptr; 
+            else
+                cblas_b_array[i] = cblas_b_array[i-1] + VT.fixed_dim_size * VT.slice_ranks[i-1] ; 
+            cblas_ldb_array[i] = VT.fixed_dim_size; 
+            if (i == 0)
+                cblas_c_array[i] = TO.data_ptr; 
+            else
+                cblas_c_array[i] = cblas_c_array[i-1] + US.fixed_dim_size * VT.fixed_dim_size ; 
+            cblas_ldc_array[i] = US.fixed_dim_size; 
+
+            cblas_alpha_array[i] = 1.0;
+            cblas_beta_array[i] = 0.0;
+        }
+        
+        cblas_dgemm_batch (
+                cblas_layout, 
+                cblas_transa_array, 
+                cblas_transb_array, 
+                cblas_m_array, 
+                cblas_n_array, 
+                cblas_k_array, 
+                cblas_alpha_array, 
+                cblas_a_array, 
+                cblas_lda_array, 
+                cblas_b_array, 
+                cblas_ldb_array, 
+                cblas_beta_array, 
+                cblas_c_array, 
+                cblas_ldc_array, 
+                cblas_group_count, 
+                cblas_group_size
+        );
+
+        delete[] cblas_transa_array;
+        delete[] cblas_transb_array;
+        delete[] cblas_m_array;
+        delete[] cblas_n_array;
+        delete[] cblas_k_array;
+        delete[] cblas_alpha_array;
+        delete[] cblas_a_array;
+        delete[] cblas_lda_array;
+        delete[] cblas_b_array;
+        delete[] cblas_ldb_array;
+        delete[] cblas_beta_array;
+        delete[] cblas_c_array;
+        delete[] cblas_ldc_array;
+        delete[] cblas_group_size;
+    }
+    US.clear();
+    return TO;
+}
+
 Tensor ttm_loop(Tensor& T, Matrix& M, size_t mode){
     std::vector<size_t> ten_dims = T.getdims();
     std::vector<size_t> mat_dims = M.getdims();
