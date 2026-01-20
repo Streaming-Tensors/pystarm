@@ -139,8 +139,14 @@ PYBIND11_MODULE(pystarm, m) {
         py::arg("A"), py::arg("verbose") = false);
 	m.def("svdx", &svdx, "Compute the truncated SVD of a matrix and return a tuple of the factors.",
         py::arg("A"), py::arg("k"), py::arg("verbose") = false);
+	m.def("threshold", &threshold, "Compute the cut-off singular value given a fraction of the weight to keep.",
+        py::arg("A"), py::arg("pct"));
+	m.def("thresholds", &thresholds, "Compute the column-wise ranks given a fraction of the weight to keep.",
+        py::arg("A"), py::arg("pct"));
 	m.def("ttm_loop", &ttm_loop, "Tensor times matrix multiply on a specific mode by looping");
 	m.def("ttm", &ttm, "Tensor times matrix multiply on a specific mode by batched BLAS");
+	m.def("slicewise_svdvals", &slicewise_svdvals, "Compute the slice-wise singular values of a tensor",
+        py::arg("A"), py::arg("verbose") = false);
 	m.def("slicewise_svd", &slicewise_svd, "Compute the slice-wise thin SVD of a tensor",
         py::arg("A"), py::arg("verbose") = false);
 	m.def("slicewise_svdx", &slicewise_svdx, "Compute the truncated slice-wise SVD of a tensor",

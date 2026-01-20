@@ -144,7 +144,7 @@ public:
       this->ncol = obj.ncol;
       this->data_ptr = obj.data_ptr;
 
-      // Clear the other other object
+      // Clear the other object
       obj.nrow     = 0;
       obj.ncol     = 0;
       obj.data_ptr = nullptr;
@@ -187,15 +187,15 @@ public:
       //}
     }
     
-    double get(size_t i, size_t j){
+    double get(size_t i, size_t j) const {
         return *(this->data_ptr + i + j * this->nrow);
     }
 
-    void set(size_t i, size_t j, double val){
+    void set(size_t i, size_t j, double val) {
         *(this->data_ptr + i + j * this->nrow) = val;
     }
 
-    std::vector<double> getrow(size_t i) {
+    std::vector<double> getrow(size_t i) const {
       assert(i < this->nrow);
 
       std::vector<double> row;
@@ -216,7 +216,7 @@ public:
       }
     }
 
-    std::vector<double> getcol(size_t j) {
+    std::vector<double> getcol(size_t j) const {
       assert(j < this->ncol);
 
       std::vector<double> col;
@@ -320,6 +320,9 @@ class JaggedMatrix{
 
     JaggedMatrix(py::buffer &buf, std::vector<size_t> col_ranks)
         : ncol(col_ranks.size()) {
+        #ifdef _MEMPRINT
+        std::cout << "JaggedMatrix reg constructor (pybuffer)" << std::endl;
+        #endif
         py::buffer_info buf_info = buf.request();
         this->col_ranks.resize(this->ncol);
         this->col_offset.resize(this->ncol+1, 0);
@@ -328,10 +331,16 @@ class JaggedMatrix{
         }
         std::partial_sum(col_ranks.begin(), col_ranks.end(), col_offset.begin()+1);
         this->data_ptr = static_cast<double*>(buf_info.ptr);
+        #ifdef _MEMPRINT
+        std::cout << "Pointing to: " << data_ptr << std::endl;
+        #endif
     }
 
     JaggedMatrix(size_t buflen, std::vector<size_t> col_ranks)
         : ncol(col_ranks.size()) {
+        #ifdef _MEMPRINT
+        std::cout << "JaggedMatrix reg constructor (malloc)" << std::endl;
+        #endif
         this->col_ranks.resize(this->ncol);
         this->col_offset.resize(this->ncol+1, 0);
         for (size_t i = 0; i < this->ncol; i++) {
@@ -341,10 +350,148 @@ class JaggedMatrix{
         size_t expected_buflen = this->col_offset[this->ncol];
         assert(buflen == expected_buflen);
         this->data_ptr = static_cast<double*>(malloc(buflen*sizeof(double)));
+        #ifdef _MEMPRINT
+        std::cout << "Pointing to: " << data_ptr << std::endl;
+        #endif
+    }
+    
+    // Empty constructor
+    JaggedMatrix() : ncol(0) {
+      this->data_ptr = nullptr;
     }
 
-    void clear(){
-        std::cout << "Clearing jagged matrix" << std::endl;
+    // Copy constructor (deep copy of data)
+    JaggedMatrix(const JaggedMatrix &obj) 
+      #ifdef _MEMPRINT
+      std::cout << "JaggedMatrix copy constructor" << std::endl;
+      #endif
+      : ncol(obj.ncol), col_ranks(obj.col_ranks), col_offset(obj.col_offset) {
+      size_t buflen  = this->col_offset[this->ncol];
+      this->data_ptr = static_cast<double*>(malloc(buflen * sizeof(double)));
+      std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+      #ifdef _MEMPRINT
+      std::cout << "Copying from: " << obj.data_ptr << std::endl;
+      std::cout << "Pointing to: " << this->data_ptr << std::endl;
+      #endif
+    }
+
+    // Copy assignment operator
+    JaggedMatrix& operator=(const JaggedMatrix &obj) {
+      #ifdef _MEMPRINT
+      std::cout << "JaggedMatrix copy assignment" << std::endl;
+      #endif
+
+      if (this != &obj) {
+        // Free current resource
+        this->clear();
+
+        // Copy the other object over
+        this->ncol       = obj.ncol;
+        this->col_ranks  = obj.col_ranks;
+        this->col_offset = obj.col_offset;
+
+        size_t buflen    = this->col_offset[this->ncol]; 
+        this->data_ptr = static_cast<double*>(malloc(buflen * sizeof(double)));
+        std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+      }
+
+      #ifdef _MEMPRINT
+      std::cout << "Copying from: " << obj.data_ptr << std::endl;
+      std::cout << "Pointing to: " << this->data_ptr << std::endl;
+      #endif
+
+      return *this;
+    }
+
+    // Move constructor (shallow copy)
+    JaggedMatrix(JaggedMatrix &&obj) noexcept {
+      #ifdef _MEMPRINT
+      std::cout << "JaggedMatrix move constructor" << std::endl;
+      std::cout << "Pointing to: " << obj.data_ptr << std::endl;
+      #endif
+
+      // Point to the other object
+      this->ncol       = obj.ncol;
+      this->col_ranks  = std::move(obj.col_ranks);
+      this->col_offset = std::move(obj.col_offset);
+      this->data_ptr   = obj.data_ptr;
+
+      // Clear the other object
+      obj.ncol     = 0;
+      obj.data_ptr = nullptr;
+    }
+
+    // Move assignment operator
+    JaggedMatrix& operator=(JaggedMatrix &&obj) noexcept {
+      #ifdef _MEMPRINT
+      std::cout << "JaggedMatrix move assignment" << std::endl;
+      std::cout << "Current memory: " << this->data_ptr << std::endl;
+      std::cout << "Pointing to: " << obj.data_ptr << std::endl;
+      #endif
+
+      if (this != &obj) {
+        // Free current resource
+        this->clear();
+
+        // Point to the other object
+        this->ncol       = obj.ncol;
+        this->col_ranks  = std::move(obj.col_ranks);
+        this->col_offset = std::move(obj.col_offset);
+        this->data_ptr   = obj.data_ptr;
+
+        // Clear the other object
+        obj.ncol     = 0;
+        obj.data_ptr = nullptr;
+      }
+
+      return *this;
+    }
+
+    ~JaggedMatrix() {
+      #ifdef _MEMPRINT
+      std::cout << "JaggedMatrix destructor" << std::endl;
+      std::cout << "Pointing to: " << this->data_ptr << std::endl;
+      #endif
+    }
+
+    // Access functions
+    double get(size_t i, size_t j) {
+      assert(j < this->ncol);
+      assert(i < this->col_ranks[j]);
+      return *(this->data_ptr + this->col_offset[j] + i);
+    }
+
+    void set(size_t i, size_t j, double val) {
+      assert(j < this->ncol);
+      assert(i < this->col_ranks[j]);
+      *(this->data_ptr + this->col_offset[j] + i) = val;
+    }
+
+    // Need only column access functions
+    std::vector<double> getcol(size_t j) {
+      assert(j < this->ncol);
+      
+      std::vector<double> col;
+      for (size_t i = 0; i < this->col_ranks[j]; i++) {
+        col.push_back(get(i, j));
+      }
+      
+      return col;
+    }    
+
+    void setcol(const std::vector<double> &col, size_t j) {
+      assert(j < this->ncol);
+      assert(col.size() == this->col_ranks[j]);
+
+      for (size_t i = 0; i < this->col_ranks[j]; i++) {
+        set(i, j, col[i]);
+      }
+    }
+
+    void clear() {
+        #ifdef _MEMPRINT
+        std::cout << "Clearing JaggedMatrix" << std::endl;
+        #endif
         if (this->data_ptr != nullptr){
             free(this->data_ptr);
         }

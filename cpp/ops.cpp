@@ -308,6 +308,67 @@ std::tuple<Matrix, std::vector<double>, Matrix> svdx(Matrix A, size_t k,
   return std::make_tuple(std::move(U), std::move(s), std::move(Vt));
 }
 
+double threshold(const Matrix& A, double pct) {
+  assert(pct > 0.0);
+  assert(pct < 1.0);
+  std::vector<double> svals;
+
+  // Copy values into a vector
+  for (size_t i = 0; i < A.nrow; i++) {
+    for (size_t j = 0; j < A.ncol; j++) {
+      svals.push_back(A.get(i, j));
+    }
+  }
+ 
+  // Sort and square the singular values
+  std::sort(svals.begin(), svals.end(), std::greater<double>());
+  std::vector<double> sqsvals;
+  sqsvals.resize(svals.size());
+  for (size_t i = 0; i < svals.size(); i++) {
+    sqsvals[i] = svals[i] * svals[i];
+  }
+
+  // Compute the partial sums
+  std::partial_sum(sqsvals.begin(), sqsvals.end(), sqsvals.begin());
+  for (size_t i = 0; i < sqsvals.size(); i++) {
+    sqsvals[i] = sqsvals[i] / sqsvals.back();
+  }
+
+  // Find the position
+  // First iterator iter in [first, last) where bool(value <= *iter) 
+  auto ub = std::upper_bound(sqsvals.begin(), sqsvals.end(), pct, 
+              std::less_equal<double>());
+
+  double thr;
+  if (ub != sqsvals.end()) {
+    size_t s = ub - sqsvals.begin();
+    thr = svals[s];
+  } else {
+    thr = 0.0; // Need all the singular values!
+  }
+
+  return thr;
+}
+
+std::vector<size_t> thresholds(const Matrix& A, double pct) {
+  std::vector<size_t> slice_ranks;
+  
+  // Compute the minimum singular value to keep
+  double thr = threshold(A, pct);
+
+  // Find the slicewise ranks
+  slice_ranks.resize(A.ncol);
+  for (size_t j = 0; j < slice_ranks.size(); j++) {
+    std::vector<double> col_svals;
+    col_svals = A.getcol(j);
+    auto ub   = std::upper_bound(col_svals.begin(), col_svals.end(), thr, 
+                  std::greater<double>());
+    slice_ranks[j] = ub - col_svals.begin(); 
+  }
+
+  return slice_ranks;
+}
+
 Tensor slicewise_matmul(const Tensor& U, const Matrix& S, const Tensor& VT){
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch.html
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
@@ -773,8 +834,6 @@ Tensor transform(const Tensor& T, std::vector<Matrix> M, std::vector<int> order)
     return TO;
 }
 
-
-
 std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=false) {
   size_t r = std::min(A.dims[0], A.dims[1]);
 
@@ -816,7 +875,6 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=f
       Vst.clear();
   }
 
-
   return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
 }
 
@@ -849,6 +907,76 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svdx(const Tensor &A, size_t k,
 
         // Compute the SVD
         std::tie(Us, s, Vst) = svdx(A.getfrontalslice_copy(i), k, verbose);
+
+        // Set the output tensors
+        U.setfrontalslice(Us, i);
+        S.setcol(s, i);
+        Vt.setfrontalslice(Vst, i);
+    }
+
+    // Clear temporary stuff
+    Us.clear();
+    Vst.clear();
+  }
+
+  return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
+}
+
+Matrix slicewise_svdvals(const Tensor &A, bool verbose=false) {
+  size_t r = std::min(A.dims[0], A.dims[1]);
+  Matrix S(r*A.nslices, r, A.nslices);
+
+  // Call slice-wise SVD values
+#pragma omp parallel
+  {
+      // Temporary slicewise SVD objects 
+      std::vector<double> s(r);
+#pragma omp for
+      for (size_t i = 0; i < A.nslices; i++) {
+
+        // Compute the SVD
+        s = svdvals(A.getfrontalslice_copy(i), verbose);
+
+        // Set the output tensors
+        S.setcol(s, i);
+      }
+  }
+
+  return S;
+}
+
+std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svdks(
+  const Tensor &A, std::vector<size_t> ks, bool verbose=false) {
+  // Create the variables
+  size_t U_fixed_dim = A.dims[0];
+  size_t U_buflen    = 0;
+  for (size_t r = 0; r < ks.size(); r++) {
+    U_buflen += U_fixed_dim * ks[r];
+  }
+  JaggedTensor U(U_buflen, U_fixed_dim, ks);
+
+  size_t Vt_fixed_dim = A.dims[1];
+  size_t Vt_buflen    = 0;
+  for (size_t r = 0; r < ks.size(); r++) {
+    Vt_buflen += Vt_fixed_dim * ks[r];
+  }
+  JaggedTensor Vt(Vt_buflen, Vt_fixed_dim, ks, true);
+
+  size_t S_buflen = std::accumulate(ks.begin(), ks.end(), (size_t) 0);
+  JaggedMatrix S(S_buflen, ks);
+
+  // Call slice-wise SVDs
+#pragma omp parallel
+  {
+    // Temporary slicewise SVD objects 
+    Matrix Us;
+    Matrix Vst;
+#pragma omp for
+    for (size_t i = 0; i < A.nslices; i++) {
+        std::vector<double> s(ks[i]);
+
+        // Compute the SVD
+        std::tie(Us, s, Vst) = svdx(A.getfrontalslice_copy(i), ks[i], verbose);
 
         // Set the output tensors
         U.setfrontalslice(Us, i);
