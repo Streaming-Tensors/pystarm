@@ -507,6 +507,14 @@ class JaggedTensor {
       return *this;
     }
 
+    // Empty constructor
+    JaggedTensor() {
+      this->fixed_dim_size      = 0;
+      this->variable_first_mode = false;
+      this->nslices             = 0;
+      this->data_ptr            = nullptr;
+    }
+
     // Get a deep copy of frontal slice
     Matrix getfrontalslice_copy(size_t i) {
         // Check if requesting a legal slice

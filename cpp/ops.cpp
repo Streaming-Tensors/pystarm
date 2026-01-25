@@ -994,6 +994,31 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svdks(
   return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
 }
 
+std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> tsvdmii_compress(const Tensor &A, 
+        std::vector<Matrix> M, double pct) {
+    std::vector<int> order;
+    for(int i = 0; i < A.ndim; i++){
+        if(i < 2) continue;
+        else order.push_back(i);
+    }
+    Tensor A_hat = transform(A, M, order);
+
+    // Compute the slicewise ranks
+    Matrix Sv    = slicewise_svdvals(A_hat);
+    std::vector<size_t> ks = thresholds(Sv, pct);
+
+    // Perform the SVD
+    JaggedTensor U, Vt;
+    JaggedMatrix S;
+    std::tie(U, S, Vt) = slicewise_svdks(A_hat, ks);
+
+    // Clear temporary stuff
+    A_hat.clear();
+    Sv.clear();
+
+    return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
+}
+
 std::tuple<Tensor, Matrix, Tensor> tsvdmi_compress(const Tensor &A, std::vector<Matrix> M, int k) {
     std::vector<int> order;
     for(int i = 0; i < A.ndim; i++){
