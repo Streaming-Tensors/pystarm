@@ -1200,7 +1200,12 @@ std::tuple<Tensor, Matrix, Tensor> tsvdmi_compress(const Tensor &A, std::vector<
         else order.push_back(i);
     }
     Tensor A_hat = transform(A, M, order);
-    return slicewise_svdx(A_hat, k);
+
+    Tensor U, Vt;
+    Matrix S;
+    std::tie(U, S, Vt) = slicewise_svdx(A_hat, k);
+    A_hat.clear();
+    return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
 }
 
 Tensor tsvdmi_reconstruct(const Tensor& U, const Matrix& S, const Tensor& VT, std::vector<Matrix> M){
@@ -1211,6 +1216,7 @@ Tensor tsvdmi_reconstruct(const Tensor& U, const Matrix& S, const Tensor& VT, st
         else order.push_back(i);
     }
     Tensor A_tilde = transform(A_hat, M, order);
+    A_hat.clear();
     return A_tilde;
 }
 

@@ -93,6 +93,14 @@ class Tensor {
       #endif
     }
 
+    // Empty constructor
+    Tensor() {
+      this->ndim                = 0;
+      this->nslices             = 0;
+      this->data_ptr            = nullptr;
+      this->buflen              = 0;
+    }
+
     // Copy constructor (deep copy of date)
     Tensor(const Tensor &obj) : ndim(obj.ndim), dims(obj.dims), nslices(obj.nslices), buflen(obj.buflen) {
       #ifdef _MEMPRINT
