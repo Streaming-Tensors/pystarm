@@ -309,7 +309,7 @@ class TensorTestCase(unittest.TestCase):
               
             return flag
 
-        # Try two examples
+        # Try three examples
 
         ## 3-dimensional example
         ks       = [2, 1]
@@ -324,6 +324,17 @@ class TensorTestCase(unittest.TestCase):
       
         ## 4-dimensional example
         ks       = [4, 3, 1, 2, 2, 3]
+        ten_nelm = 120
+        ten_dims = (5, 4, 3, 2)
+        ten_ndim = len(ten_dims)
+        arr1 = np.arange(ten_nelm, dtype=np.float64).reshape(ten_dims, order='F')
+        ten1 = pystarm.Tensor(arr1, ten_ndim, ten_dims)
+
+        flag = slicewise_checks(arr1, ten1, ks)
+        self.assertEqual(flag, True)
+
+        ## 4-dimensional example with zeros
+        ks       = [4, 3, 0, 2, 0, 3]
         ten_nelm = 120
         ten_dims = (5, 4, 3, 2)
         ten_ndim = len(ten_dims)

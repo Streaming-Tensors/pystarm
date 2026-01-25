@@ -973,6 +973,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svdks(
     Matrix Vst;
 #pragma omp for
     for (size_t i = 0; i < A.nslices; i++) {
+      if (ks[i] > 0) {
         std::vector<double> s(ks[i]);
 
         // Compute the SVD
@@ -982,6 +983,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svdks(
         U.setfrontalslice(Us, i);
         S.setcol(s, i);
         Vt.setfrontalslice(Vst, i);
+      }
     }
 
     // Clear temporary stuff
