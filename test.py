@@ -256,6 +256,83 @@ class TensorTestCase(unittest.TestCase):
         self.assertEqual(flag1, True)
         self.assertEqual(flag2, True)
 
+    def test_slicewise_svdks(self):
+        """Test slicewise truncated SVD with different ranks per slice"""
+        
+        def slicewise_svdks(A, ks):
+            dims    = A.shape
+            nslices = np.prod(dims[2:])
+            U       = []
+            S       = []
+            Vt      = []
+
+            slice_idx = 0
+            # Order the frontal slices in natural mode ordering
+            for idx in itertools.product(*reversed([range(p) for p in dims[2:]])):
+              Aslice       = A[:, :, *reversed(idx)]
+              [Us, s, Vts] = np.linalg.svd(Aslice, full_matrices=False)
+
+              k = ks[slice_idx]
+              U.append(Us[:, :k])
+              S.append(s[:k])
+              Vt.append(Vts[:k, :])
+
+              slice_idx += 1
+
+            return U, S, Vt
+        
+        def slicewise_checks(Apy, Aten, ks):
+            # Compute the slicewise SVD
+            Uc, Sc, Vtc = pystarm.slicewise_svdks(Aten, ks)
+
+            # Compute in Python
+            [Upy, Spy, Vtpy] = slicewise_svdks(Apy, ks)
+
+            # Product of slices should be the same
+            nslices = len(Spy)
+            sflags  = np.zeros(nslices, dtype=np.bool)
+
+            for ii in range(nslices):
+                Us   = Uc.getfrontalslice(ii)
+                Usp  = np.frombuffer(Us, dtype=np.float64).reshape(Us.getdims(), order='F', copy=False)
+                Vts  = Vtc.getfrontalslice(ii)
+                Vtsp = np.frombuffer(Vts, dtype=np.float64).reshape(Vts.getdims(), order='F', copy=False)
+                Ssp  = Sc.getcol(ii)
+                Bsp  = Usp @ (np.diag(Ssp) @ Vtsp)
+        
+                Bpy = Upy[ii] @ (np.diag(Spy[ii]) @ Vtpy[ii])
+
+                # Check if the reconstructions are close
+                sflags[ii] = np.allclose(Bsp, Bpy)
+
+            flag = np.all(sflags)
+              
+            return flag
+
+        # Try two examples
+
+        ## 3-dimensional example
+        ks       = [2, 1]
+        ten_nelm = 24
+        ten_dims = (4, 3, 2)
+        ten_ndim = len(ten_dims)
+        arr1 = np.arange(ten_nelm, dtype=np.float64).reshape(ten_dims, order='F')
+        ten1 = pystarm.Tensor(arr1, ten_ndim, ten_dims)
+        
+        flag = slicewise_checks(arr1, ten1, ks)
+        self.assertEqual(flag, True)
+      
+        ## 4-dimensional example
+        ks       = [4, 3, 1, 2, 2, 3]
+        ten_nelm = 120
+        ten_dims = (5, 4, 3, 2)
+        ten_ndim = len(ten_dims)
+        arr1 = np.arange(ten_nelm, dtype=np.float64).reshape(ten_dims, order='F')
+        ten1 = pystarm.Tensor(arr1, ten_ndim, ten_dims)
+
+        flag = slicewise_checks(arr1, ten1, ks)
+        self.assertEqual(flag, True)
+
 class MatrixTestCase(unittest.TestCase):
     def test_matrix_creation(self):
         """Test for matrix creation"""
