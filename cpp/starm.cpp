@@ -95,9 +95,13 @@ PYBIND11_MODULE(pystarm, m) {
              py::keep_alive<1, 2>() // Keep the argument 2 (py::buffer) alive at least as long as 
                                     // the argument 1 (the C++ constructed object) is alive
         )
-        .def_readonly("ncol", &JaggedMatrix::ncol, "Number of columns in the matrix")
-        .def_readonly("col_ranks", &JaggedMatrix::col_ranks, "Ranks of each column in the matrix")
-        .def("clear", &JaggedMatrix::clear, "Clear the entire buffer of the jagged matrix");
+        .def_readonly("ncol", &JaggedMatrix::ncol, "Number of columns in the JaggedMatrix")
+        .def_readonly("col_ranks", &JaggedMatrix::col_ranks, "Ranks of each column in the JaggedMatrix")
+        .def("clear", &JaggedMatrix::clear, "Clear the entire buffer of the jagged matrix")
+        .def("get", &JaggedMatrix::get, "Get (i,j) th entry of the JaggedMatrix if it is valid")
+        .def("set", &JaggedMatrix::set, "Set (i,j) th entry of the JaggedMatrix if it is valid")
+        .def("getcol", &JaggedMatrix::getcol, "Get j-th column of the JaggedMatrix")
+        .def("setcol", &JaggedMatrix::setcol, "Set j-th column of the JaggedMatrix");
 
     py::class_<JaggedTensor>(m, "JaggedTensor", py::buffer_protocol())
         .def_buffer([](JaggedTensor& ten) -> py::buffer_info{
@@ -151,6 +155,8 @@ PYBIND11_MODULE(pystarm, m) {
         py::arg("A"), py::arg("verbose") = false);
 	m.def("slicewise_svdx", &slicewise_svdx, "Compute the truncated slice-wise SVD of a tensor",
         py::arg("A"), py::arg("k"), py::arg("verbose") = false);
+	m.def("slicewise_svdks", &slicewise_svdks, "Compute the truncated slice-wise SVD of a tensor with different ranks per frontal slice",
+        py::arg("A"), py::arg("ks"), py::arg("verbose") = false);
 	m.def("slicewise_matmul", &slicewise_matmul, "Compute the slice-wise multiplication of the output of slicewise_svd - U, VT and S");
 	m.def("transform", &transform, "Transform tensor with (multi)ttm in a specified order");
 	m.def("tsvdmi_compress", &tsvdmi_compress, "Compress using TSVDM-I algorithm");

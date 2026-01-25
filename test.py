@@ -368,6 +368,62 @@ class MatrixTestCase(unittest.TestCase):
         flag2 = np.allclose(sc, spy)
         self.assertEqual(flag2, True)
 
+    def test_svdvals_threshold(self):
+        """Test finding the threshold singular value"""
+        Apy  = np.random.rand(12).reshape((4,3), order='F')
+
+        for j in range(Apy.shape[1]):
+          b        = np.sort(Apy[:,j])
+          Apy[:,j] = b[::-1]
+
+        Amat = pystarm.Matrix(Apy, 4, 3)
+
+        # Run the test for the following thresholds
+        thrs  = [0.1, 0.25, 0.7, 0.9, 0.95]
+        flags = np.zeros(len(thrs))
+        a     = Apy.flatten().copy()
+        a     = np.sort(a)[::-1]
+        b     = a**2
+        b     = np.cumsum(b) / np.sum(b)
+
+        for i,t in enumerate(thrs):
+          t1       = a[np.argmax(b >= t)]
+          t2       = pystarm.threshold(Amat, t)
+          flags[i] = np.allclose(t1, t2)
+        
+        self.assertEqual(np.all(flags), True)
+          
+    def test_columnwise_ranks(self):
+        """Test finding the columnwise ranks given a threshold"""
+        Apy  = np.random.rand(12).reshape((4,3), order='F')
+
+        for j in range(Apy.shape[1]):
+          b        = np.sort(Apy[:,j])
+          Apy[:,j] = b[::-1]
+
+        Amat = pystarm.Matrix(Apy, 4, 3)
+
+        # Get the singular values sorted
+        a     = Apy.flatten().copy()
+        a     = np.sort(a)[::-1]
+        b     = a**2
+        b     = np.cumsum(b) / np.sum(b)
+
+        # Run the test for the following thresholds
+        thrs  = [0.1, 0.25, 0.7, 0.9]
+        flags = np.zeros(len(thrs))
+
+        for i,t in enumerate(thrs):
+          col_ranks = np.zeros(Apy.shape[1])
+          thr       = a[np.argmax(b >= t)]
+          for j in range(Apy.shape[1]):
+            col_ranks[j] = np.argmax(Apy[:,j] < thr)
+                
+          col_ranks2 = pystarm.thresholds(Amat, t)
+          flags[i]   = np.allclose(col_ranks, col_ranks2)
+        
+        self.assertEqual(np.all(flags), True)
+
 class JaggedTensorTestCase(unittest.TestCase):
     def test_jagged_tensor_creation(self):
         """Test jagged tensor creation and operations"""

@@ -455,7 +455,7 @@ class JaggedMatrix{
     }
 
     // Access functions
-    double get(size_t i, size_t j) {
+    double get(size_t i, size_t j) const {
       assert(j < this->ncol);
       assert(i < this->col_ranks[j]);
       return *(this->data_ptr + this->col_offset[j] + i);
@@ -468,7 +468,7 @@ class JaggedMatrix{
     }
 
     // Need only column access functions
-    std::vector<double> getcol(size_t j) {
+    std::vector<double> getcol(size_t j) const {
       assert(j < this->ncol);
       
       std::vector<double> col;
