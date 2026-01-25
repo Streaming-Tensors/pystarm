@@ -478,7 +478,7 @@ Tensor slicewise_matmul(const Tensor& U, const Matrix& S, const Tensor& VT){
     return TO;
 }
 
-Tensor slicewise_matmulx(const JaggedTensor& U, const JaggedMatrix& S, const JaggedTensor& VT){
+Tensor slicewise_matmulks(const JaggedTensor& U, const JaggedMatrix& S, const JaggedTensor& VT){
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch.html
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
     assert(U.nslices == VT.nslices);
@@ -590,7 +590,7 @@ Tensor slicewise_matmulx(const JaggedTensor& U, const JaggedMatrix& S, const Jag
         for(MKL_INT i = 0; i < cblas_group_count; i++){ 
             cblas_group_size[i] = 1;
             cblas_transa_array[i] = CblasNoTrans;
-            cblas_transb_array[i] = CblasTrans;
+            cblas_transb_array[i] = CblasNoTrans;
             cblas_m_array[i] = US.fixed_dim_size; 
             cblas_k_array[i] = US.slice_ranks[i]; 
             cblas_n_array[i] = VT.fixed_dim_size; 
@@ -603,7 +603,7 @@ Tensor slicewise_matmulx(const JaggedTensor& U, const JaggedMatrix& S, const Jag
                 cblas_b_array[i] = VT.data_ptr; 
             else
                 cblas_b_array[i] = cblas_b_array[i-1] + VT.fixed_dim_size * VT.slice_ranks[i-1] ; 
-            cblas_ldb_array[i] = VT.fixed_dim_size; 
+            cblas_ldb_array[i] = VT.slice_ranks[i]; 
             if (i == 0)
                 cblas_c_array[i] = TO.data_ptr; 
             else

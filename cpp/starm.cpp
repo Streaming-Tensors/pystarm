@@ -158,7 +158,7 @@ PYBIND11_MODULE(pystarm, m) {
 	m.def("slicewise_svdks", &slicewise_svdks, "Compute the truncated slice-wise SVD of a tensor with different ranks per frontal slice",
         py::arg("A"), py::arg("ks"), py::arg("verbose") = false);
 	m.def("slicewise_matmul", &slicewise_matmul, "Compute the slice-wise multiplication of the output of slicewise_svd - U, VT and S");
-	m.def("slicewise_matmulx", &slicewise_matmulx, "Compute the slice-wise multiplication of the output of slicewise_svdx - U, VT and S");
+	m.def("slicewise_matmulks", &slicewise_matmulks, "Compute the slice-wise multiplication of the output of slicewise_svdks - U, VT and S");
 	m.def("transform", &transform, "Transform tensor with (multi)ttm in a specified order");
 	m.def("tsvdmi_compress", &tsvdmi_compress, "Compress using TSVDM-I algorithm");
 	m.def("tsvdmi_reconstruct", &tsvdmi_reconstruct, "Reconstruct output of TSVDM-I algorithm");
