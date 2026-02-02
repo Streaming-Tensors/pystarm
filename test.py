@@ -400,6 +400,119 @@ class TensorTestCase(unittest.TestCase):
         flag = np.allclose(T_py.flatten(order='F'), T_np.flatten(order='F'))
         self.assertEqual(flag, True)
 
+    def test_slicewise_matmulks_random_case(self):
+        """Test slicewise matmul with different ranks per slice with random test case"""
+        nslices = np.random.randint(1, 20)
+        slice_ranks = np.random.randint(1, 10, nslices)
+
+        U_fixed_dim_size = np.random.randint(1, 20)
+        U_nslices = nslices
+        U_slice_ranks = slice_ranks
+        U_jagged = []
+        U_flattened_list = []
+        for i in range(U_nslices):
+            x = np.asfortranarray(np.random.rand(U_fixed_dim_size, U_slice_ranks[i]).astype(np.float64))
+            U_jagged.append(x)
+            U_flattened_list.append(x.flatten(order='F'))
+        U_flattened = np.concatenate(U_flattened_list)
+        U_starm = pystarm.JaggedTensor(U_flattened, U_fixed_dim_size, U_slice_ranks)
+
+        S_ncol = U_nslices
+        S_col_ranks = U_slice_ranks
+        S_jagged = []
+        S_flattened_list = []
+        for i in range(S_ncol):
+            # val = i+1
+            # x = val * np.ones(S_col_ranks[i], dtype=np.float64, order='F')
+            x = np.asfortranarray(np.random.rand(S_col_ranks[i]).astype(np.float64))
+            S_jagged.append(x)
+            S_flattened_list.append(x.flatten(order='F'))
+        S_flattened = np.concatenate(S_flattened_list)
+        S_starm = pystarm.JaggedMatrix(S_flattened, S_col_ranks)
+
+        Vt_fixed_dim_size = np.random.randint(1, 20)
+        Vt_nslices = U_nslices
+        Vt_slice_ranks = U_slice_ranks
+        Vt_jagged = []
+        Vt_flattened_list = []
+        for i in range(Vt_nslices):
+            # slice_vals = i+1
+            # x = slice_vals * np.ones((Vt_slice_ranks[i], Vt_fixed_dim_size), dtype=np.float64, order='F')
+            x = np.asfortranarray(np.random.rand(Vt_slice_ranks[i], Vt_fixed_dim_size).astype(np.float64))
+            Vt_jagged.append(x)
+            Vt_flattened_list.append(x.flatten(order='F'))
+        Vt_flattened = np.concatenate(Vt_flattened_list)
+        Vt_starm = pystarm.JaggedTensor(Vt_flattened, Vt_fixed_dim_size, Vt_slice_ranks, True)
+
+        T_starm = pystarm.slicewise_matmulks(U_starm, S_starm, Vt_starm) 
+        T_py  = np.frombuffer(T_starm, dtype=np.float64).reshape(T_starm.getdims(), order='F', copy=False)
+        T_np = np_slicewise_matmulks(U_jagged, S_jagged, Vt_jagged)
+
+        flag = np.allclose(T_py.flatten(order='F'), T_np.flatten(order='F'))
+        self.assertEqual(flag, True)
+
+    def test_slicewise_matmulks_random_case_with_empty_slices(self):
+        """Test slicewise matmul with different ranks per slice with random test case with empty slices"""
+        nslices = 6
+        slice_ranks = np.array([4,3,0,2,0,3])
+
+        # U_fixed_dim_size = np.random.randint(1, 20)
+        U_fixed_dim_size = 5
+        U_nslices = nslices
+        U_slice_ranks = slice_ranks
+        U_jagged = []
+        U_flattened_list = []
+        for i in range(U_nslices):
+            slice_vals = i+1
+            x = slice_vals * np.ones((U_fixed_dim_size, U_slice_ranks[i]), dtype=np.float64, order='F')
+            # x = np.asfortranarray(np.random.rand(U_fixed_dim_size, U_slice_ranks[i]).astype(np.float64))
+            U_jagged.append(x)
+            U_flattened_list.append(x.flatten(order='F'))
+            print('U', i, U_flattened_list[-1])
+        U_flattened = np.concatenate(U_flattened_list)
+        U_starm = pystarm.JaggedTensor(U_flattened, U_fixed_dim_size, U_slice_ranks)
+
+        S_ncol = U_nslices
+        S_col_ranks = U_slice_ranks
+        S_jagged = []
+        S_flattened_list = []
+        for i in range(S_ncol):
+            val = i+1
+            x = val * np.ones(S_col_ranks[i], dtype=np.float64, order='F')
+            # x = np.asfortranarray(np.random.rand(S_col_ranks[i]).astype(np.float64))
+            S_jagged.append(x)
+            S_flattened_list.append(x.flatten(order='F'))
+            print('S', i, S_flattened_list[-1])
+        S_flattened = np.concatenate(S_flattened_list)
+        S_starm = pystarm.JaggedMatrix(S_flattened, S_col_ranks)
+
+        # Vt_fixed_dim_size = np.random.randint(1, 20)
+        Vt_fixed_dim_size = 3
+        Vt_nslices = U_nslices
+        Vt_slice_ranks = U_slice_ranks
+        Vt_jagged = []
+        Vt_flattened_list = []
+        for i in range(Vt_nslices):
+            slice_vals = i+1
+            x = slice_vals * np.ones((Vt_slice_ranks[i], Vt_fixed_dim_size), dtype=np.float64, order='F')
+            # x = np.asfortranarray(np.random.rand(Vt_slice_ranks[i], Vt_fixed_dim_size).astype(np.float64))
+            Vt_jagged.append(x)
+            Vt_flattened_list.append(x.flatten(order='F'))
+            print('Vt', i, Vt_flattened_list[-1])
+        Vt_flattened = np.concatenate(Vt_flattened_list)
+        print('U', U_flattened)
+        print('S', S_flattened)
+        print('Vt', Vt_flattened)
+        print('slice_ranks', Vt_slice_ranks)
+        Vt_starm = pystarm.JaggedTensor(Vt_flattened, Vt_fixed_dim_size, Vt_slice_ranks, True)
+
+        T_starm = pystarm.slicewise_matmulks(U_starm, S_starm, Vt_starm) 
+        T_py  = np.frombuffer(T_starm, dtype=np.float64).reshape(T_starm.getdims(), order='F', copy=False)
+        T_np = np_slicewise_matmulks(U_jagged, S_jagged, Vt_jagged)
+
+        flag = np.allclose(T_py.flatten(order='F'), T_np.flatten(order='F'))
+        self.assertEqual(flag, True)
+
 class MatrixTestCase(unittest.TestCase):
     def test_matrix_creation(self):
         """Test for matrix creation"""
