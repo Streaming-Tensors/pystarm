@@ -468,7 +468,7 @@ class TensorTestCase(unittest.TestCase):
             # x = np.asfortranarray(np.random.rand(U_fixed_dim_size, U_slice_ranks[i]).astype(np.float64))
             U_jagged.append(x)
             U_flattened_list.append(x.flatten(order='F'))
-            print('U', i, U_flattened_list[-1])
+            # print('U', i, U_flattened_list[-1])
         U_flattened = np.concatenate(U_flattened_list)
         U_starm = pystarm.JaggedTensor(U_flattened, U_fixed_dim_size, U_slice_ranks)
 
@@ -482,7 +482,7 @@ class TensorTestCase(unittest.TestCase):
             # x = np.asfortranarray(np.random.rand(S_col_ranks[i]).astype(np.float64))
             S_jagged.append(x)
             S_flattened_list.append(x.flatten(order='F'))
-            print('S', i, S_flattened_list[-1])
+            # print('S', i, S_flattened_list[-1])
         S_flattened = np.concatenate(S_flattened_list)
         S_starm = pystarm.JaggedMatrix(S_flattened, S_col_ranks)
 
@@ -498,17 +498,20 @@ class TensorTestCase(unittest.TestCase):
             # x = np.asfortranarray(np.random.rand(Vt_slice_ranks[i], Vt_fixed_dim_size).astype(np.float64))
             Vt_jagged.append(x)
             Vt_flattened_list.append(x.flatten(order='F'))
-            print('Vt', i, Vt_flattened_list[-1])
+            # print('Vt', i, Vt_flattened_list[-1])
         Vt_flattened = np.concatenate(Vt_flattened_list)
-        print('U', U_flattened)
-        print('S', S_flattened)
-        print('Vt', Vt_flattened)
-        print('slice_ranks', Vt_slice_ranks)
+        # print('U', U_flattened)
+        # print('S', S_flattened)
+        # print('Vt', Vt_flattened)
+        # print('slice_ranks', Vt_slice_ranks)
         Vt_starm = pystarm.JaggedTensor(Vt_flattened, Vt_fixed_dim_size, Vt_slice_ranks, True)
 
         T_starm = pystarm.slicewise_matmulks(U_starm, S_starm, Vt_starm) 
         T_py  = np.frombuffer(T_starm, dtype=np.float64).reshape(T_starm.getdims(), order='F', copy=False)
         T_np = np_slicewise_matmulks(U_jagged, S_jagged, Vt_jagged)
+
+        # print(T_py.flatten(order='F'))
+        # print(T_np.flatten(order='F'))
 
         flag = np.allclose(T_py.flatten(order='F'), T_np.flatten(order='F'))
         self.assertEqual(flag, True)

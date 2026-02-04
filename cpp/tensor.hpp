@@ -81,6 +81,7 @@ class Tensor {
 
         this->buflen = buflen;
         this->data_ptr = (double*) malloc(this->buflen * sizeof(double) );
+        memset(this->data_ptr, 0.0, this->buflen * sizeof(double) );
 
         // Count the number of slices
         size_t nslices = 1;

@@ -565,89 +565,155 @@ Tensor slicewise_matmulks(const JaggedTensor& U, const JaggedMatrix& S, const Ja
     TOdims[2] = US.nslices;
     size_t TObuflen = std::accumulate(TOdims.begin(), TOdims.end(), (size_t)1, std::multiplies<size_t>());
     Tensor TO(TObuflen, 3, TOdims);
-
     {
-        // Use cblas_dgemm_batch: https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-0/cblas-gemm-batch.html
-        
-        MKL_INT cblas_group_count = (MKL_INT)US.nslices;
-        MKL_INT* cblas_group_size = new MKL_INT[cblas_group_count];
+        MKL_INT cblas_m;
+        MKL_INT cblas_k;
+        MKL_INT cblas_n;
+        double* cblas_a;
+        double* cblas_b;
+        double* cblas_c;
+        MKL_INT cblas_lda;
+        MKL_INT cblas_ldb;
+        MKL_INT cblas_ldc;
+        double cblas_alpha = 1.0;
+        double cblas_beta = 0.0;
 
-        CBLAS_LAYOUT cblas_layout = CblasColMajor;
-        CBLAS_TRANSPOSE* cblas_transa_array = new CBLAS_TRANSPOSE[cblas_group_count];
-        CBLAS_TRANSPOSE* cblas_transb_array = new CBLAS_TRANSPOSE[cblas_group_count];
-        MKL_INT* cblas_m_array = new MKL_INT[cblas_group_count];
-        MKL_INT* cblas_n_array = new MKL_INT[cblas_group_count];
-        MKL_INT* cblas_k_array = new MKL_INT[cblas_group_count];
-        double* cblas_alpha_array = new double[cblas_group_count];
-        const double** cblas_a_array = new const double*[cblas_group_count];
-        MKL_INT* cblas_lda_array = new MKL_INT[cblas_group_count];
-        const double** cblas_b_array = new const double*[cblas_group_count];
-        MKL_INT* cblas_ldb_array = new MKL_INT[cblas_group_count];
-        double* cblas_beta_array = new double[cblas_group_count];
-        double** cblas_c_array = new double*[cblas_group_count];
-        MKL_INT* cblas_ldc_array = new MKL_INT[cblas_group_count];
+        for (size_t i = 0; i < US.nslices; i++){
+            cblas_m = (MKL_INT) US.fixed_dim_size; 
+            cblas_k = (MKL_INT) US.slice_ranks[i]; 
+            cblas_n = (MKL_INT) VT.fixed_dim_size; 
+            cblas_alpha = 1.0;
+            cblas_beta = 0.0;
+            if (i == 0)
+                cblas_a = US.data_ptr; 
+            else
+                cblas_a = cblas_a + US.fixed_dim_size * US.slice_ranks[i-1] ; 
 
-        for(MKL_INT i = 0; i < cblas_group_count; i++){ 
-            cblas_group_size[i] = 1;
-            cblas_transa_array[i] = CblasNoTrans;
-            cblas_transb_array[i] = CblasNoTrans;
-            cblas_m_array[i] = US.fixed_dim_size; 
-            cblas_k_array[i] = US.slice_ranks[i]; 
-            cblas_n_array[i] = VT.fixed_dim_size; 
-            if (i == 0)
-                cblas_a_array[i] = US.data_ptr; 
-            else
-                cblas_a_array[i] = cblas_a_array[i-1] + US.fixed_dim_size * US.slice_ranks[i-1] ; 
-            cblas_lda_array[i] = US.fixed_dim_size; 
-            if (i == 0)
-                cblas_b_array[i] = VT.data_ptr; 
-            else
-                cblas_b_array[i] = cblas_b_array[i-1] + VT.fixed_dim_size * VT.slice_ranks[i-1] ; 
-            cblas_ldb_array[i] = VT.slice_ranks[i]; 
-            if (i == 0)
-                cblas_c_array[i] = TO.data_ptr; 
-            else
-                cblas_c_array[i] = cblas_c_array[i-1] + US.fixed_dim_size * VT.fixed_dim_size ; 
-            cblas_ldc_array[i] = US.fixed_dim_size; 
+            cblas_lda = (MKL_INT)US.fixed_dim_size; 
 
-            cblas_alpha_array[i] = 1.0;
-            cblas_beta_array[i] = 0.0;
+            if (i == 0)
+                cblas_b = VT.data_ptr; 
+            else
+                cblas_b = cblas_b + VT.fixed_dim_size * VT.slice_ranks[i-1] ; 
+
+            cblas_ldb = VT.slice_ranks[i]; 
+
+            if (i == 0)
+                cblas_c = TO.data_ptr; 
+            else
+                cblas_c = cblas_c + US.fixed_dim_size * VT.fixed_dim_size ; 
+
+            cblas_ldc = US.fixed_dim_size; 
+                                                 
+            if(US.slice_ranks[i] > 0){
+                cblas_dgemm(
+                    CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
+                    CblasNoTrans, // A matrix is not transpose. `transa` param of MKL cblas call.
+                    CblasNoTrans, // B matrix is not transpose. `transb` param of MKL cblas call.
+                    cblas_m, // Number of rows of A or C. `m` param of MKL cblas call.
+                    cblas_n, // Number of cols of B or C. `n` param of MKL cblas call.
+                    cblas_k, // Inner dimension - number of columns of A or number of rows of B. `k` param of MKL cblas call.
+                    cblas_alpha, // Scalar `alpha` param of MKL cblas call.
+                    cblas_a, // Data buffer of A. `a` param of MKL cblas call.
+                    cblas_lda, // Leading dimension of A. `lda` param of MKL cblas call.
+                    cblas_b, // Data buffer of B. `b` param of MKL cblas call.
+                    cblas_ldb, // Leading dimension of B. `ldb` param of MKL cblas call.
+                    cblas_beta, // Scalar `beta` param of MKL cblas call.
+                    cblas_c, // Data buffer of C. `c` param of MKL cblas call.
+                    cblas_ldc // Leading dimension of C. `ldc` param of MKL cblas call.
+                );
+            }
         }
-        
-        cblas_dgemm_batch (
-                cblas_layout, 
-                cblas_transa_array, 
-                cblas_transb_array, 
-                cblas_m_array, 
-                cblas_n_array, 
-                cblas_k_array, 
-                cblas_alpha_array, 
-                cblas_a_array, 
-                cblas_lda_array, 
-                cblas_b_array, 
-                cblas_ldb_array, 
-                cblas_beta_array, 
-                cblas_c_array, 
-                cblas_ldc_array, 
-                cblas_group_count, 
-                cblas_group_size
-        );
-
-        delete[] cblas_transa_array;
-        delete[] cblas_transb_array;
-        delete[] cblas_m_array;
-        delete[] cblas_n_array;
-        delete[] cblas_k_array;
-        delete[] cblas_alpha_array;
-        delete[] cblas_a_array;
-        delete[] cblas_lda_array;
-        delete[] cblas_b_array;
-        delete[] cblas_ldb_array;
-        delete[] cblas_beta_array;
-        delete[] cblas_c_array;
-        delete[] cblas_ldc_array;
-        delete[] cblas_group_size;
     }
+
+    //{
+        //// Use cblas_dgemm_batch: https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-0/cblas-gemm-batch.html
+        ////
+        
+        //MKL_INT cblas_group_count = (MKL_INT)US.nslices;
+        //MKL_INT* cblas_group_size = new MKL_INT[cblas_group_count];
+
+        //CBLAS_LAYOUT cblas_layout = CblasColMajor;
+        //CBLAS_TRANSPOSE* cblas_transa_array = new CBLAS_TRANSPOSE[cblas_group_count];
+        //CBLAS_TRANSPOSE* cblas_transb_array = new CBLAS_TRANSPOSE[cblas_group_count];
+        //MKL_INT* cblas_m_array = new MKL_INT[cblas_group_count];
+        //MKL_INT* cblas_n_array = new MKL_INT[cblas_group_count];
+        //MKL_INT* cblas_k_array = new MKL_INT[cblas_group_count];
+        //double* cblas_alpha_array = new double[cblas_group_count];
+        //const double** cblas_a_array = new const double*[cblas_group_count];
+        //MKL_INT* cblas_lda_array = new MKL_INT[cblas_group_count];
+        //const double** cblas_b_array = new const double*[cblas_group_count];
+        //MKL_INT* cblas_ldb_array = new MKL_INT[cblas_group_count];
+        //double* cblas_beta_array = new double[cblas_group_count];
+        //double** cblas_c_array = new double*[cblas_group_count];
+        //MKL_INT* cblas_ldc_array = new MKL_INT[cblas_group_count];
+
+        //for(MKL_INT i = 0; i < cblas_group_count; i++){ 
+            //cblas_group_size[i] = 1;
+            //cblas_transa_array[i] = CblasNoTrans;
+            //cblas_transb_array[i] = CblasNoTrans;
+            //cblas_m_array[i] = US.fixed_dim_size; 
+            //cblas_k_array[i] = US.slice_ranks[i]; 
+            //cblas_n_array[i] = VT.fixed_dim_size; 
+
+            //if (i == 0)
+                //cblas_a_array[i] = US.data_ptr; 
+            //else
+                //cblas_a_array[i] = cblas_a_array[i-1] + US.fixed_dim_size * US.slice_ranks[i-1] ; 
+
+            //cblas_lda_array[i] = US.fixed_dim_size; 
+
+            //if (i == 0)
+                //cblas_b_array[i] = VT.data_ptr; 
+            //else
+                //cblas_b_array[i] = cblas_b_array[i-1] + VT.fixed_dim_size * VT.slice_ranks[i-1] ; 
+
+            //cblas_ldb_array[i] = VT.slice_ranks[i]; 
+
+            //if (i == 0)
+                //cblas_c_array[i] = TO.data_ptr; 
+            //else
+                //cblas_c_array[i] = cblas_c_array[i-1] + US.fixed_dim_size * VT.fixed_dim_size ; 
+            //cblas_ldc_array[i] = US.fixed_dim_size; 
+
+            //cblas_alpha_array[i] = 1.0;
+            //cblas_beta_array[i] = 0.0;
+        //}
+        
+        //cblas_dgemm_batch (
+                //cblas_layout, 
+                //cblas_transa_array, 
+                //cblas_transb_array, 
+                //cblas_m_array, 
+                //cblas_n_array, 
+                //cblas_k_array, 
+                //cblas_alpha_array, 
+                //cblas_a_array, 
+                //cblas_lda_array, 
+                //cblas_b_array, 
+                //cblas_ldb_array, 
+                //cblas_beta_array, 
+                //cblas_c_array, 
+                //cblas_ldc_array, 
+                //cblas_group_count, 
+                //cblas_group_size
+        //);
+
+        //delete[] cblas_transa_array;
+        //delete[] cblas_transb_array;
+        //delete[] cblas_m_array;
+        //delete[] cblas_n_array;
+        //delete[] cblas_k_array;
+        //delete[] cblas_alpha_array;
+        //delete[] cblas_a_array;
+        //delete[] cblas_lda_array;
+        //delete[] cblas_b_array;
+        //delete[] cblas_ldb_array;
+        //delete[] cblas_beta_array;
+        //delete[] cblas_c_array;
+        //delete[] cblas_ldc_array;
+        //delete[] cblas_group_size;
+    //}
     US.clear();
     return TO;
 }
