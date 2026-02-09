@@ -119,8 +119,8 @@ if __name__ == "__main__":
     t1 = time.perf_counter()
     print("Time to generate the DCT matrix:", t1-t0)
 
-    (U_hat,S_hat,VT_hat) = tsvdm_I_compress(A, M, 100)
-    Atilde = tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, MT)
+    (U_hat,S_hat,VT_hat) = tsvdm_I_compress(A, [M], [2], 50, True)
+    Atilde = tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, [MT], [2], True)
 
     arr_reconst = np.frombuffer(Atilde, dtype=np.float64).reshape(Atilde.getdims(), order='F', copy = False)
     write_mp4_opencv(arr_reconst, "data/iniesta_reconst.mp4")
