@@ -8,6 +8,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from alg import tsvdm_I_compress
 from alg import tsvdm_I_reconstruct
+from alg import tsvdm_II_compress
+from alg import tsvdm_II_reconstruct
+import argparse
 
 def video_to_gray_array(path, max_frames=None):
     cap = cv2.VideoCapture(path)
@@ -93,6 +96,22 @@ def write_mp4_opencv(arr: np.ndarray, out_path: str, fps: float = 30.0,
     # return np.asfortranarray(arr)   # convert to Fortran (column-major) order
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-alg", "--alg", type=str, help="Name of the algorithm")
+    parser.add_argument("-k", "--k", type=int, help="Slice rank for tsvdm-I")
+    parser.add_argument("-pct", "--pct", type=int, help="Percentage for tsvdm-II")
+    args = parser.parse_args()
+    
+    alg = None
+    k = None
+    pct = None
+
+    alg = args.alg
+    if args.k is not None:
+        k = args.k
+    if args.pct is not None:
+        pct = 1.0 * float(args.pct) / 100.0
+
     t0 = time.perf_counter()
     arr_gry = video_to_gray_array("data/iniesta.mp4")
     t1 = time.perf_counter()
@@ -118,12 +137,21 @@ if __name__ == "__main__":
     MT = pystarm.Matrix(DFT, mat_dims[0], mat_dims[1])
     t1 = time.perf_counter()
     print("Time to generate the DCT matrix:", t1-t0)
+    
+    Atilde = None
+    filename = None
+    if alg == "tsvdmi":
+        (U_hat,S_hat,VT_hat) = tsvdm_I_compress(A, [M], [2], k, True)
+        Atilde = tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, [MT], [2], True)
+        filename = "data/iniesta_reconst" + "-" + alg + "-" + str(k) +".mp4"
 
-    (U_hat,S_hat,VT_hat) = tsvdm_I_compress(A, [M], [2], 50, True)
-    Atilde = tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, [MT], [2], True)
+    elif alg == "tsvdmii":
+        (U_hat,S_hat,VT_hat) = tsvdm_II_compress(A, [M], [2], pct, True)
+        Atilde = tsvdm_II_reconstruct(U_hat, S_hat, VT_hat, [MT], [2], True)
+        filename = "data/iniesta_reconst" + "-" + alg + "-" + str(args.pct) +".mp4"
 
     arr_reconst = np.frombuffer(Atilde, dtype=np.float64).reshape(Atilde.getdims(), order='F', copy = False)
-    write_mp4_opencv(arr_reconst, "data/iniesta_reconst.mp4")
+    write_mp4_opencv(arr_reconst, filename)
 
     arr_diff = arr_gry - arr_reconst
     norm_arr_diff = np.linalg.norm(arr_diff)

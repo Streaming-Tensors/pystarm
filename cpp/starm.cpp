@@ -163,7 +163,6 @@ PYBIND11_MODULE(pystarm, m) {
 	m.def("tsvdmi_compress", &tsvdmi_compress, "Compress using TSVDM-I algorithm");
 	m.def("tsvdmi_reconstruct", &tsvdmi_reconstruct, "Reconstruct output of TSVDM-I algorithm");
 	m.def("tsvdmii_compress", &tsvdmii_compress, "Compress using TSVDM-II algorithm");
-	m.def("check", &check, "Check");
 }
 
 #endif
