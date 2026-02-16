@@ -1,5 +1,4 @@
 import time
-import pystarm
 import numpy as np
 import scipy as sp
 from scipy.fft import dct
@@ -11,6 +10,7 @@ from alg import tsvdm_I_reconstruct
 from alg import tsvdm_II_compress
 from alg import tsvdm_II_reconstruct
 import argparse
+import pystarm
 
 def video_to_gray_array(path, max_frames=None):
     cap = cv2.VideoCapture(path)
