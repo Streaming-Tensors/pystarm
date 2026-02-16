@@ -73,6 +73,7 @@ PYBIND11_MODULE(pystarm, m) {
         )
         .def("clear", &Tensor::clear, "Free memory of the underlying data buffer")
         .def("getdims", &Tensor::getdims, "Get tensor dimensions")
+        .def("getbuflen", &Tensor::getbuflen, "Get buffer length")
         .def("getfrontalslice", &Tensor::getfrontalslice, "Get a frontal slice")
         .def("getfrontalslice_copy", &Tensor::getfrontalslice_copy, "Get a deep copy of a frontal slice")
         .def("setfrontalslice", &Tensor::setfrontalslice, "Set a frontal slice")
@@ -136,6 +137,7 @@ PYBIND11_MODULE(pystarm, m) {
         //.def_readonly("last_mode_jagged", &JaggedTensor::last_mode_jagged, "  Whether the last mode is jagged. If false, then first mode is jagged") --- IGNORE ---
         .def("setfrontalslice", &JaggedTensor::setfrontalslice, "set a frontal slice in the jagged tensor")
         .def("getfrontalslice", &JaggedTensor::getfrontalslice, "Get a frontal slice from the jagged tensor by index")
+        .def("getbuflen", &JaggedTensor::getbuflen, "Get buffer length")
         .def("clear", &JaggedTensor::clear, "Clear all slices in the jagged tensor");
 
 	m.def("matmul", &matmul, "Multiply two matrices and return a new result matrix");
