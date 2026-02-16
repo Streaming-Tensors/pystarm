@@ -219,6 +219,10 @@ class Tensor {
         return this->dims;
     }
 
+    size_t getbuflen(){
+        return this->buflen;
+    }
+
     /* Get a deep copy of a frontal slice
        Assuming natural ordering
        Slices are linearly indexed (0-based indexing)
@@ -306,11 +310,7 @@ class Tensor {
         printf("Memory location: %p\n", this->data_ptr);        
         #endif
 
-        size_t buflen = 1;
-        for (size_t i = 0; i < ndim; i++) {
-            buflen = buflen * this->dims[i];
-        }
-        for (size_t i = 0; i < buflen; ++i) {
+        for (size_t i = 0; i < this->buflen; ++i) {
                 printf("%.2lf\t", this->data_ptr[i] );
         }  
         printf("\n");
@@ -321,20 +321,10 @@ class Tensor {
         printf("Memory location: %p\n", this->data_ptr);        
         #endif
 
-        size_t buflen = 1;
-        for (size_t i = 0; i < ndim; i++) {
-            buflen = buflen * this->dims[i];
-        }
-
         MKL_INT cblas_n = (MKL_INT) this->buflen;
         MKL_INT cblas_incx = (MKL_INT)(1);
         double* cblas_x = this->data_ptr;
         return cblas_dnrm2(cblas_n, cblas_x, cblas_incx);
-        //double norm = 0.0;
-        //for (size_t i = 0; i < buflen; ++i) {
-            //norm += this->data_ptr[i] * this->data_ptr[i];
-        //}
-        //return std::sqrt(norm);
     }
 
     void generate_random(){
@@ -357,6 +347,7 @@ class JaggedTensor {
     bool variable_first_mode; // Whether the first mode of a slice is jagged. If false, then last mode is jagged
     std::vector<size_t> slice_ranks;  // Each element is the rank of the corresponding slice
     double *data_ptr;
+    size_t buflen;
 
     // Takes a preallocated buffer by Python
     // py::buffer instead of py:array_t to prevent any chance of silent data copy
@@ -371,6 +362,10 @@ class JaggedTensor {
         for (size_t i = 0; i < this->nslices; i++) {
             this->slice_ranks[i] = slice_ranks[i];
         }
+        this->buflen = 0;
+        for (size_t r : slice_ranks) {
+            this->buflen += fixed_dim_size * r;
+        }
         this->data_ptr = static_cast<double*>(buf_info.ptr);
         #ifdef _MEMPRINT
         std::cout << "Pointing to after owning buffer: " << this->data_ptr << std::endl;
@@ -379,7 +374,7 @@ class JaggedTensor {
 
     JaggedTensor(size_t buflen, size_t fixed_dim_size, std::vector<size_t> slice_ranks, bool variable_first_mode = false)
         : fixed_dim_size(fixed_dim_size), nslices(slice_ranks.size()), 
-          slice_ranks(slice_ranks), variable_first_mode(variable_first_mode) {
+          slice_ranks(slice_ranks), variable_first_mode(variable_first_mode), buflen(buflen) {
         #ifdef _MEMPRINT
         std::cout << "JaggedTensor Malloc constructor" << std::endl;
         std::cout << "Pointing to before malloc: " << this->data_ptr << std::endl;
@@ -402,7 +397,7 @@ class JaggedTensor {
 
     // Copy constructor (deep copy of data)
     JaggedTensor(const JaggedTensor & obj) 
-        : fixed_dim_size(obj.fixed_dim_size), nslices(obj.nslices), variable_first_mode(obj.variable_first_mode) {
+        : fixed_dim_size(obj.fixed_dim_size), nslices(obj.nslices), variable_first_mode(obj.variable_first_mode), buflen(obj.buflen) {
         #ifdef _MEMPRINT
         std::cout << "JaggedTensor Copy constructor" << std::endl;
         std::cout << "Pointing to before copy: " << this->data_ptr << std::endl;
@@ -412,12 +407,12 @@ class JaggedTensor {
         for (size_t i = 0; i < this->nslices; i++) {
             this->slice_ranks[i] = obj.slice_ranks[i];
         }
-        size_t buflen = 0;
-        for (size_t r : slice_ranks) {
-            buflen += fixed_dim_size * r;
-        }
-        this->data_ptr = static_cast<double*>(malloc(buflen * sizeof(double)));
-        std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+        //size_t buflen = 0;
+        //for (size_t r : slice_ranks) {
+            //buflen += fixed_dim_size * r;
+        //}
+        this->data_ptr = static_cast<double*>(malloc(this->buflen * sizeof(double)));
+        std::copy(obj.data_ptr, obj.data_ptr + this->buflen, this->data_ptr);
 
         #ifdef _MEMPRINT
         std::cout << "Pointing to after copy: " << this->data_ptr << std::endl;
@@ -444,12 +439,13 @@ class JaggedTensor {
         for (size_t i = 0; i < this->nslices; i++) {
             this->slice_ranks[i] = obj.slice_ranks[i];
         }
-        size_t buflen = 0;
-        for (size_t r : slice_ranks) {
-            buflen += fixed_dim_size * r;
-        }
-        this->data_ptr = static_cast<double*>(malloc(buflen * sizeof(double)));
-        std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+        //size_t buflen = 0;
+        //for (size_t r : slice_ranks) {
+            //buflen += fixed_dim_size * r;
+        //}
+        this->buflen = obj.buflen;
+        this->data_ptr = static_cast<double*>(malloc(this->buflen * sizeof(double)));
+        std::copy(obj.data_ptr, obj.data_ptr + this->buflen, this->data_ptr);
       }
 
       #ifdef _MEMPRINT
@@ -473,11 +469,13 @@ class JaggedTensor {
       this->nslices             = obj.nslices;
       this->slice_ranks         = std::move(obj.slice_ranks);
       this->data_ptr            = obj.data_ptr;
+      this->buflen              = obj.buflen;
 
       // Clear the other object
       obj.fixed_dim_size = 0;
       obj.nslices        = 0;
       obj.data_ptr       = nullptr;
+      obj.buflen         = 0;
 
       #ifdef _MEMPRINT
       std::cout << "Pointing to after move: " << this->data_ptr << std::endl;
@@ -502,11 +500,13 @@ class JaggedTensor {
         this->nslices             = obj.nslices;
         this->slice_ranks         = std::move(obj.slice_ranks);
         this->data_ptr            = obj.data_ptr;
+        this->buflen              = obj.buflen;
 
         // Clear the other object
         obj.fixed_dim_size = 0;
         obj.nslices        = 0;
         obj.data_ptr       = nullptr;
+        obj.buflen         = 0;
       }
 
       #ifdef _MEMPRINT
@@ -522,6 +522,11 @@ class JaggedTensor {
       this->variable_first_mode = false;
       this->nslices             = 0;
       this->data_ptr            = nullptr;
+      this->buflen              = 0;
+    }
+
+    size_t getbuflen(){
+        return this->buflen;
     }
 
     // Get a deep copy of frontal slice
@@ -615,6 +620,7 @@ class JaggedTensor {
         }
         this->slice_ranks.clear();
         this->data_ptr = nullptr;
+        this->buflen = 0;
     }
 };
 

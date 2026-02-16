@@ -46,6 +46,7 @@ PYBIND11_MODULE(pystarm, m) {
         .def("setcol", &Matrix::setcol, "Set j-th column of the matrix")
         .def("clear", &Matrix::clear, "Free memory of the underlying data buffer")
         .def("getdims", &Matrix::getdims, "Get matrix dimensions")
+        .def("getbuflen", &Matrix::getbuflen, "Get buffer length")
         .def("print", &Matrix::print, "Print contents of the matrix");
     //py::class_<Tensor>(m, "Tensor")
         //.def(py::init<py::buffer& , size_t, std::vector<size_t> >());
@@ -72,6 +73,7 @@ PYBIND11_MODULE(pystarm, m) {
         )
         .def("clear", &Tensor::clear, "Free memory of the underlying data buffer")
         .def("getdims", &Tensor::getdims, "Get tensor dimensions")
+        .def("getbuflen", &Tensor::getbuflen, "Get buffer length")
         .def("getfrontalslice", &Tensor::getfrontalslice, "Get a frontal slice")
         .def("getfrontalslice_copy", &Tensor::getfrontalslice_copy, "Get a deep copy of a frontal slice")
         .def("setfrontalslice", &Tensor::setfrontalslice, "Set a frontal slice")
@@ -97,6 +99,7 @@ PYBIND11_MODULE(pystarm, m) {
         )
         .def_readonly("ncol", &JaggedMatrix::ncol, "Number of columns in the JaggedMatrix")
         .def_readonly("col_ranks", &JaggedMatrix::col_ranks, "Ranks of each column in the JaggedMatrix")
+        .def("getbuflen", &JaggedMatrix::getbuflen, "Get buffer length")
         .def("clear", &JaggedMatrix::clear, "Clear the entire buffer of the jagged matrix")
         .def("get", &JaggedMatrix::get, "Get (i,j) th entry of the JaggedMatrix if it is valid")
         .def("set", &JaggedMatrix::set, "Set (i,j) th entry of the JaggedMatrix if it is valid")
@@ -134,6 +137,7 @@ PYBIND11_MODULE(pystarm, m) {
         //.def_readonly("last_mode_jagged", &JaggedTensor::last_mode_jagged, "  Whether the last mode is jagged. If false, then first mode is jagged") --- IGNORE ---
         .def("setfrontalslice", &JaggedTensor::setfrontalslice, "set a frontal slice in the jagged tensor")
         .def("getfrontalslice", &JaggedTensor::getfrontalslice, "Get a frontal slice from the jagged tensor by index")
+        .def("getbuflen", &JaggedTensor::getbuflen, "Get buffer length")
         .def("clear", &JaggedTensor::clear, "Clear all slices in the jagged tensor");
 
 	m.def("matmul", &matmul, "Multiply two matrices and return a new result matrix");

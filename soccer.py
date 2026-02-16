@@ -98,60 +98,78 @@ def write_mp4_opencv(arr: np.ndarray, out_path: str, fps: float = 30.0,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-alg", "--alg", type=str, help="Name of the algorithm")
+    parser.add_argument("-mtype", "--mtype", type=str, help="Transformation matrix type")
     parser.add_argument("-k", "--k", type=int, help="Slice rank for tsvdm-I")
-    parser.add_argument("-pct", "--pct", type=int, help="Percentage for tsvdm-II")
+    parser.add_argument("-tol", "--tol", type=str, help="Error tolerance for tsvdm-II")
     args = parser.parse_args()
     
     alg = None
+    mtype = None
     k = None
+    tol = None
     pct = None
 
     alg = args.alg
+    mtype = args.mtype
     if args.k is not None:
         k = args.k
-    if args.pct is not None:
-        pct = 1.0 * float(args.pct) / 100.0
+    if args.tol is not None:
+        tol = float("0." + str(args.tol))
+        pct = 1 - tol * tol
+        # pct = 1.0 * float(args.pct) / 100.0
 
     t0 = time.perf_counter()
     arr_gry = video_to_gray_array("data/iniesta.mp4")
     t1 = time.perf_counter()
     print("Time to read data into numpy:", t1-t0)
     arr_gry_shape = arr_gry.shape
-    print("Grayscale tensor shape:", arr_gry.shape) 
+    print("Tensor shape:", arr_gry.shape) 
 
     t0 = time.perf_counter()
     A = pystarm.Tensor(arr_gry, len(arr_gry_shape), arr_gry_shape)
     t1 = time.perf_counter()
     print("Time to convert to Pystarm tensor:", t1-t0)
-
+    
     t0 = time.perf_counter()
-    n = arr_gry_shape[-1]
-    mat_nelm = n * n
-    mat_dims = (n, n)
-    mat_ndim = len(mat_dims)
-    DC = dct(np.eye(n), axis=0, norm="ortho")
-    DF = np.asfortranarray(DC)
-    DFT = np.asfortranarray(DF.T)
+    Ms = []
+    MTs = []
+    ttm_modes = [2] # Because soccer data is just a three way-tensor
+    if mtype == "dct":
+        for i in range(len(ttm_modes)):
+            mode = ttm_modes[i]
+            n = arr_gry_shape[mode]
+            mat_nelm = n * n
+            mat_dims = (n, n)
+            mat_ndim = len(mat_dims)
+            DC = dct(np.eye(n), axis=0, norm="ortho")
+            DF = np.asfortranarray(DC)
+            DFT = np.asfortranarray(DF.T)
 
-    M = pystarm.Matrix(DF, mat_dims[0], mat_dims[1])
-    MT = pystarm.Matrix(DFT, mat_dims[0], mat_dims[1])
+            Ms.append(pystarm.Matrix(DF, mat_dims[0], mat_dims[1]))
+            MTs.append(pystarm.Matrix(DFT, mat_dims[0], mat_dims[1]))
+    elif mtype == "eye":
+        pass
+    elif mtype == "hosvd":
+        pass
     t1 = time.perf_counter()
     print("Time to generate the DCT matrix:", t1-t0)
     
     Atilde = None
     filename = None
     if alg == "tsvdmi":
-        (U_hat,S_hat,VT_hat) = tsvdm_I_compress(A, [M], [2], k, True)
-        Atilde = tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, [MT], [2], True)
+        (U_hat,S_hat,VT_hat) = tsvdm_I_compress(A, Ms, ttm_modes, k, True)
+        print("Total buffer:", U_hat.getbuflen() + S_hat.getbuflen() + VT_hat.getbuflen() )
+        Atilde = tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, MTs, ttm_modes, True)
         filename = "data/iniesta_reconst" + "-" + alg + "-" + str(k) +".mp4"
 
     elif alg == "tsvdmii":
-        (U_hat,S_hat,VT_hat) = tsvdm_II_compress(A, [M], [2], pct, True)
-        Atilde = tsvdm_II_reconstruct(U_hat, S_hat, VT_hat, [MT], [2], True)
-        filename = "data/iniesta_reconst" + "-" + alg + "-" + str(args.pct) +".mp4"
+        (U_hat,S_hat,VT_hat) = tsvdm_II_compress(A, Ms, ttm_modes, pct, True)
+        print("Total buffer:", U_hat.getbuflen() + S_hat.getbuflen() + VT_hat.getbuflen() )
+        Atilde = tsvdm_II_reconstruct(U_hat, S_hat, VT_hat, MTs,ttm_modes, True)
+        # filename = "data/iniesta_reconst" + "-" + alg + "-" + str(args.pct) +".mp4"
 
     arr_reconst = np.frombuffer(Atilde, dtype=np.float64).reshape(Atilde.getdims(), order='F', copy = False)
-    write_mp4_opencv(arr_reconst, filename)
+    # write_mp4_opencv(arr_reconst, filename)
 
     arr_diff = arr_gry - arr_reconst
     norm_arr_diff = np.linalg.norm(arr_diff)
