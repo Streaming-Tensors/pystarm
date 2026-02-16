@@ -27,7 +27,8 @@ public:
     size_t nrow;
     size_t ncol;
     double* data_ptr; // Expects the data to be in column major order
-    
+    size_t buflen;
+
     // Takes a preallocated buffer by Python
     // py::buffer instead of py:array_t to prevent any chance of silent data copy
     Matrix(py::buffer &buf, size_t m, size_t n)
@@ -36,7 +37,8 @@ public:
         std::cout << "Reg constructor (pybuffer)" << std::endl;
         #endif
         py::buffer_info buf_info = buf.request();
-        data_ptr = static_cast<double*>(buf_info.ptr);
+        this->data_ptr = static_cast<double*>(buf_info.ptr);
+        this->buflen = m * n;
         #ifdef _MEMPRINT
         std::cout << "Pointing to: " << data_ptr << std::endl;
         #endif
@@ -65,11 +67,13 @@ public:
     
     // Constructor that allocates new buffer
     Matrix(size_t buflen, size_t m, size_t n)
-        : nrow(m), ncol(n) {
+        : nrow(m), ncol(n), buflen(buflen) {
         #ifdef _MEMPRINT
         std::cout << "Reg constructor (malloc)" << std::endl;
         #endif
-        this->data_ptr = (double*) malloc(buflen * sizeof(double) );
+        assert(this->buflen == this->nrow * this->ncol);
+        this->data_ptr = (double*) malloc(this->buflen * sizeof(double) );
+        //this->buflen = m * n;
         #ifdef _MEMPRINT
         std::cout << "Pointing to: " << data_ptr << std::endl;
         #endif
@@ -79,6 +83,7 @@ public:
     Matrix()
         : nrow(0), ncol(0) {
         this->data_ptr = nullptr;
+        this->buflen = 0;
     }
     
     // Constructor that takes a preallocated buffer
@@ -89,16 +94,19 @@ public:
         std::cout << "Pointing to: " << ptr << std::endl;
         #endif
         this->data_ptr = static_cast<double*>(ptr);
+        this->buflen = this->nrow * this->ncol;
+
     }
 
     // Copy constructor (deep copy of data)
-    Matrix(const Matrix &obj) : nrow(obj.nrow), ncol(obj.ncol) {
+    Matrix(const Matrix &obj) : nrow(obj.nrow), ncol(obj.ncol), buflen(obj.buflen) {
       #ifdef _MEMPRINT
       std::cout << "Copy constructor" << std::endl;
       #endif
-      size_t buflen  = this->nrow * this->ncol;
-      this->data_ptr = (double*) malloc(buflen * sizeof(double));
-      std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+      //size_t buflen  = this->nrow * this->ncol;
+      //this->buflen = this->nrow * this->ncol;
+      this->data_ptr = (double*) malloc(this->buflen * sizeof(double));
+      std::copy(obj.data_ptr, obj.data_ptr + this->buflen, this->data_ptr);
       #ifdef _MEMPRINT
       std::cout << "Copying from: " << obj.data_ptr << std::endl;
       std::cout << "Pointing to: " << this->data_ptr << std::endl;
@@ -118,10 +126,9 @@ public:
         // Copy the other object over
         this->nrow     = obj.nrow;
         this->ncol     = obj.ncol;
-
-        size_t buflen  = this->nrow * this->ncol;
-        this->data_ptr = (double*) malloc(buflen * sizeof(double));
-        std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+        this->buflen  = obj.buflen;
+        this->data_ptr = (double*) malloc(this->buflen * sizeof(double));
+        std::copy(obj.data_ptr, obj.data_ptr + this->buflen, this->data_ptr);
       }
 
       #ifdef _MEMPRINT
@@ -143,11 +150,13 @@ public:
       this->nrow = obj.nrow;
       this->ncol = obj.ncol;
       this->data_ptr = obj.data_ptr;
+      this->buflen = obj.buflen;
 
       // Clear the other object
       obj.nrow     = 0;
       obj.ncol     = 0;
       obj.data_ptr = nullptr;
+      obj.buflen = 0;
     }
     
     // Move assignment operator
@@ -166,11 +175,13 @@ public:
         this->nrow     = obj.nrow;
         this->ncol     = obj.ncol;
         this->data_ptr = obj.data_ptr;
+        this->buflen   = obj.buflen;
 
         // Clear the other object
         obj.nrow     = 0;
         obj.ncol     = 0;
         obj.data_ptr = nullptr;
+        obj.buflen   = 0;
       }
 
       return *this;
@@ -246,6 +257,7 @@ public:
             free(this->data_ptr);
         }
         this->data_ptr = nullptr;
+        this->buflen = 0;
         #ifdef _MEMPRINT
         std::cout << "Pointing to: " << this->data_ptr << std::endl;
         #endif
@@ -256,6 +268,10 @@ public:
         dims[0] = this->nrow;
         dims[1] = this->ncol;
         return dims;
+    }
+
+    size_t getbuflen(){
+        return this->buflen;
     }
 
     void print(){
@@ -317,6 +333,7 @@ class JaggedMatrix{
     std::vector<size_t> col_ranks;  // Each element is the rank of the corresponding column
     std::vector<size_t> col_offset;  // Contains offset to data_ptr for each column. Contains 1 more element to store the buffer length. 
     double *data_ptr;
+    size_t buflen;
 
     JaggedMatrix(py::buffer &buf, std::vector<size_t> col_ranks)
         : ncol(col_ranks.size()) {
@@ -329,8 +346,9 @@ class JaggedMatrix{
         for (size_t i = 0; i < this->ncol; i++) {
             this->col_ranks[i] = col_ranks[i];
         }
-        std::partial_sum(col_ranks.begin(), col_ranks.end(), col_offset.begin()+1);
+        std::partial_sum(this->col_ranks.begin(), this->col_ranks.end(), this->col_offset.begin()+1);
         this->data_ptr = static_cast<double*>(buf_info.ptr);
+        this->buflen = this->col_offset[this->ncol];
         #ifdef _MEMPRINT
         std::cout << "Pointing to: " << data_ptr << std::endl;
         #endif
@@ -350,6 +368,7 @@ class JaggedMatrix{
         size_t expected_buflen = this->col_offset[this->ncol];
         assert(buflen == expected_buflen);
         this->data_ptr = static_cast<double*>(malloc(buflen*sizeof(double)));
+        this->buflen = this->col_offset[this->ncol];
         #ifdef _MEMPRINT
         std::cout << "Pointing to: " << data_ptr << std::endl;
         #endif
@@ -358,6 +377,7 @@ class JaggedMatrix{
     // Empty constructor
     JaggedMatrix() : ncol(0) {
       this->data_ptr = nullptr;
+      this->buflen = 0;
     }
 
     // Copy constructor (deep copy of data)
@@ -366,9 +386,9 @@ class JaggedMatrix{
       std::cout << "JaggedMatrix copy constructor" << std::endl;
       #endif
       : ncol(obj.ncol), col_ranks(obj.col_ranks), col_offset(obj.col_offset) {
-      size_t buflen  = this->col_offset[this->ncol];
-      this->data_ptr = static_cast<double*>(malloc(buflen * sizeof(double)));
-      std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+      this->buflen = this->col_offset[this->ncol];
+      this->data_ptr = static_cast<double*>(malloc(this->buflen * sizeof(double)));
+      std::copy(obj.data_ptr, obj.data_ptr + this->buflen, this->data_ptr);
       #ifdef _MEMPRINT
       std::cout << "Copying from: " << obj.data_ptr << std::endl;
       std::cout << "Pointing to: " << this->data_ptr << std::endl;
@@ -389,10 +409,11 @@ class JaggedMatrix{
         this->ncol       = obj.ncol;
         this->col_ranks  = obj.col_ranks;
         this->col_offset = obj.col_offset;
+        this->buflen     = obj.buflen;
 
-        size_t buflen    = this->col_offset[this->ncol]; 
-        this->data_ptr = static_cast<double*>(malloc(buflen * sizeof(double)));
-        std::copy(obj.data_ptr, obj.data_ptr + buflen, this->data_ptr);
+        //size_t buflen    = this->col_offset[this->ncol]; 
+        this->data_ptr = static_cast<double*>(malloc(this->buflen * sizeof(double)));
+        std::copy(obj.data_ptr, obj.data_ptr + this->buflen, this->data_ptr);
       }
 
       #ifdef _MEMPRINT
@@ -415,6 +436,7 @@ class JaggedMatrix{
       this->col_ranks  = std::move(obj.col_ranks);
       this->col_offset = std::move(obj.col_offset);
       this->data_ptr   = obj.data_ptr;
+      this->buflen     = obj.buflen;
 
       // Clear the other object
       obj.ncol     = 0;
@@ -438,6 +460,7 @@ class JaggedMatrix{
         this->col_ranks  = std::move(obj.col_ranks);
         this->col_offset = std::move(obj.col_offset);
         this->data_ptr   = obj.data_ptr;
+        this->buflen     = obj.buflen;
 
         // Clear the other object
         obj.ncol     = 0;
@@ -497,6 +520,9 @@ class JaggedMatrix{
         }
         this->col_ranks.clear();
         this->col_offset.clear();
+    }
+    size_t getbuflen() {
+        return this->buflen;
     }
 };
 

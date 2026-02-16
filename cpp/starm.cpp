@@ -46,6 +46,7 @@ PYBIND11_MODULE(pystarm, m) {
         .def("setcol", &Matrix::setcol, "Set j-th column of the matrix")
         .def("clear", &Matrix::clear, "Free memory of the underlying data buffer")
         .def("getdims", &Matrix::getdims, "Get matrix dimensions")
+        .def("getbuflen", &Matrix::getbuflen, "Get buffer length")
         .def("print", &Matrix::print, "Print contents of the matrix");
     //py::class_<Tensor>(m, "Tensor")
         //.def(py::init<py::buffer& , size_t, std::vector<size_t> >());
@@ -97,6 +98,7 @@ PYBIND11_MODULE(pystarm, m) {
         )
         .def_readonly("ncol", &JaggedMatrix::ncol, "Number of columns in the JaggedMatrix")
         .def_readonly("col_ranks", &JaggedMatrix::col_ranks, "Ranks of each column in the JaggedMatrix")
+        .def("getbuflen", &JaggedMatrix::getbuflen, "Get buffer length")
         .def("clear", &JaggedMatrix::clear, "Clear the entire buffer of the jagged matrix")
         .def("get", &JaggedMatrix::get, "Get (i,j) th entry of the JaggedMatrix if it is valid")
         .def("set", &JaggedMatrix::set, "Set (i,j) th entry of the JaggedMatrix if it is valid")
