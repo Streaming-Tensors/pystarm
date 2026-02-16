@@ -639,15 +639,19 @@ class MatrixTestCase(unittest.TestCase):
         Amat = pystarm.Matrix(Apy, 4, 3)
 
         # Run the test for the following thresholds
-        thrs  = [0.1, 0.25, 0.7, 0.9, 0.95]
-        flags = np.zeros(len(thrs))
+        tols  = [1e-4, 1e-3, 0.01, 0.05, 0.1, 0.25, 0.3, 0.4, 0.5, 0.7]
+        flags = np.zeros(len(tols))
         a     = Apy.flatten().copy()
-        a     = np.sort(a)[::-1]
+        a     = np.sort(a)
         b     = a**2
         b     = np.cumsum(b) / np.sum(b)
 
-        for i,t in enumerate(thrs):
-          t1       = a[np.argmax(b >= t)]
+        for i,t in enumerate(tols):
+          t_vals = np.where(b < t**2)[0] 
+          if (len(t_vals) > 0):
+            t1 = a[t_vals[-1]] # Get highest threshold
+          else:
+            t1 = 0.0
           t2       = pystarm.threshold(Amat, t)
           flags[i] = np.allclose(t1, t2)
         
@@ -665,19 +669,25 @@ class MatrixTestCase(unittest.TestCase):
 
         # Get the singular values sorted
         a     = Apy.flatten().copy()
-        a     = np.sort(a)[::-1]
+        a     = np.sort(a)
         b     = a**2
         b     = np.cumsum(b) / np.sum(b)
 
         # Run the test for the following thresholds
-        thrs  = [0.1, 0.25, 0.7, 0.9]
-        flags = np.zeros(len(thrs))
+        tols  = [1e-4, 1e-3, 0.01, 0.05, 0.1, 0.25, 0.3, 0.4, 0.5, 0.7]
+        flags = np.zeros(len(tols))
 
-        for i,t in enumerate(thrs):
+        for i,t in enumerate(tols):
           col_ranks = np.zeros(Apy.shape[1])
-          thr       = a[np.argmax(b >= t)]
+
+          t_vals = np.where(b < t**2)[0] 
+          if (len(t_vals) > 0):
+            thr = a[t_vals[-1]] # Get highest threshold
+          else:
+            thr = 0.0
+
           for j in range(Apy.shape[1]):
-            col_ranks[j] = np.argmax(Apy[:,j] < thr)
+            col_ranks[j] = np.sum(Apy[:,j] >= thr)
                 
           col_ranks2 = pystarm.thresholds(Amat, t)
           flags[i]   = np.allclose(col_ranks, col_ranks2)

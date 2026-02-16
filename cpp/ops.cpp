@@ -170,8 +170,8 @@ std::vector<double> svdvals(Matrix A, bool verbose=false) {
 
   // Compute the thin SVD
   dgesvd(
-    "N", // JOBU: Option for computing all or part of U. 'S' is no columns. 
-    "N", // JOBVT: Option for computing all or part of Vt. 'S' is no rows.
+    "N", // JOBU: Option for computing all or part of U. 'N' is no columns. 
+    "N", // JOBVT: Option for computing all or part of Vt. 'N' is no rows.
     &m, // M: No. of rows of the input matrix.
     &n, // N: No. of columns of the input matrix.
     A.data_ptr, // A: Input matrix. Contents destroyed during the computation.
@@ -230,7 +230,7 @@ std::tuple<Matrix, std::vector<double>, Matrix> svdx(Matrix A, size_t k,
   // Workspace query
   dgesvdx(
     "V", // JOBU: Option for computing all or part of U. 'V' is the columns specified by RANGE. 
-    "V", // JOBVT: Option for computing all or part of Vt. 'S' is the rows specified by RANGE.
+    "V", // JOBVT: Option for computing all or part of Vt. 'V' is the rows specified by RANGE.
     "I", // RANGE: Option for computing range of singular values. 'I' is [IL, IU] range.
     &m, // M: No. of rows of the input matrix.
     &n, // N: No. of columns of the input matrix.
@@ -264,7 +264,7 @@ std::tuple<Matrix, std::vector<double>, Matrix> svdx(Matrix A, size_t k,
   // Compute the truncated SVD
   dgesvdx(
     "V", // JOBU: Option for computing all or part of U. 'V' is the columns specified by RANGE. 
-    "V", // JOBVT: Option for computing all or part of Vt. 'S' is the rows specified by RANGE.
+    "V", // JOBVT: Option for computing all or part of Vt. 'V' is the rows specified by RANGE.
     "I", // RANGE: Option for computing range of singular values. 'I' is [IL, IU] range.
     &m, // M: No. of rows of the input matrix.
     &n, // N: No. of columns of the input matrix.
@@ -308,10 +308,14 @@ std::tuple<Matrix, std::vector<double>, Matrix> svdx(Matrix A, size_t k,
   return std::make_tuple(std::move(U), std::move(s), std::move(Vt));
 }
 
-double threshold(const Matrix& A, double pct) {
-  assert(pct > 0.0);
-  assert(pct < 1.0);
+double threshold(const Matrix& A, double tol, bool verbose=false) {
+  // (sum of squares of discarded singular values) 
+  //                  < (tol)^2 * (sum of squares of all singular values)
+  assert(tol > 0.0);
+  assert(tol < 1.0);
   std::vector<double> svals;
+  // Working with the square of singular values
+  double energy = std::pow(tol, 2); 
 
   // Copy values into a vector
   for (size_t i = 0; i < A.nrow; i++) {
@@ -321,7 +325,7 @@ double threshold(const Matrix& A, double pct) {
   }
  
   // Sort and square the singular values
-  std::sort(svals.begin(), svals.end(), std::greater<double>());
+  std::sort(svals.begin(), svals.end());
   std::vector<double> sqsvals;
   sqsvals.resize(svals.size());
   for (size_t i = 0; i < svals.size(); i++) {
@@ -335,37 +339,58 @@ double threshold(const Matrix& A, double pct) {
   }
 
   // Find the position
-  // First iterator iter in [first, last) where bool(value <= *iter) 
-  auto ub = std::upper_bound(sqsvals.begin(), sqsvals.end(), pct, 
-              std::less_equal<double>());
+  // First iterator iter in [first, last) where bool(value < *iter) 
+  auto ub = std::upper_bound(sqsvals.begin(), sqsvals.end(), energy, 
+              std::less<double>());
 
-  double thr;
-  if (ub != sqsvals.end()) {
-    size_t s = ub - sqsvals.begin();
+  double thr, thr_energy, thr_relerr;
+  size_t s;
+  if (ub != sqsvals.begin()) {
+    s   = (ub - sqsvals.begin()) - 1;
     thr = svals[s];
   } else {
     thr = 0.0; // Need all the singular values!
+    s   = -1;
   }
 
+  if (verbose) {
+    double thr_energy, thr_relerr;
+    thr_relerr = std::sqrt(sqsvals[s]);
+    thr_energy = 1.0 - sqsvals[s];
+    std::cout << "Threshold        : " << thr << std::endl;
+    std::cout << "Threshold index  : " << s << std::endl;
+    std::cout << "Threshold energy : " << thr_energy << std::endl;
+    std::cout << "Threshold relerr : " << thr_relerr << std::endl;
+  }
   return thr;
 }
 
-std::vector<size_t> thresholds(const Matrix& A, double pct) {
+std::vector<size_t> thresholds(const Matrix& A, double tol, bool verbose=false) {
   std::vector<size_t> slice_ranks;
   
   // Compute the minimum singular value to keep
-  double thr = threshold(A, pct);
+  double thr = threshold(A, tol, verbose);
 
   // Find the slicewise ranks
   slice_ranks.resize(A.ncol);
   for (size_t j = 0; j < slice_ranks.size(); j++) {
     std::vector<double> col_svals;
     col_svals = A.getcol(j);
+
+    // Find the position
+    // First iterator iter in [first, last) where bool(value > *iter) 
     auto ub   = std::upper_bound(col_svals.begin(), col_svals.end(), thr, 
                   std::greater<double>());
-    slice_ranks[j] = ub - col_svals.begin(); 
+    slice_ranks[j] = ub - col_svals.begin();
   }
 
+  if (verbose) {
+    std::cout << "Slice ranks: " << std::endl;
+    for (size_t i = 0; i < slice_ranks.size(); i++)
+      std::cout << slice_ranks[i] << " ";
+
+    std::cout << std::endl;
+  }
   return slice_ranks;
 }
 
@@ -1235,7 +1260,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svdks(
 }
 
 std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> tsvdmii_compress(const Tensor &A, 
-        std::vector<Matrix> M, double pct) {
+        std::vector<Matrix> M, double tol) {
     std::vector<int> order;
     for(int i = 0; i < A.ndim; i++){
         if(i < 2) continue;
@@ -1245,7 +1270,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> tsvdmii_compress(const Tens
 
     // Compute the slicewise ranks
     Matrix Sv    = slicewise_svdvals(A_hat);
-    std::vector<size_t> ks = thresholds(Sv, pct);
+    std::vector<size_t> ks = thresholds(Sv, tol);
 
     // Perform the SVD
     JaggedTensor U, Vt;
