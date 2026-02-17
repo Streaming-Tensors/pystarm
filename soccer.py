@@ -100,23 +100,20 @@ if __name__ == "__main__":
     parser.add_argument("-alg", "--alg", type=str, help="Name of the algorithm")
     parser.add_argument("-mtype", "--mtype", type=str, help="Transformation matrix type")
     parser.add_argument("-k", "--k", type=int, help="Slice rank for tsvdm-I")
-    parser.add_argument("-tol", "--tol", type=str, help="Error tolerance for tsvdm-II")
+    parser.add_argument("-tol", "--tol", type=float, help="Error tolerance for tsvdm-II")
     args = parser.parse_args()
     
     alg = None
     mtype = None
     k = None
     tol = None
-    pct = None
 
     alg = args.alg
     mtype = args.mtype
     if args.k is not None:
         k = args.k
     if args.tol is not None:
-        tol = float("0." + str(args.tol))
-        pct = 1 - tol * tol
-        # pct = 1.0 * float(args.pct) / 100.0
+        tol = args.tol
 
     t0 = time.perf_counter()
     arr_gry = video_to_gray_array("data/iniesta.mp4")
@@ -163,10 +160,10 @@ if __name__ == "__main__":
         filename = "data/iniesta_reconst" + "-" + alg + "-" + str(k) +".mp4"
 
     elif alg == "tsvdmii":
-        (U_hat,S_hat,VT_hat) = tsvdm_II_compress(A, Ms, ttm_modes, pct, True)
+        (U_hat,S_hat,VT_hat) = tsvdm_II_compress(A, Ms, ttm_modes, tol, True)
         print("Total buffer:", U_hat.getbuflen() + S_hat.getbuflen() + VT_hat.getbuflen() )
         Atilde = tsvdm_II_reconstruct(U_hat, S_hat, VT_hat, MTs,ttm_modes, True)
-        # filename = "data/iniesta_reconst" + "-" + alg + "-" + str(args.pct) +".mp4"
+        filename = "data/iniesta_reconst" + "-" + alg + "-" + str(args.tol) +".mp4"
 
     arr_reconst = np.frombuffer(Atilde, dtype=np.float64).reshape(Atilde.getdims(), order='F', copy = False)
     # write_mp4_opencv(arr_reconst, filename)
