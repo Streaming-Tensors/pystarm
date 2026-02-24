@@ -36,6 +36,9 @@ def tsvdm_I_compress(A, Ms, ttm_modes, k, verbose=False):
         if verbose:
             print("[tsvdm_I_compress]", "Time for TTM on mode", mode, ":", t1-t0)
 
+    if A_hat is None:
+        A_hat = A
+
     t0 = time.perf_counter()
     U_hat, S_hat, V_hat = pystarm.slicewise_svdx(A_hat, k)
     # U_hat, S_hat, V_hat = pystarm.slicewise_svd(A_hat)
@@ -43,8 +46,9 @@ def tsvdm_I_compress(A, Ms, ttm_modes, k, verbose=False):
     if verbose:
         print("[tsvdm_I_compress]", "Time for slicewise SVD:", t1-t0)
 
-    A_hat.clear()
-    
+    if A_hat is not A:
+        A_hat.clear()
+
     return (U_hat,S_hat,V_hat)
 
 def tsvdm_II_compress(A, Ms, ttm_modes, pct, verbose=False):
@@ -77,6 +81,9 @@ def tsvdm_II_compress(A, Ms, ttm_modes, pct, verbose=False):
         if verbose:
             print("[tsvdm_II_compress]", "Time for TTM on mode", mode, ":", t1-t0)
 
+    if A_hat is None:
+        A_hat = A
+
     t0 = time.perf_counter()
     Sv = pystarm.slicewise_svdvals(A_hat)
     t1 = time.perf_counter()
@@ -96,8 +103,9 @@ def tsvdm_II_compress(A, Ms, ttm_modes, pct, verbose=False):
         print("[tsvdm_II_compress]", "Time for slicewise_svdks:", t1-t0)
     
     Sv.clear()
-    A_hat.clear()
-    
+    if A_hat is not A:
+        A_hat.clear()
+
     return (U_hat,S_hat,V_hat)
 
 def tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, Minvs, ttm_modes, verbose=False):
@@ -109,6 +117,9 @@ def tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, Minvs, ttm_modes, verbose=False):
 
     if verbose:
         print("[tsvdm_I_reconstruct]", "ttm_modes", ttm_modes)
+
+    if len(ttm_modes) == 0:
+        return A_hat
 
     A_tilde = None
     for i in range(len(ttm_modes)):
@@ -147,6 +158,9 @@ def tsvdm_II_reconstruct(U_hat, S_hat, VT_hat, Minvs, ttm_modes, verbose=False):
 
     if verbose:
         print("[tsvdm_II_reconstruct]", "ttm_modes", ttm_modes)
+
+    if len(ttm_modes) == 0:
+        return A_hat
 
     A_tilde = None
     for i in range(len(ttm_modes)):

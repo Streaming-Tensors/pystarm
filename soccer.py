@@ -1,3 +1,13 @@
+
+# import importlib.util, sys
+# _spec = importlib.util.spec_from_file_location(
+        # "pystarm",                      # the name Python uses — must match PYBIND11_MODULE name
+        # "/global/homes/t/taufique/Codes/pystarm/pystarm_asan.cpython-311-x86_64-linux-gnu.so"      # the actual file to load
+# )
+# pystarm = importlib.util.module_from_spec(_spec)
+# sys.modules["pystarm"] = pystarm    # registers it so "import pystarm" in alg.py also gets this
+# _spec.loader.exec_module(pystarm)
+
 import time
 import numpy as np
 import scipy as sp
@@ -11,6 +21,7 @@ from alg import tsvdm_II_compress
 from alg import tsvdm_II_reconstruct
 import argparse
 import pystarm
+import pyttb as ttb
 
 def video_to_gray_array(path, max_frames=None):
     cap = cv2.VideoCapture(path)
@@ -135,21 +146,26 @@ if __name__ == "__main__":
         for i in range(len(ttm_modes)):
             mode = ttm_modes[i]
             n = arr_gry_shape[mode]
-            mat_nelm = n * n
-            mat_dims = (n, n)
-            mat_ndim = len(mat_dims)
             DC = dct(np.eye(n), axis=0, norm="ortho")
             DF = np.asfortranarray(DC)
             DFT = np.asfortranarray(DF.T)
 
-            Ms.append(pystarm.Matrix(DF, mat_dims[0], mat_dims[1]))
-            MTs.append(pystarm.Matrix(DFT, mat_dims[0], mat_dims[1]))
+            Ms.append(pystarm.Matrix(DF, DF.shape[0], DF.shape[1]))
+            MTs.append(pystarm.Matrix(DFT, DFT.shape[0], DFT.shape[1]))
     elif mtype == "eye":
-        pass
+        ttm_modes = []
     elif mtype == "hosvd":
-        pass
+        ttb_tensor = ttb.tensor(arr_gry)
+        hosvd = ttb.hosvd(ttb_tensor, tol=0)
+        Us = hosvd.factor_matrices
+        for i in range(len(ttm_modes)):
+            mode = ttm_modes[i]
+            U  = np.asfortranarray(Us[mode])
+            UT = np.asfortranarray(Us[mode].T)
+            Ms.append(pystarm.Matrix(U, U.shape[0], U.shape[1]))
+            MTs.append(pystarm.Matrix(UT, UT.shape[0], UT.shape[1]))
     t1 = time.perf_counter()
-    print("Time to generate the DCT matrix:", t1-t0)
+    print("Time to generate transformation matrix:", t1-t0)
     
     Atilde = None
     filename = None
@@ -157,13 +173,13 @@ if __name__ == "__main__":
         (U_hat,S_hat,VT_hat) = tsvdm_I_compress(A, Ms, ttm_modes, k, True)
         print("Total buffer:", U_hat.getbuflen() + S_hat.getbuflen() + VT_hat.getbuflen() )
         Atilde = tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, MTs, ttm_modes, True)
-        filename = "data/iniesta_reconst" + "-" + alg + "-" + str(k) +".mp4"
+        filename = "data/iniesta_reconst" + "-" + alg + "-" + mtype + "-" + str(k) + ".mp4"
 
     elif alg == "tsvdmii":
         (U_hat,S_hat,VT_hat) = tsvdm_II_compress(A, Ms, ttm_modes, tol, True)
         print("Total buffer:", U_hat.getbuflen() + S_hat.getbuflen() + VT_hat.getbuflen() )
         Atilde = tsvdm_II_reconstruct(U_hat, S_hat, VT_hat, MTs,ttm_modes, True)
-        filename = "data/iniesta_reconst" + "-" + alg + "-" + str(args.tol) +".mp4"
+        filename = "data/iniesta_reconst" + "-" + alg + "-" + mtype + "-" + str(args.tol) + ".mp4"
 
     arr_reconst = np.frombuffer(Atilde, dtype=np.float64).reshape(Atilde.getdims(), order='F', copy = False)
     # write_mp4_opencv(arr_reconst, filename)
