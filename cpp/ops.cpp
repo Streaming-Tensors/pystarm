@@ -53,7 +53,7 @@ std::tuple<Matrix, std::vector<double>, Matrix> svd(Matrix A,
   lapack_int lda = m, ldu = m, ldvt = r;
   
   if (verbose) {
-    A.print();
+    //A.print();
     printf("A.nrow, A.ncol, r: %zu %zu %zu\n", A.nrow, A.ncol, r);
     printf("m, n: %d %d\n", m, n);
     printf("lda, ldu, ldvt: %d %d %d\n", lda, ldu, ldvt);
@@ -111,7 +111,7 @@ std::tuple<Matrix, std::vector<double>, Matrix> svd(Matrix A,
 
   if (verbose) {
     printf("Exit code for DGESVD: %d\n", info);
-    A.print();
+    //A.print();
   }
 
   // Free workspace and the copied matrix
@@ -130,7 +130,7 @@ std::vector<double> svdvals(Matrix A, bool verbose=false) {
   lapack_int lda = m, ldu = m, ldvt = r;
   
   if (verbose) {
-    A.print();
+    //A.print();
     printf("A.nrow, A.ncol, r: %zu %zu %zu\n", A.nrow, A.ncol, r);
     printf("m, n: %d %d\n", m, n);
     printf("lda, ldu, ldvt: %d %d %d\n", lda, ldu, ldvt);
@@ -188,7 +188,7 @@ std::vector<double> svdvals(Matrix A, bool verbose=false) {
 
   if (verbose) {
     printf("Exit code for DGESVD: %d\n", info);
-    A.print();
+    //A.print();
   }
 
   // Free workspace and the copied matrix
@@ -209,7 +209,7 @@ std::tuple<Matrix, std::vector<double>, Matrix> svdx(Matrix A, size_t k,
   lapack_int lda = m, ldu = m, ldvt = k;
   
   if (verbose) {
-    A.print();
+    //A.print();
     printf("A.nrow, A.ncol, k: %zu %zu %zu\n", A.nrow, A.ncol, k);
     printf("m, n: %d %d\n", m, n);
     printf("lda, ldu, ldvt: %d %d %d\n", lda, ldu, ldvt);
@@ -292,9 +292,9 @@ std::tuple<Matrix, std::vector<double>, Matrix> svdx(Matrix A, size_t k,
     printf("Memory location of work: %p\n", work);
     printf("Memory location of iwork: %p\n", iwork);
     #endif
-    A.print();
-    U.print();
-    Vt.print();
+    //A.print();
+    //U.print();
+    //Vt.print();
   }
 
   // Resize the singular values to k
