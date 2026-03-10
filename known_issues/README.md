@@ -1,15 +1,10 @@
 # Known Issues
 
-## 1. Crash in `slicewise_svdx` with identity transformation and multiple threads
+## 1. Crash with tsvdmi, soccer data, identity transformation, and multiple threads
 
 ### Description
 
-Running `tsvdmi` on the soccer dataset with the identity transformation (`mtype=eye`) causes
-a process crash when multiple threads are active. The crash is an **invalid free** detected by
-AddressSanitizer: `Matrix::clear()` calls the system `free()` on a pointer that was allocated
-by MKL's internal allocator rather than the standard `malloc`. ASan detects this as freeing a
-pointer it did not allocate, triggering a fatal `CHECK failed` assertion inside an OpenMP worker
-thread spawned by `slicewise_svdx`.
+Running `tsvdmi` on the soccer dataset with the identity transformation crashes when multiple threads are active. The crash does not occur when running single-threaded (with both OpenMP and MKL thread counts set to 1), when using a different matrix type such as DCT, when using `tsvdmii`, or when running on other datasets such as traffic data.
 
 ### Reproduction
 
@@ -34,17 +29,6 @@ The issue is **not observed** in these configurations:
   python soccer.py -alg tsvdmii -tol 0.1 -mtype eye
   ```
 - Different datasets (traffic data does not exhibit this crash).
-
-### Root Cause
-
-Inside `slicewise_svdx` (`cpp/ops.cpp:1174`), each OpenMP thread calls `svdx`
-(`cpp/ops.cpp:306`), which constructs a temporary `Matrix` using an MKL-allocated buffer.
-When that `Matrix` is subsequently destroyed via `Matrix::clear()` (`cpp/matrix.hpp:257`),
-it calls the system `free()` on the MKL-owned pointer. MKL uses its own allocator, so the
-pointer is not recognized by ASan (or the system allocator), causing the crash.
-
-The identity transformation bypasses any pre-processing TTM step, leaving more work to
-`slicewise_svdx`, which exercises this MKL allocation path more heavily under parallelism.
 
 ---
 
