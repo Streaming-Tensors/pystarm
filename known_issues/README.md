@@ -30,6 +30,13 @@ The issue is **not observed** in these configurations:
   ```
 - Different datasets (traffic data does not exhibit this crash).
 
+**Additional investigation:** Since the issue arises in parallel runs, one suspicion was that it could be related to setting both `OMP_NUM_THREADS` and `MKL_NUM_THREADS` to the number of available cores, causing nested parallelism. To verify, two approaches were tried to restrict MKL to a single thread per OpenMP worker:
+
+1. Setting `MKL_NUM_THREADS=1` via environment variable.
+2. Calling `mkl_set_num_threads_local(1)` inside the `#pragma omp parallel` region of `slicewise_svdx`.
+
+In both cases the crash persisted.
+
 ---
 
 ## Using AddressSanitizer to Debug Memory Issues
