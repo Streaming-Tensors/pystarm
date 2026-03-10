@@ -24,3 +24,10 @@ export LD_PRELOAD=/usr/lib64/gcc/x86_64-suse-linux/14/libasan.so
 # each triggering their own ASAN error report — fewer threads means fewer concurrent
 # reports and easier to read output
 export OMP_NUM_THREADS=4
+
+# Tunes ASAN runtime behavior:
+# quarantine_size_mb=1  : shrinks the freed-memory quarantine from the default (~256 MB) to 1 MB,
+#                         so ASAN recycles chunks sooner and detects overflows closer to where they happen
+# malloc_context_size=30: captures 30 stack frames in allocation/free records (default is 30, made explicit)
+#                         giving a fuller call stack when an error is detected
+export ASAN_OPTIONS=quarantine_size_mb=1:malloc_context_size=30
