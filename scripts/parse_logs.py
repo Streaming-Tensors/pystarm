@@ -53,7 +53,7 @@ def parse_content(content):
     row['time_data_to_pystarm']  = find(r'^Time to convert to pystarm tensor:\s+([\d.e+\-]+)', content)
 
     # --- Compressed representation size ---
-    row['total_buffer'] = find(r'^Total buffer:\s+(\d+)', content)
+    row['compression_ratio'] = find(r'^Compression ratio:\s+([\d.e+\-]+)', content)
 
     # --- Split content into compress and reconstruct sections ---
     # All [tsvdm_X_compress] lines come before [tsvdm_X_reconstruct] lines
@@ -84,7 +84,7 @@ def parse_content(content):
     row['norm_original']      = find(r'^Norm of original tensor:\s+([\d.e+\-]+)', content)
     row['norm_reconstructed'] = find(r'^Norm of reconstructed tensor:\s+([\d.e+\-]+)', content)
 
-    row['complete'] = all(row.get(f) is not None for f in ['relative_err', 'absolute_err', 'total_buffer'])
+    row['complete'] = all(row.get(f) is not None for f in ['relative_err', 'absolute_err', 'compression_ratio'])
 
     return row
 
@@ -111,7 +111,7 @@ COLUMNS = [
     # experiments.py timings
     'time_transform_matrix', 'time_data_to_pystarm',
     # Compressed size
-    'total_buffer',
+    'compression_ratio',
     # Compress timings (alg.py)
     'time_compress_ttm_total',
     'time_slicewise_svd',           # tsvdmi only

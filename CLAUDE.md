@@ -4,6 +4,67 @@
 
 pystarm is a Python/C++ library that wraps matrix and tensor operations via pybind11 and Intel MKL. It is used to implement and benchmark t-SVDM (Tensor SVD with Matrix Transform) algorithms for tensor compression.
 
+## Reference Papers
+
+This work closely follows these two papers:
+
+- **PNAS publication**: "Tensor-tensor algebra for optimal representation and compression of multiway data" — Misha E. Kilmer, Lior Horesh, Haim Avron, and Elizabeth Newman. https://www.pnas.org/doi/epub/10.1073/pnas.2015851118
+- **ArXiv tech report**: "Tensor-Tensor Products for Optimal Representation and Compression" — Misha Kilmer, Lior Horesh, Haim Avron, and Elizabeth Newman. https://arxiv.org/abs/2001.00046
+
+## Paper Summary
+
+### Core Idea
+
+The central question of the papers is: is it better to compress data as a matrix (2D) or as a tensor (multi-dimensional array)? The papers prove that treating data as a tensor and compressing via t-SVDM is provably at least as good as, and often strictly better than, matrix SVD.
+
+### The t-SVDM Framework
+
+Any invertible matrix **M** defines a tensor-tensor product (called ?M). The compression proceeds as:
+1. Apply M along the transformation modes of the tensor (go to transform domain)
+2. Perform independent matrix SVDs on each frontal slice in that domain
+3. Apply M⁻¹ to reconstruct (inverse transform)
+
+The original t-product (Kilmer & Martin, 2011) is the special case where M is the DFT matrix. The papers generalize this to any invertible M, with the key requirement that M must be a **non-zero multiple of a unitary (orthogonal) matrix** for the Eckart-Young optimality theorem to hold.
+
+### Choices of M
+
+| M | Notes |
+|---|---|
+| DFT | Original t-product, complex arithmetic |
+| DCT | Real-valued, good for spatially/temporally smooth data |
+| Wavelet | Orthogonal wavelet matrix |
+| HOSVD factor Z | M = Z^T recovers HOSVD as a special case |
+| Random orthogonal | No benefit — used as a negative baseline in experiments |
+| Identity (eye) | No inter-slice mixing, weakest compression |
+
+A good M concentrates the energy of the tensor into fewer, larger singular values in the transform domain (faster decay), enabling better compression at the same error level.
+
+### Energy
+
+The **energy** of a tensor is its squared Frobenius norm — the sum of squares of all its entries. By Corollary 6 of the paper, this equals the sum of squared singular values across all slices in the transform domain. Singular values therefore directly partition the total energy, and retaining the largest ones retains the most energy.
+
+### Algorithms
+
+**t-SVDM / tsvdmi** (Algorithm 2 in paper): Fix a global rank **k**. Transform, truncate every slice to rank k, inverse transform. Eckart-Young optimal: best rank-k approximation in Frobenius norm. Weakness: treats all slices equally — may over-allocate for easy slices and under-allocate for hard ones.
+
+**t-SVDMII / tsvdmii** (Algorithm 3 in paper): Fix an energy level **γ** (e.g. 0.99 = retain 99% of energy). Compute all singular values across all slices globally, sort them, find a threshold τ such that retained values cover energy γ. Each slice keeps a different number of singular values (multi-rank ρ). Strictly better compression than t-SVDM: same or smaller error, smaller or equal storage (Theorem 17).
+
+### Key Theoretical Results
+
+- **Eckart-Young for t-SVDM** (Theorem 10): rank-k t-SVDM is the best rank-k approximation under ?M — analogous to truncated matrix SVD.
+- **t-SVDMII is also optimal** (Theorem 11): multi-rank ρ approximation is best possible at that multi-rank.
+- **Tensors beat matrices** (Theorem 15): t-SVDM error ≤ matrix SVD error for the same truncation parameter k. Strict inequality is possible.
+- **t-rank ≤ matrix rank** (Theorem 13): A good M can reveal t-rank << matrix rank.
+- **HOSVD is a special case** (Theorem 18 & 19): HOSVD is a specific instance of ?M, and truncated HOSVD is provably suboptimal compared to truncated t-SVDM.
+
+### Extension to Higher-Order Tensors
+
+For 4-way and higher tensors, different transforms M, B are applied along different modes, and slicewise SVDs are performed in the multi-transformed domain (Algorithm 5). This is what `experiments.py` implements — `ttm_modes = list(range(2, arr.ndim))` applies transforms on all modes beyond the first two.
+
+### Numerical Results
+
+Tested on Yale face data, traffic video (120×160×120), and hyperspectral images. In all cases t-SVDMII with DCT or wavelet outperforms matrix SVD and HOSVD at the same compression ratio. The traffic video experiment is directly relevant to this codebase.
+
 ## Algorithms
 
 Two variants of t-SVDM are implemented:

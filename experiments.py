@@ -173,14 +173,18 @@ if __name__ == "__main__":
     t1 = time.perf_counter()
     print("Time to convert to pystarm tensor:", t1 - t0)
 
+    original_size = 1
+    for d in arr.shape:
+        original_size *= d
+
     if alg == "tsvdmi":
         (U_hat, S_hat, VT_hat) = tsvdm_I_compress(A, Ms, ttm_modes, k, True)
-        print("Total buffer:", U_hat.getbuflen() + S_hat.getbuflen() + VT_hat.getbuflen())
+        print("Compression ratio:", original_size / (U_hat.getbuflen() + S_hat.getbuflen() + VT_hat.getbuflen()))
         Atilde = tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, MTs, ttm_modes, True)
 
     elif alg == "tsvdmii":
         (U_hat, S_hat, VT_hat) = tsvdm_II_compress(A, Ms, ttm_modes, tol, True)
-        print("Total buffer:", U_hat.getbuflen() + S_hat.getbuflen() + VT_hat.getbuflen())
+        print("Compression ratio:", original_size / (U_hat.getbuflen() + S_hat.getbuflen() + VT_hat.getbuflen()))
         Atilde = tsvdm_II_reconstruct(U_hat, S_hat, VT_hat, MTs, ttm_modes, True)
 
     arr_reconst = np.frombuffer(Atilde, dtype=np.float64).reshape(Atilde.getdims(), order='F', copy=False)
