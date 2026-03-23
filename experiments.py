@@ -52,7 +52,33 @@ def read_traffic_data(filepath):
     # MATLAB serializes arrays in column-major (Fortran) order by default, so we
     # reshape with order='F' to match. The 3 corresponds to RGB channels, as
     # MATLAB's readFrame() returns each frame as H x W x 3.
-    return data.reshape((height, width, 3, num_frames), order='F')
+    arr = data.reshape((height, width, 3, num_frames), order='F')
+    return arr / np.linalg.norm(arr)
+
+
+def read_traffic_gray_data(filepath):
+    """Read a traffic binary file (.bin), convert to grayscale, and return an H x W x T tensor.
+
+    Grayscale conversion uses BT.601 luminance weights matching MATLAB's im2gray:
+      I = 0.298936021293775 * R + 0.587043074451121 * G + 0.114020904255103 * B
+    Pixel values in traffic.bin are float64 in [0, 255] (cast from uint8 by traffic_writer.m).
+    The result is normalized by its Frobenius norm.
+    """
+    with open(filepath, 'rb') as f:
+        height = np.frombuffer(f.read(4), dtype=np.uint32)[0]
+        width  = np.frombuffer(f.read(4), dtype=np.uint32)[0]
+        _fps   = np.frombuffer(f.read(8), dtype=np.float64)[0]
+        data   = np.frombuffer(f.read(), dtype=np.float64)
+
+    frame_size = height * width * 3
+    num_frames = len(data) // frame_size
+    color = data.reshape((height, width, 3, num_frames), order='F')
+
+    # BT.601 luminance weights — matches MATLAB im2gray for uint8 input
+    gray = (0.298936021293775 * color[:, :, 0, :] +
+            0.587043074451121 * color[:, :, 1, :] +
+            0.114020904255103 * color[:, :, 2, :])
+    return gray / np.linalg.norm(gray)
 
 
 def read_cfd_data(dirpath):
@@ -113,8 +139,10 @@ if __name__ == "__main__":
 
     if dname == "soccer":
         arr = read_soccer_data(dfile)
-    elif dname == "traffic":
+    elif dname == "traffic-color":
         arr = read_traffic_data(dfile)
+    elif dname == "traffic-gray":
+        arr = read_traffic_gray_data(dfile)
     elif dname == "cfd":
         arr = read_cfd_data(dfile)
     else:
@@ -180,12 +208,12 @@ if __name__ == "__main__":
     if alg == "tsvdmi":
         (U_hat, S_hat, VT_hat) = tsvdm_I_compress(A, Ms, ttm_modes, k, True)
         print("Compression ratio:", original_size / (U_hat.getbuflen() + S_hat.getbuflen() + VT_hat.getbuflen()))
-        Atilde = tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, MTs, ttm_modes, True)
+        Atilde = tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, MTs, ttm_modes, arr.shape, True)
 
     elif alg == "tsvdmii":
         (U_hat, S_hat, VT_hat) = tsvdm_II_compress(A, Ms, ttm_modes, tol, True)
         print("Compression ratio:", original_size / (U_hat.getbuflen() + S_hat.getbuflen() + VT_hat.getbuflen()))
-        Atilde = tsvdm_II_reconstruct(U_hat, S_hat, VT_hat, MTs, ttm_modes, True)
+        Atilde = tsvdm_II_reconstruct(U_hat, S_hat, VT_hat, MTs, ttm_modes, arr.shape, True)
 
     arr_reconst = np.frombuffer(Atilde, dtype=np.float64).reshape(Atilde.getdims(), order='F', copy=False)
 

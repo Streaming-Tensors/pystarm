@@ -4,23 +4,31 @@ export OMP_NUM_THREADS=64
 OUTPUT_DIR="$SCRATCH/pystarm"
 OUTPUT_PREFIX=""
 
+# Path to MATLAB Tensor Toolbox — update this before running MATLAB experiments
+TENSOR_TOOLBOX_PATH="/global/homes/t/taufique/Codes/tensor_toolbox-v3.8"
+
 #MTYPES=("eye")
-MTYPES=("dct" "eye" "hosvd")
+#MTYPES=("dct" "eye" "hosvd")
+MTYPES=("dct")
 
 mkdir -p $OUTPUT_DIR
 
 for ALG in "tsvdmi" "tsvdmii"; do
 #for ALG in "tsvdmii"; do
 
-    for DNAME in "traffic"; do
-    #for DNAME in "soccer" "traffic" "cfd"; do
+    #for DNAME in "traffic-color" "traffic-gray"; do
+    #for DNAME in "soccer" "traffic-color" "traffic-gray" "cfd"; do
+    for DNAME in "cfd"; do
 
         if [ "$DNAME" == "soccer" ]; then
             DFILE="data/iniesta.mp4"
             PERM_MODES=("012")
-        elif [ "$DNAME" == "traffic" ]; then
+        elif [ "$DNAME" == "traffic-color" ]; then
             DFILE="data/traffic.bin"
             PERM_MODES=("0123" "0321")
+        elif [ "$DNAME" == "traffic-gray" ]; then
+            DFILE="data/traffic.bin"
+            PERM_MODES=("012" "021" "120")
         elif [ "$DNAME" == "cfd" ]; then
             DFILE="/global/cfs/cdirs/m4293/starMData/"
             PERM_MODES=("01234")
@@ -32,8 +40,12 @@ for ALG in "tsvdmi" "tsvdmii"; do
                 if [ "$PERM_MODE" == "012" ]; then
                     K_VALUES=(5 10 20 40 80 160 320 640 1280)
                 fi
-            elif [ "$DNAME" == "traffic" ]; then
+            elif [ "$DNAME" == "traffic-color" ]; then
                 if [ "$PERM_MODE" == "0123" ] || [ "$PERM_MODE" == "0321" ]; then
+                    K_VALUES=(5 10 20 40)
+                fi
+            elif [ "$DNAME" == "traffic-gray" ]; then
+                if [ "$PERM_MODE" == "012" ] || [ "$PERM_MODE" == "021" ] || [ "$PERM_MODE" == "120" ]; then
                     K_VALUES=(5 10 20 40)
                 fi
             elif [ "$DNAME" == "cfd" ]; then
@@ -66,3 +78,24 @@ for ALG in "tsvdmi" "tsvdmii"; do
     done
 
 done
+
+## --- MATLAB HOSVD (Tucker) experiments ---
+#for DNAME in "traffic-color" "traffic-gray"; do
+
+    #if [ "$DNAME" == "traffic-color" ]; then
+        #PERM_MODES=("0123" "0321")
+    #elif [ "$DNAME" == "traffic-gray" ]; then
+        #PERM_MODES=("012" "021" "120")
+    #fi
+
+    #for PERM_MODE in "${PERM_MODES[@]}"; do
+        #for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25 0.5; do
+            #LOGFILE="${OUTPUT_DIR}/${DNAME}_hosvd_${TOL}_eye_${PERM_MODE}_1"
+            #echo "Running MATLAB DNAME=$DNAME TOL=$TOL PERM_MODE=$PERM_MODE -> $LOGFILE"
+            #matlab -nodisplay -nosplash -r \
+                #"addpath('${TENSOR_TOOLBOX_PATH}'); tol=${TOL}; perm_str='${PERM_MODE}'; dname_str='${DNAME}'; run('scripts/traffic_tucker.m'); exit" \
+                #> $LOGFILE 2>&1
+        #done
+    #done
+
+#done
