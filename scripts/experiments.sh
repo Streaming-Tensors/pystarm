@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# --- Switches ---
+RUN_PYTHON=false
+RUN_MATLAB=true
+
 export OMP_NUM_THREADS=64
 OUTPUT_DIR="$SCRATCH/pystarm"
 OUTPUT_PREFIX=""
@@ -13,89 +17,73 @@ MTYPES=("dct")
 
 mkdir -p $OUTPUT_DIR
 
-for ALG in "tsvdmi" "tsvdmii"; do
-#for ALG in "tsvdmii"; do
+#for DNAME in "soccer" "traffic-color" "traffic-gray" "dcmall" "cfd"; do
+for DNAME in "dcmall"; do
 
-    #for DNAME in "traffic-color" "traffic-gray"; do
-    #for DNAME in "soccer" "traffic-color" "traffic-gray" "cfd"; do
-    for DNAME in "cfd"; do
+    # --- Dataset definitions (shared by Python and MATLAB) ---
+    if [ "$DNAME" == "soccer" ]; then
+        DFILE="data/iniesta.mp4"
+        PERM_MODES=("012")
+        K_VALUES=(5 10 20 40 80 160 320 640 1280)
+    elif [ "$DNAME" == "traffic-color" ]; then
+        DFILE="data/traffic.bin"
+        PERM_MODES=("0123" "0321")
+        K_VALUES=(5 10 20 40)
+    elif [ "$DNAME" == "traffic-gray" ]; then
+        DFILE="data/traffic.bin"
+        PERM_MODES=("012" "021" "120")
+        K_VALUES=(5 10 20 40)
+    elif [ "$DNAME" == "cfd" ]; then
+        DFILE="/global/cfs/cdirs/m4293/starMData/"
+        PERM_MODES=("01234")
+        K_VALUES=(5 10 20 40 80)
+    elif [ "$DNAME" == "dcmall" ]; then
+        DFILE="$CFS/m4293/HSI/Hyperspectral_Project/dc.tif"
+        PERM_MODES=("021")
+        K_VALUES=(5 10 20 40 80)
+    fi
 
-        if [ "$DNAME" == "soccer" ]; then
-            DFILE="data/iniesta.mp4"
-            PERM_MODES=("012")
-        elif [ "$DNAME" == "traffic-color" ]; then
-            DFILE="data/traffic.bin"
-            PERM_MODES=("0123" "0321")
-        elif [ "$DNAME" == "traffic-gray" ]; then
-            DFILE="data/traffic.bin"
-            PERM_MODES=("012" "021" "120")
-        elif [ "$DNAME" == "cfd" ]; then
-            DFILE="/global/cfs/cdirs/m4293/starMData/"
-            PERM_MODES=("01234")
+    for PERM_MODE in "${PERM_MODES[@]}"; do
+
+        # --- Python experiments ---
+        if [ "$RUN_PYTHON" == "true" ]; then
+            for ALG in "tsvdmi" "tsvdmii"; do
+            #for ALG in "tsvdmii"; do
+
+                if [ "$ALG" == "tsvdmi" ]; then
+                    for K in "${K_VALUES[@]}"; do
+                        for MTYPE in "${MTYPES[@]}"; do
+                            LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${K}_${MTYPE}_${PERM_MODE}_${OMP_NUM_THREADS}"
+                            echo "Running DNAME=$DNAME ALG=$ALG K=$K MTYPE=$MTYPE PERM_MODE=$PERM_MODE -> $LOGFILE"
+                            python experiments.py -alg $ALG -mtype $MTYPE -k $K -dname $DNAME -dfile $DFILE -perm-mode $PERM_MODE > $LOGFILE 2>&1
+                        done
+                    done
+
+                elif [ "$ALG" == "tsvdmii" ]; then
+                    for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25 0.5; do
+                    #for TOL in 0.1 0.25 0.5; do
+                        for MTYPE in "${MTYPES[@]}"; do
+                            LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${TOL}_${MTYPE}_${PERM_MODE}_${OMP_NUM_THREADS}"
+                            echo "Running DNAME=$DNAME ALG=$ALG TOL=$TOL MTYPE=$MTYPE PERM_MODE=$PERM_MODE -> $LOGFILE"
+                            python experiments.py -alg $ALG -mtype $MTYPE -tol $TOL -dname $DNAME -dfile $DFILE -perm-mode $PERM_MODE > $LOGFILE 2>&1
+                        done
+                    done
+                fi
+
+            done
         fi
 
-        for PERM_MODE in "${PERM_MODES[@]}"; do
+        # --- MATLAB HOSVD experiments ---
+        if [ "$RUN_MATLAB" == "true" ]; then
+            for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25 0.5; do
+                LOGFILE="${OUTPUT_DIR}/${DNAME}_hosvd_${TOL}_eye_${PERM_MODE}_1"
+                echo "Running MATLAB DNAME=$DNAME TOL=$TOL PERM_MODE=$PERM_MODE -> $LOGFILE"
+                matlab -nodisplay -nosplash -r \
+                    "addpath('${TENSOR_TOOLBOX_PATH}'); tol=${TOL}; perm_str='${PERM_MODE}'; dname_str='${DNAME}'; dfile_str='${DFILE}'; run('scripts/hosvd_experiment.m'); exit" \
+                    > $LOGFILE 2>&1
+            done
+        fi
 
-            if [ "$DNAME" == "soccer" ]; then
-                if [ "$PERM_MODE" == "012" ]; then
-                    K_VALUES=(5 10 20 40 80 160 320 640 1280)
-                fi
-            elif [ "$DNAME" == "traffic-color" ]; then
-                if [ "$PERM_MODE" == "0123" ] || [ "$PERM_MODE" == "0321" ]; then
-                    K_VALUES=(5 10 20 40)
-                fi
-            elif [ "$DNAME" == "traffic-gray" ]; then
-                if [ "$PERM_MODE" == "012" ] || [ "$PERM_MODE" == "021" ] || [ "$PERM_MODE" == "120" ]; then
-                    K_VALUES=(5 10 20 40)
-                fi
-            elif [ "$DNAME" == "cfd" ]; then
-                if [ "$PERM_MODE" == "01234" ]; then
-                    K_VALUES=(5 10 20 40 80)
-                fi
-            fi
-
-            if [ "$ALG" == "tsvdmi" ]; then
-                for K in "${K_VALUES[@]}"; do
-                    for MTYPE in "${MTYPES[@]}"; do
-                        LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${K}_${MTYPE}_${PERM_MODE}_${OMP_NUM_THREADS}"
-                        echo "Running DNAME=$DNAME ALG=$ALG K=$K MTYPE=$MTYPE PERM_MODE=$PERM_MODE -> $LOGFILE"
-                        python experiments.py -alg $ALG -mtype $MTYPE -k $K -dname $DNAME -dfile $DFILE -perm-mode $PERM_MODE > $LOGFILE 2>&1
-                    done
-                done
-
-            elif [ "$ALG" == "tsvdmii" ]; then
-                for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25 0.5; do
-                #for TOL in 0.1 0.25 0.5; do
-                    for MTYPE in "${MTYPES[@]}"; do
-                        LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${TOL}_${MTYPE}_${PERM_MODE}_${OMP_NUM_THREADS}"
-                        echo "Running DNAME=$DNAME ALG=$ALG TOL=$TOL MTYPE=$MTYPE PERM_MODE=$PERM_MODE -> $LOGFILE"
-                        python experiments.py -alg $ALG -mtype $MTYPE -tol $TOL -dname $DNAME -dfile $DFILE -perm-mode $PERM_MODE > $LOGFILE 2>&1
-                    done
-                done
-            fi
-
-        done
     done
 
 done
-
-## --- MATLAB HOSVD (Tucker) experiments ---
-#for DNAME in "traffic-color" "traffic-gray"; do
-
-    #if [ "$DNAME" == "traffic-color" ]; then
-        #PERM_MODES=("0123" "0321")
-    #elif [ "$DNAME" == "traffic-gray" ]; then
-        #PERM_MODES=("012" "021" "120")
-    #fi
-
-    #for PERM_MODE in "${PERM_MODES[@]}"; do
-        #for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25 0.5; do
-            #LOGFILE="${OUTPUT_DIR}/${DNAME}_hosvd_${TOL}_eye_${PERM_MODE}_1"
-            #echo "Running MATLAB DNAME=$DNAME TOL=$TOL PERM_MODE=$PERM_MODE -> $LOGFILE"
-            #matlab -nodisplay -nosplash -r \
-                #"addpath('${TENSOR_TOOLBOX_PATH}'); tol=${TOL}; perm_str='${PERM_MODE}'; dname_str='${DNAME}'; run('scripts/traffic_tucker.m'); exit" \
-                #> $LOGFILE 2>&1
-        #done
-    #done
-
-#done

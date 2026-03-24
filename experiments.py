@@ -108,6 +108,13 @@ def read_cfd_data(dirpath):
     return x
 
 
+def read_dcmall_data(filepath):
+    import tifffile
+    arr = tifffile.imread(filepath).astype(np.float64)
+    print("DC Mall raw shape:", arr.shape)
+    return arr
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-alg",       "--alg",       type=str,   help="Name of the algorithm (tsvdmi or tsvdmii)")
@@ -145,6 +152,8 @@ if __name__ == "__main__":
         arr = read_traffic_gray_data(dfile)
     elif dname == "cfd":
         arr = read_cfd_data(dfile)
+    elif dname == "dcmall":
+        arr = read_dcmall_data(dfile)
     else:
         raise ValueError(f"Unknown dname: {dname}")
 
