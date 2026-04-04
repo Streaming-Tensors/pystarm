@@ -353,6 +353,57 @@ class TensorTestCase(unittest.TestCase):
         flag = slicewise_checks(arr1, ten1, ks)
         self.assertEqual(flag, True)
 
+    def test_slicewise_svd_thr(self):
+        """Test slicewise truncated SVD given an energy threshold while saving intermediate computations"""
+
+        def create_range_tensors(dims):
+          A = np.arange(np.prod(dims), dtype=np.float64).reshape(dims, order='F')
+          return A
+
+        def check_slicewise_svd_thr(dims, thr):
+          Ap = create_range_tensors(dims)
+          Ac = pystarm.Tensor(Ap, len(Ap.shape), Ap.shape)
+
+          Sf = pystarm.slicewise_svdvals(Ac)
+          ks = pystarm.thresholds(Sf, thr)
+          
+          U1, S1, V1t = pystarm.slicewise_svdks(Ac, ks)
+          U2, S2, V2t = pystarm.slicewise_svd_thr(Ac, thr)
+
+          nslices = np.prod(dims[2:])
+          Uflags  = np.zeros(nslices, dtype=np.bool)
+          Sflags  = np.zeros(nslices, dtype=np.bool)
+          Vtflags = np.zeros(nslices, dtype=np.bool)
+
+          for ii in range(nslices):
+            U1s  = U1.getfrontalslice(ii)
+            U1sp = np.frombuffer(U1s, dtype=np.float64).reshape(U1s.getdims(), order='F', copy=False)
+            U2s  = U2.getfrontalslice(ii)
+            U2sp = np.frombuffer(U2s, dtype=np.float64).reshape(U2s.getdims(), order='F', copy=False)
+            Uflags[ii] = np.allclose(U1sp, U2sp)
+
+            V1ts  = V1t.getfrontalslice(ii)
+            V1tsp = np.frombuffer(V1ts, dtype=np.float64).reshape(V1ts.getdims(), order='F', copy=False)
+            V2ts  = V2t.getfrontalslice(ii)
+            V2tsp = np.frombuffer(V2ts, dtype=np.float64).reshape(V2ts.getdims(), order='F', copy=False)
+            Vtflags[ii] = np.allclose(V1tsp, V2tsp)
+            
+            Sflags[ii]  = np.allclose(S1.getcol(ii), S2.getcol(ii))
+
+          return Uflags, Sflags, Vtflags
+
+        # Try all paths
+
+        all_dims = [(10, 4, 3, 2), (5, 4, 3, 2), (3, 4, 3, 2), (3, 10, 3, 2)]
+        thrs     = [0.3, 0.001]
+
+        for dims in all_dims:
+          for thr in thrs:
+            uflags, sflags, vtflags = check_slicewise_svd_thr(dims, thr)
+            self.assertEqual(np.all(uflags), True)
+            self.assertEqual(np.all(sflags), True)
+            self.assertEqual(np.all(vtflags), True)
+
     def test_slicewise_matmulks_fixed_case(self):
         """Test slicewise matmul with different ranks per slice with fixed test case"""
         U_fixed_dim_size = 5
@@ -515,6 +566,114 @@ class TensorTestCase(unittest.TestCase):
 
         flag = np.allclose(T_py.flatten(order='F'), T_np.flatten(order='F'))
         self.assertEqual(flag, True)
+
+    def test_truncate_factors(self):
+        """Test truncating full tSVDM factors to rank-k"""
+        def create_full_tensors(dims):
+          U_dims    = list(dims)
+          U_dims[1] = U_dims[0]
+          U_dims    = tuple(U_dims)
+          U = np.arange(np.prod(U_dims), dtype=np.float64).reshape(U_dims, order='F')
+
+          Vt_dims    = list(dims)
+          Vt_dims[0] = Vt_dims[1]
+          Vt_dims    = tuple(Vt_dims)
+          Vt = np.arange(np.prod(Vt_dims), dtype=np.float64).reshape(Vt_dims, order='F')
+
+          r = min(dims[0], dims[1])
+          s = np.prod(dims[2:])
+          S = np.arange(r*s, dtype=np.float64).reshape((r,s), order='F')
+
+          return U, S, Vt
+      
+        def truncate_tensor(A, ranks, jaggedfirstmode=False):
+          dims    = A.shape
+          nslices = np.prod(dims[2:])
+
+          # Store truncated slices in a list
+          Aslices = []
+          sidx    = 0
+          # Order the frontal slices in natural mode ordering
+          for idx in itertools.product(*reversed([range(p) for p in dims[2:]])):
+            Aslice = A[:, :, *reversed(idx)].copy()
+            if (jaggedfirstmode): # Forming Vt slices
+              Aslices.append(Aslice[:ranks[sidx], :])
+            else: # Forming U slices
+              Aslices.append(Aslice[:, :ranks[sidx]])
+            sidx += 1
+
+          return Aslices
+
+        def truncate_matrix(M, ranks):
+          Mslices = []
+          for j in range(M.shape[1]):
+            Mslices.append(M[:ranks[j], j])
+          
+          return Mslices
+
+        def check_truncation(dims, ranks):
+          Up, Sp, Vtp = create_full_tensors(dims)
+
+          Uc  = pystarm.Tensor(Up, len(Up.shape), Up.shape)
+          Sc  = pystarm.Matrix(Sp, Sp.shape[0], Sp.shape[1])
+          Vtc = pystarm.Tensor(Vtp, len(Vtp.shape), Vtp.shape)
+
+          Upk  = truncate_tensor(Up, ranks)
+          Spk  = truncate_matrix(Sp, ranks)
+          Vtpk = truncate_tensor(Vtp, ranks, True)
+
+          Uck, Sck, Vtck = pystarm.truncate_factors(Uc, Sc, Vtc, ranks)
+
+          nslices = np.prod(dims[2:])
+          Uflags  = np.zeros(nslices, dtype=np.bool)
+          Sflags  = np.zeros(nslices, dtype=np.bool)
+          Vtflags = np.zeros(nslices, dtype=np.bool)
+
+          for ii in range(nslices):
+            Us  = Uck.getfrontalslice(ii)
+            Usp = np.frombuffer(Us, dtype=np.float64).reshape(Us.getdims(), order='F', copy=False)
+            Uflags[ii] = np.allclose(Usp, Upk[ii])
+
+            Vts  = Vtck.getfrontalslice(ii)
+            Vtsp = np.frombuffer(Vts, dtype=np.float64).reshape(Vts.getdims(), order='F', copy=False)
+            Vtflags[ii] = np.allclose(Vtsp, Vtpk[ii])
+            
+            Sflags[ii]  = np.allclose(Sck.getcol(ii), Spk[ii])
+
+          return Uflags, Sflags, Vtflags
+ 
+        # Try three examples
+
+        ## 3-dimensional example
+        ks       = [2, 1]
+        ten_dims = (4, 3, 2)
+        
+        uflags, sflags, vtflags = check_truncation(ten_dims, ks)
+    
+        self.assertEqual(np.all(uflags), True)
+        self.assertEqual(np.all(sflags), True)
+        self.assertEqual(np.all(vtflags), True)
+      
+        ## 4-dimensional example
+        ks       = [4, 3, 1, 2, 2, 3]
+        ten_dims = (5, 4, 3, 2)
+
+        uflags, sflags, vtflags = check_truncation(ten_dims, ks)
+    
+        self.assertEqual(np.all(uflags), True)
+        self.assertEqual(np.all(sflags), True)
+        self.assertEqual(np.all(vtflags), True)
+
+        ## 4-dimensional example with zeros
+        ks       = [4, 3, 0, 2, 0, 3]
+        ten_dims = (5, 4, 3, 2)
+
+        uflags, sflags, vtflags = check_truncation(ten_dims, ks)
+    
+        self.assertEqual(np.all(uflags), True)
+        self.assertEqual(np.all(sflags), True)
+        self.assertEqual(np.all(vtflags), True)
+
 
 class MatrixTestCase(unittest.TestCase):
     def test_matrix_creation(self):

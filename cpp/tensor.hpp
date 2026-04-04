@@ -591,7 +591,7 @@ class JaggedTensor {
         assert(i < this->nslices);
         size_t var_dim_size = this->slice_ranks[i];
         size_t buflen = fixed_dim_size * var_dim_size;
-        // Check if slice has the right dimensions. OK if slice is not truncated (i.e. from a full SVD decomposition)
+        // Check if slice has the right dimensions. 
         if (variable_first_mode) {
             assert(slice.nrow == var_dim_size);
             assert(slice.ncol == fixed_dim_size);
