@@ -2407,6 +2407,18 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
         // Computing Vt
         free(workpbr);
       }
+
+      // Free saved computations
+      // QR stage
+      free(tau);
+
+      // BRD stage
+      free(Tmats);
+      free(tauq);
+      free(taup);
+      free(Dvecs);
+      free(Evecs);
+
     } else { // Path 2
       /*
         A = QB * B * PB**T = QB * ( UB * S * VB**T ) * PB**T
@@ -2573,6 +2585,12 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
         // Computing Vt
         free(workpbr);
       }
+      // Free saved computations
+      // BRD stage
+      free(tauq);
+      free(taup);
+      free(Dvecs);
+      free(Evecs);
     }
   } else {
     if (n > mnthr) { // Path 1t
@@ -2770,6 +2788,16 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
         free(workpbr);
         free(workqr2);
       }
+      // Free saved computations
+      // QR stage
+      free(tau);
+
+      // BRD stage
+      free(Tmats);
+      free(tauq);
+      free(taup);
+      free(Dvecs);
+      free(Evecs);
     } else { // Path 2t
       /*
         A = QB * B * PB**T = QB * ( UB * S * VB**T ) * PB**T
@@ -2937,6 +2965,12 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
         // Computing Vt
         free(workpbr);
       }
+      // Free saved computations
+      // BRD stage
+      free(tauq);
+      free(taup);
+      free(Dvecs);
+      free(Evecs);
     }
   }
 
@@ -2973,6 +3007,9 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
       );
     }
   }
+
+  // Free the copied tensor
+  A_copy.clear();
 
   return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
 }
