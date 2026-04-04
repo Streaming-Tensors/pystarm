@@ -1,0 +1,18 @@
+=================================================================
+AddressSanitizer: CHECK failed: sanitizer_allocator_secondary.h:200 "((nearest_chunk)) < ((h->map_beg + h->map_size))" (0x7f3d6ff67000, 0x0) (tid=858077)
+    #0 0x7f3dd5ffe86a in __asan::CheckUnwind() (/usr/lib64/gcc/x86_64-suse-linux/14/libasan.so+0x10186a) (BuildId: 000905ced1b32cc1be9a41788742c0e50a071430)
+    #1 0x7f3dd60235ed in __sanitizer::CheckFailed(char const*, int, char const*, unsigned long long, unsigned long long) (/usr/lib64/gcc/x86_64-suse-linux/14/libasan.so+0x1265ed) (BuildId: 000905ced1b32cc1be9a41788742c0e50a071430)
+    #2 0x7f3dd5f3e70f in __asan::Allocator::GetAsanChunkByAddr(unsigned long) (/usr/lib64/gcc/x86_64-suse-linux/14/libasan.so+0x4170f) (BuildId: 000905ced1b32cc1be9a41788742c0e50a071430)
+    #3 0x7f3dd5f3ea2c in __asan::Allocator::FindHeapChunkByAddress(unsigned long) (/usr/lib64/gcc/x86_64-suse-linux/14/libasan.so+0x41a2c) (BuildId: 000905ced1b32cc1be9a41788742c0e50a071430)
+    #4 0x7f3dd5f4338f in __asan::GetHeapAddressInformation(unsigned long, unsigned long, __asan::HeapAddressDescription*) (/usr/lib64/gcc/x86_64-suse-linux/14/libasan.so+0x4638f) (BuildId: 000905ced1b32cc1be9a41788742c0e50a071430)
+    #5 0x7f3dd5f437bd in __asan::AddressDescription::AddressDescription(unsigned long, unsigned long, bool) (/usr/lib64/gcc/x86_64-suse-linux/14/libasan.so+0x467bd) (BuildId: 000905ced1b32cc1be9a41788742c0e50a071430)
+    #6 0x7f3dd5ffb1de in __asan::ReportFreeNotMalloced(unsigned long, __sanitizer::BufferedStackTrace*) (/usr/lib64/gcc/x86_64-suse-linux/14/libasan.so+0xfe1de) (BuildId: 000905ced1b32cc1be9a41788742c0e50a071430)
+    #7 0x7f3dd5ff2eae in free.part.0 (/usr/lib64/gcc/x86_64-suse-linux/14/libasan.so+0xf5eae) (BuildId: 000905ced1b32cc1be9a41788742c0e50a071430)
+    #8 0x7f3dd27ce817 in Matrix::clear() cpp/matrix.hpp:257
+    #9 0x7f3dd2784ce5 in svdx(Matrix, unsigned long, bool) cpp/ops.cpp:306
+    #10 0x7f3dd27982bd in slicewise_svdx(Tensor const&, unsigned long, bool) [clone ._omp_fn.0] cpp/ops.cpp:1174
+    #11 0x7f3dd339ceba in gomp_thread_start ../../../libgomp/team.c:129
+    #12 0x7f3dd5f5bef5 in asan_thread_start(void*) (/usr/lib64/gcc/x86_64-suse-linux/14/libasan.so+0x5eef5) (BuildId: 000905ced1b32cc1be9a41788742c0e50a071430)
+    #13 0x7f3dd5c7ff6b in start_thread (/lib64/libc.so.6+0xa6f6b) (BuildId: 16dc6ffdd6165c6cb0346d683a041c90daa99730)
+    #14 0x7f3dd5d07387 in clone3 (/lib64/libc.so.6+0x12e387) (BuildId: 16dc6ffdd6165c6cb0346d683a041c90daa99730)
+

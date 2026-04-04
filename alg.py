@@ -36,17 +36,23 @@ def tsvdm_I_compress(A, Ms, ttm_modes, k, verbose=False):
         if verbose:
             print("[tsvdm_I_compress]", "Time for TTM on mode", mode, ":", t1-t0)
 
-    if A_hat is None:
-        A_hat = A
+    # if A_hat is None:
+        # A_hat = A
+
 
     t0 = time.perf_counter()
-    U_hat, S_hat, V_hat = pystarm.slicewise_svdx(A_hat, k)
+    if A_hat is None:
+        U_hat, S_hat, V_hat = pystarm.slicewise_svdx(A, k)
+    else:
+        U_hat, S_hat, V_hat = pystarm.slicewise_svdx(A_hat, k)
     # U_hat, S_hat, V_hat = pystarm.slicewise_svd(A_hat)
     t1 = time.perf_counter()
     if verbose:
         print("[tsvdm_I_compress]", "Time for slicewise SVD:", t1-t0)
 
-    if A_hat is not A:
+    # if A_hat is not A:
+        # A_hat.clear()
+    if A_hat is not None:
         A_hat.clear()
 
     return (U_hat,S_hat,V_hat)
@@ -108,12 +114,19 @@ def tsvdm_II_compress(A, Ms, ttm_modes, pct, verbose=False):
 
     return (U_hat,S_hat,V_hat)
 
-def tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, Minvs, ttm_modes, verbose=False):
+def tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, Minvs, ttm_modes, orig_shape, verbose=False):
     t0 = time.perf_counter()
     A_hat = pystarm.slicewise_matmul(U_hat, S_hat, VT_hat)
     t1 = time.perf_counter()
     if verbose:
         print("[tsvdm_I_reconstruct] Time to reconstruct A_hat:", t1-t0)
+
+    # slicewise_matmul always returns a 3D tensor, collapsing all modes >= 2
+    # into a single nslices dimension. Reshape back to the original nD shape
+    # before applying inverse TTMs (or returning for the eye/empty case).
+    if len(A_hat.getdims()) == 3 and len(orig_shape) > 3:
+        arr_nd = np.frombuffer(A_hat, dtype=np.float64).reshape(orig_shape, order='F')
+        A_hat  = pystarm.Tensor(arr_nd, len(orig_shape), orig_shape)
 
     if verbose:
         print("[tsvdm_I_reconstruct]", "ttm_modes", ttm_modes)
@@ -149,12 +162,19 @@ def tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, Minvs, ttm_modes, verbose=False):
     
     return A_tilde
 
-def tsvdm_II_reconstruct(U_hat, S_hat, VT_hat, Minvs, ttm_modes, verbose=False):
+def tsvdm_II_reconstruct(U_hat, S_hat, VT_hat, Minvs, ttm_modes, orig_shape, verbose=False):
     t0 = time.perf_counter()
     A_hat = pystarm.slicewise_matmulks(U_hat, S_hat, VT_hat)
     t1 = time.perf_counter()
     if verbose:
         print("[tsvdm_II_reconstruct] Time to reconstruct A_hat:", t1-t0)
+
+    # slicewise_matmulks always returns a 3D tensor, collapsing all modes >= 2
+    # into a single nslices dimension. Reshape back to the original nD shape
+    # before applying inverse TTMs (or returning for the eye/empty case).
+    if len(A_hat.getdims()) == 3 and len(orig_shape) > 3:
+        arr_nd = np.frombuffer(A_hat, dtype=np.float64).reshape(orig_shape, order='F')
+        A_hat  = pystarm.Tensor(arr_nd, len(orig_shape), orig_shape)
 
     if verbose:
         print("[tsvdm_II_reconstruct]", "ttm_modes", ttm_modes)
