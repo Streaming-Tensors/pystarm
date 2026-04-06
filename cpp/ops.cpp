@@ -1125,9 +1125,10 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=f
       std::vector<double> s(r);
 #pragma omp for
       for (size_t i = 0; i < A.nslices; i++) {
-
         // Compute the SVD
+        mkl_set_num_threads_local(1);
         std::tie(Us, s, Vst) = svd(A.getfrontalslice_copy(i), verbose);
+        mkl_set_num_threads_local(0);
 
         // Set the output tensors
         U.setfrontalslice(Us, i);
@@ -1171,7 +1172,9 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svdx(const Tensor &A, size_t k,
     for (size_t i = 0; i < A.nslices; i++) {
 
         // Compute the SVD
+        mkl_set_num_threads_local(1);
         std::tie(Us, s, Vst) = svdx(A.getfrontalslice_copy(i), k, verbose);
+        mkl_set_num_threads_local(0);
 
         // Set the output tensors
         U.setfrontalslice(Us, i);
@@ -1200,7 +1203,9 @@ Matrix slicewise_svdvals(const Tensor &A, bool verbose=false) {
       for (size_t i = 0; i < A.nslices; i++) {
 
         // Compute the SVD
+        mkl_set_num_threads_local(1);
         s = svdvals(A.getfrontalslice_copy(i), verbose);
+        mkl_set_num_threads_local(0);
 
         // Set the output tensors
         S.setcol(s, i);
@@ -1242,7 +1247,9 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svdks(
         std::vector<double> s(ks[i]);
 
         // Compute the SVD
+        mkl_set_num_threads_local(1);
         std::tie(Us, s, Vst) = svdx(A.getfrontalslice_copy(i), ks[i], verbose);
+        mkl_set_num_threads_local(0);
 
         // Set the output tensors
         U.setfrontalslice(Us, i);

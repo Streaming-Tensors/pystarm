@@ -4,6 +4,7 @@ import time
 import numpy as np
 import h5py
 import cv2
+import xarray as xr
 from scipy.fft import dct
 import pystarm
 import pyttb as ttb
@@ -115,6 +116,41 @@ def read_dcmall_data(filepath):
     return arr
 
 
+def read_ncep_air(data_dir, variable, year_start, year_end):
+    """Read NCEP Reanalysis pressure-level files for a range of years and return
+    a single Fortran-order float64 tensor with shape (lat, lon, level, time).
+
+    Each annual file is opened with xarray, the data variable is extracted as
+    a NumPy array, converted to float64, and transposed from (time, level,
+    lat, lon) -> (lat, lon, level, time).  All years are then concatenated
+    along the time axis and copied slice-by-slice into a contiguous
+    Fortran-order buffer.
+    """
+    years = range(year_start, year_end + 1)
+    per_year = []
+
+    for year in years:
+        filepath = os.path.join(data_dir, f"{variable}.{year}.nc")
+        print(f"  Reading {os.path.basename(filepath)} ...", end=" ", flush=True)
+
+        with xr.open_dataset(filepath) as ds:
+            raw = ds[variable].values
+
+        raw = raw.astype(np.float64)
+        # Transpose (time, level, lat, lon) -> (lat, lon, level, time)
+        arr = np.transpose(raw, (2, 3, 1, 0))
+        print(f"shape={arr.shape}  dtype={arr.dtype}")
+        per_year.append(arr)
+
+    full = np.concatenate(per_year, axis=-1)
+    print(f"\nConcatenated shape (before Fortran copy): {full.shape}")
+
+    x = np.zeros(full.shape, dtype=np.float64, order='F')
+    for i in range(full.shape[-1]):
+        x[..., i] = full[..., i]
+    return x
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-alg",       "--alg",       type=str,   help="Name of the algorithm (tsvdmi or tsvdmii)")
@@ -154,6 +190,8 @@ if __name__ == "__main__":
         arr = read_cfd_data(dfile)
     elif dname == "dcmall":
         arr = read_dcmall_data(dfile)
+    elif dname == "ncep-air":
+        arr = read_ncep_air(dfile, "air", 1948, 1957)
     else:
         raise ValueError(f"Unknown dname: {dname}")
 

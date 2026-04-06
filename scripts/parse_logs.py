@@ -4,9 +4,20 @@ import csv
 import argparse
 
 
+# Matches regular floats as well as nan/NaN/inf/Inf/-Inf etc.
+NUM = r'[\d.e+\-]+|[-]?[Nn][Aa][Nn]|[-]?[Ii][Nn][Ff]'
+
+
 def find(pattern, text):
     m = re.search(pattern, text, re.MULTILINE)
     return m.group(1).strip() if m else None
+
+
+def is_nan(value):
+    """Return True if a parsed string value represents NaN or Inf."""
+    if value is None:
+        return False
+    return value.lower() in ('nan', '-nan', 'inf', '-inf')
 
 
 def findall_sum(pattern, text):
@@ -53,7 +64,7 @@ def parse_content(content):
     row['time_data_to_pystarm']  = find(r'^Time to convert to pystarm tensor:\s+([\d.e+\-]+)', content)
 
     # --- Compressed representation size ---
-    row['compression_ratio'] = find(r'^Compression ratio:\s+([\d.e+\-]+)', content)
+    row['compression_ratio'] = find(rf'^Compression ratio:\s+({NUM})', content)
 
     # --- Split content into compress and reconstruct sections ---
     # All [tsvdm_X_compress] lines come before [tsvdm_X_reconstruct] lines
@@ -79,12 +90,16 @@ def parse_content(content):
         r'^\[tsvdm_(?:I|II)_reconstruct\] Time for TTM on mode \d+ :\s+([\d.e+\-]+)', reconstruct_section)
 
     # --- Error metrics ---
-    row['absolute_err']       = find(r'^Absolute err:\s+([\d.e+\-]+)', content)
-    row['relative_err']       = find(r'^Relative err:\s+([\d.e+\-]+)', content)
-    row['norm_original']      = find(r'^Norm of original tensor:\s+([\d.e+\-]+)', content)
-    row['norm_reconstructed'] = find(r'^Norm of reconstructed tensor:\s+([\d.e+\-]+)', content)
+    row['absolute_err']       = find(rf'^Absolute err:\s+({NUM})', content)
+    row['relative_err']       = find(rf'^Relative err:\s+({NUM})', content)
+    row['norm_original']      = find(rf'^Norm of original tensor:\s+({NUM})', content)
+    row['norm_reconstructed'] = find(rf'^Norm of reconstructed tensor:\s+({NUM})', content)
 
-    row['complete'] = all(row.get(f) is not None for f in ['relative_err', 'absolute_err', 'compression_ratio'])
+    key_fields = ['relative_err', 'absolute_err', 'compression_ratio']
+    row['complete'] = (
+        all(row.get(f) is not None for f in key_fields) and
+        not any(is_nan(row.get(f)) for f in key_fields)
+    )
 
     return row
 

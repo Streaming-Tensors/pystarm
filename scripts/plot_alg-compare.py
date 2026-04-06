@@ -34,18 +34,24 @@ outfile  = f"plots/{dname}_alg-compare.pdf"
 csv_file = 'experiments.csv'
 data = pd.read_csv(csv_file, dtype={"perm_mode_f": str})
 
-data = data[(data["dname_f"] == dname) & (data["perm_mode_f"] == perm)]
-data_tsvdmii = data[(data["mtype_f"] == "dct") & (data["alg"] == "tsvdmii")]
-data_tsvdmi  = data[(data["mtype_f"] == "dct") & (data["alg"] == "tsvdmi")]
-data_hosvd   = data[(data["mtype_f"] == "eye") & (data["alg"] == "hosvd")]
+data = data[(data["dname_f"] == dname) & (data["perm_mode_f"] == perm) & (data["complete"] == True)]
+data_tsvdmii        = data[(data["mtype_f"] == "dct")  & (data["alg"] == "tsvdmii")].sort_values("relative_err")
+data_tsvdmi         = data[(data["mtype_f"] == "dct")  & (data["alg"] == "tsvdmi")].sort_values("relative_err")
+data_hosvd          = data[(data["mtype_f"] == "eye")  & (data["alg"] == "hosvd")].sort_values("relative_err")
+data_hosvd_prop     = data[(data["mtype_f"] == "eye")  & (data["alg"] == "hosvd-proportional")].sort_values("relative_err")
 
 fig = plt.figure(figsize=(6, 6))
 gs  = GridSpec(nrows=1, ncols=1)
 ax  = fig.add_subplot(gs[0, 0])
 
-ax.plot(data_tsvdmii['relative_err'], data_tsvdmii['compression_ratio'], marker='x', label="tsvdmii-dct")
-ax.plot(data_tsvdmi['relative_err'],  data_tsvdmi['compression_ratio'],  marker='s', label="tsvdmi-dct")
-ax.plot(data_hosvd['relative_err'],   data_hosvd['compression_ratio'],   marker='o', label="hosvd")
+if not data_tsvdmii.empty:
+    ax.plot(data_tsvdmii['relative_err'],    data_tsvdmii['compression_ratio'],    marker='x', label="tsvdmii-dct")
+if not data_tsvdmi.empty:
+    ax.plot(data_tsvdmi['relative_err'],     data_tsvdmi['compression_ratio'],     marker='s', label="tsvdmi-dct")
+if not data_hosvd.empty:
+    ax.plot(data_hosvd['relative_err'],      data_hosvd['compression_ratio'],      marker='o', label="hosvd")
+if not data_hosvd_prop.empty:
+    ax.plot(data_hosvd_prop['relative_err'], data_hosvd_prop['compression_ratio'], marker='^', label="hosvd-proportional")
 
 ax.set_yscale('log', base=2)
 ax.set_xlabel("relative error")

@@ -1,10 +1,15 @@
 #!/bin/bash
 
 # --- Switches ---
-RUN_PYTHON=false
-RUN_MATLAB=true
+RUN_PYTHON=true
+RUN_MATLAB=false
 
-export OMP_NUM_THREADS=64
+NTHREADS=8
+#export OMP_NUM_THREADS=64
+export MKL_NUM_THREADS=$NTHREADS
+export OMP_NUM_THREADS=$NTHREADS
+export MKL_DYNAMIC=FALSE
+
 OUTPUT_DIR="$SCRATCH/pystarm"
 OUTPUT_PREFIX=""
 
@@ -17,8 +22,8 @@ MTYPES=("dct")
 
 mkdir -p $OUTPUT_DIR
 
-#for DNAME in "soccer" "traffic-color" "traffic-gray" "dcmall" "cfd"; do
-for DNAME in "dcmall"; do
+#for DNAME in "soccer" "traffic-color" "traffic-gray" "dcmall" "cfd" "ncep-air"; do
+for DNAME in "cfd" "ncep-air"; do
 
     # --- Dataset definitions (shared by Python and MATLAB) ---
     if [ "$DNAME" == "soccer" ]; then
@@ -31,7 +36,8 @@ for DNAME in "dcmall"; do
         K_VALUES=(5 10 20 40)
     elif [ "$DNAME" == "traffic-gray" ]; then
         DFILE="data/traffic.bin"
-        PERM_MODES=("012" "021" "120")
+        #PERM_MODES=("012" "021" "120")
+        PERM_MODES=("120")
         K_VALUES=(5 10 20 40)
     elif [ "$DNAME" == "cfd" ]; then
         DFILE="/global/cfs/cdirs/m4293/starMData/"
@@ -40,7 +46,11 @@ for DNAME in "dcmall"; do
     elif [ "$DNAME" == "dcmall" ]; then
         DFILE="$CFS/m4293/HSI/Hyperspectral_Project/dc.tif"
         PERM_MODES=("021")
-        K_VALUES=(5 10 20 40 80)
+        K_VALUES=(5 10 20 40 80 120 160 200 250)
+    elif [ "$DNAME" == "ncep-air" ]; then
+        DFILE="/global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure"
+        PERM_MODES=("0123")
+        K_VALUES=(5 10 20 40)
     fi
 
     for PERM_MODE in "${PERM_MODES[@]}"; do
@@ -49,6 +59,7 @@ for DNAME in "dcmall"; do
         if [ "$RUN_PYTHON" == "true" ]; then
             for ALG in "tsvdmi" "tsvdmii"; do
             #for ALG in "tsvdmii"; do
+            #for ALG in "tsvdmi"; do
 
                 if [ "$ALG" == "tsvdmi" ]; then
                     for K in "${K_VALUES[@]}"; do
@@ -60,8 +71,8 @@ for DNAME in "dcmall"; do
                     done
 
                 elif [ "$ALG" == "tsvdmii" ]; then
-                    for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25 0.5; do
-                    #for TOL in 0.1 0.25 0.5; do
+                    for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25; do
+                    #for TOL in 0.1; do
                         for MTYPE in "${MTYPES[@]}"; do
                             LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${TOL}_${MTYPE}_${PERM_MODE}_${OMP_NUM_THREADS}"
                             echo "Running DNAME=$DNAME ALG=$ALG TOL=$TOL MTYPE=$MTYPE PERM_MODE=$PERM_MODE -> $LOGFILE"
@@ -79,7 +90,15 @@ for DNAME in "dcmall"; do
                 LOGFILE="${OUTPUT_DIR}/${DNAME}_hosvd_${TOL}_eye_${PERM_MODE}_1"
                 echo "Running MATLAB DNAME=$DNAME TOL=$TOL PERM_MODE=$PERM_MODE -> $LOGFILE"
                 matlab -nodisplay -nosplash -r \
-                    "addpath('${TENSOR_TOOLBOX_PATH}'); tol=${TOL}; perm_str='${PERM_MODE}'; dname_str='${DNAME}'; dfile_str='${DFILE}'; run('scripts/hosvd_experiment.m'); exit" \
+                    "addpath('${TENSOR_TOOLBOX_PATH}'); alg_str='hosvd'; tol=${TOL}; perm_str='${PERM_MODE}'; dname_str='${DNAME}'; dfile_str='${DFILE}'; run('scripts/hosvd_experiment.m'); exit" \
+                    > $LOGFILE 2>&1
+            done
+
+            for P in 0.125 0.175 0.225 0.275 0.325 0.375 0.425 0.475; do
+                LOGFILE="${OUTPUT_DIR}/${DNAME}_hosvd-proportional_${P}_eye_${PERM_MODE}_1"
+                echo "Running MATLAB hosvd-proportional DNAME=$DNAME P=$P PERM_MODE=$PERM_MODE -> $LOGFILE"
+                matlab -nodisplay -nosplash -r \
+                    "addpath('${TENSOR_TOOLBOX_PATH}'); alg_str='hosvd-proportional'; p=${P}; perm_str='${PERM_MODE}'; dname_str='${DNAME}'; dfile_str='${DFILE}'; run('scripts/hosvd_experiment.m'); exit" \
                     > $LOGFILE 2>&1
             done
         fi

@@ -12,7 +12,10 @@
 %      dfile_str='/path/to/traffic.bin'; run('scripts/hosvd_experiment.m'); exit"
 %
 % Inputs (set in workspace by caller):
-%   tol       - relative energy tolerance (e.g. 0.0001)
+%   alg_str   - algorithm: 'hosvd' or 'hosvd-proportional'
+%   tol       - relative energy tolerance for 'hosvd' (e.g. 0.0001)
+%   p         - proportional rank factor for 'hosvd-proportional' (e.g. 0.125);
+%               ranks are set to ceil(dim_i * p) for each mode i
 %   perm_str  - permutation mode string
 %   dname_str - dataset name: 'traffic-color', 'traffic-gray', or 'dcmall'
 %   dfile_str - full path to the data file
@@ -69,8 +72,7 @@ if strcmp(dname_str, 'traffic-color') || strcmp(dname_str, 'traffic-gray')
 
 elseif strcmp(dname_str, 'dcmall')
     % Read hyperspectral TIF file; imread returns (bands x height x width)
-    raw = double(imread(dfile_str));
-    A   = raw / norm(tensor(raw));
+    A = double(imread(dfile_str));
 
     switch perm_str
         case '021', perm = [1,3,2]; perm_label = '(0, 2, 1)';
@@ -90,19 +92,31 @@ tensor_shape_parts = arrayfun(@(x) num2str(x), sz, 'UniformOutput', false);
 tensor_shape = ['(' strjoin(tensor_shape_parts, ', ') ')'];
 
 % --- Print parameters (matching experiments.py format for parse_logs.py) ---
-fprintf('alg         : hosvd\n');
+fprintf('alg         : %s\n', alg_str);
 fprintf('mtype        : eye\n');
 fprintf('k            : None\n');
-fprintf('tol          : %g\n', tol);
+if strcmp(alg_str, 'hosvd')
+    fprintf('tol          : %g\n', tol);
+else
+    fprintf('tol          : %g\n', p);
+end
 fprintf('dname        : %s\n', dname_str);
 fprintf('dfile        : %s\n', dfile_str);
 fprintf('perm_mode    : %s\n', perm_label);
 fprintf('Tensor shape: %s\n', tensor_shape);
 
 % --- Run HOSVD ---
-T        = tensor(A_perm);
-norm_A   = norm(T);
-T_approx = hosvd(T, tol);
+T      = tensor(A_perm);
+norm_A = norm(T);
+
+if strcmp(alg_str, 'hosvd')
+    T_approx = hosvd(T, tol);
+elseif strcmp(alg_str, 'hosvd-proportional')
+    ranks = arrayfun(@(d) ceil(d * p), sz);
+    T_approx = hosvd(T, 0, 'ranks', ranks);
+else
+    error('Unsupported alg_str: %s', alg_str);
+end
 
 % --- Compression ratio: original elements / compressed elements ---
 compressed_size = numel(T_approx.core);
