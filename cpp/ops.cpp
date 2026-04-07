@@ -1399,8 +1399,8 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
   lapack_int qrwork = 0, brdwork = 0;
   lapack_int dbdsvdwork = 0, dbdsvdiwork = 0; // Only for svdvals
 
-  if (m > n) {
-    if (m > mnthr) { // Path 1 : M >> N (approx M >= 1.6 N)
+  if (m >= n) {
+    if (m >= mnthr) { // Path 1 : M >> N (approx M >= 1.6 N)
       // Workspace query for QR stage
       lapack_int qr_info, qr_lwork;
       double qr_wkopt;
@@ -1436,7 +1436,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
       dbdsvdiwork = 12*n;
     }
   } else {
-    if (n > mnthr) { // Path 1t : N >> M (approx N >= 1.6 M)
+    if (n >= mnthr) { // Path 1t : N >> M (approx N >= 1.6 M)
       // Workspace query for QR stage
       lapack_int qr_info, qr_lwork;
       double qr_wkopt;
@@ -1493,8 +1493,8 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
   Matrix Sfull(minmn*nslices, minmn, nslices);
 
   // Loop through the slices and compute singular values
-  if (m > n) {
-    if (m > mnthr) { // Path 1
+  if (m >= n) {
+    if (m >= mnthr) { // Path 1
       /*
         A = Q * R = Q * ( QB * B * PB**T )
                   = Q * ( QB * ( UB * S * VB**T ) * PB**T )
@@ -1779,7 +1779,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
       //std::cout << std::endl;
     }
   } else {
-    if (n > mnthr) { // Path 1t
+    if (n >= mnthr) { // Path 1t
       /*
         A = L * Q = ( QB * B * PB**T ) * Q
                   = ( QB * ( UB * S * VB**T ) * PB**T ) * Q
@@ -2104,8 +2104,8 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
   size_t kmax        = *std::max_element(ks.begin(), ks.end());
   lapack_int li_kmax = kmax;
 
-  if (m > n) {
-    if (m > mnthr) { // Path 1: M >> N (approx M >= 1.6 N)
+  if (m >= n) {
+    if (m >= mnthr) { // Path 1: M >> N (approx M >= 1.6 N)
       // Optimal work size needed for bidiagonal SVD
       dbdsvdwork2  = 14*n;
       dbdsvdiwork2 = 14*n;
@@ -2154,7 +2154,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
       pbrwork = (lapack_int) br_wkopt;
     }
   } else { 
-    if (n > mnthr) { // Path 1t: N >> M (approx N >= 1.6 M)
+    if (n >= mnthr) { // Path 1t: N >> M (approx N >= 1.6 M)
       // Optimal work size needed for bidiagonal SVD
       dbdsvdwork2  = 14*m;
       dbdsvdiwork2 = 14*m;
@@ -2213,8 +2213,8 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
   }
 
   // Loop through the slices and compute the truncated SVD
-  if (m > n) {
-    if (m > mnthr) { // Path 1
+  if (m >= n) {
+    if (m >= mnthr) { // Path 1
       /*
         A = Q * R = Q * ( QB * B * PB**T )
                   = Q * ( QB * ( UB * S * VB**T ) * PB**T )
@@ -2593,7 +2593,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
       free(Evecs);
     }
   } else {
-    if (n > mnthr) { // Path 1t
+    if (n >= mnthr) { // Path 1t
       /*
         A = L * Q = ( QB * B * PB**T ) * Q
                   = ( QB * ( UB * S * VB**T ) * PB**T ) * Q
