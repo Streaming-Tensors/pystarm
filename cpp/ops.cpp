@@ -202,7 +202,9 @@ std::tuple<Matrix, std::vector<double>, Matrix> svdx(Matrix A, size_t k,
                                                     bool verbose=false) {
   Matrix U(A.nrow*k, A.nrow, k);
   Matrix Vt(k*A.ncol, k, A.ncol);
-  std::vector<double> s(std::min(A.nrow, A.ncol));
+  size_t r   = std::min(A.nrow, A.ncol);
+  size_t pad = 1; // Padding for times DBDSVDX fails
+  std::vector<double> s(r+pad);
 
   // sizes in int for DGESVDX
   lapack_int m = A.nrow, n = A.ncol;
@@ -221,7 +223,7 @@ std::tuple<Matrix, std::vector<double>, Matrix> svdx(Matrix A, size_t k,
   double *work, wkopt;
 
   lwork = -1; // Optimal workspace query
-  iwork = (lapack_int*) malloc((12 * std::min(m, n)) * sizeof(lapack_int));
+  iwork = (lapack_int*) malloc((12 * r) * sizeof(lapack_int));
 
   // Options for DGESVDX
   double vl = 0.0, vu = 0.0;
@@ -1492,6 +1494,9 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
   // Full singular values matrix
   Matrix Sfull(minmn*nslices, minmn, nslices);
 
+  // Padding for s vector in DBDSVDX call
+  size_t pad = 1;
+
   // Loop through the slices and compute singular values
   if (m >= n) {
     if (m >= mnthr) { // Path 1
@@ -1601,7 +1606,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           //std::cout << std::endl;
 
           // DBDSVD stage
-          std::vector<double> s(minmn);
+          std::vector<double> s(minmn+pad);
           D_loc       = Dvecs + (i * minmn);
           E_loc       = Evecs + (i * (minmn-1));
           double zero = 0.0;
@@ -1631,6 +1636,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           );
 
           // Set the full matrix singular values
+          s.resize(minmn);
           Sfull.setcol(s, i);
         }
 
@@ -1723,7 +1729,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           //std::cout << std::endl;
 
           // DBDSVD stage
-          std::vector<double> s(minmn);
+          std::vector<double> s(minmn+pad);
           D_loc       = Dvecs + (i * minmn);
           E_loc       = Evecs + (i * (minmn-1));
           double zero = 0.0;
@@ -1753,6 +1759,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           );
 
           // Set the full matrix singular values
+          s.resize(minmn);
           Sfull.setcol(s, i);
         }
         // Free temporaries (if any)
@@ -1885,7 +1892,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           //std::cout << std::endl;
 
           // DBDSVD stage
-          std::vector<double> s(minmn);
+          std::vector<double> s(minmn+pad);
           D_loc       = Dvecs + (i * minmn);
           E_loc       = Evecs + (i * (minmn-1));
           double zero = 0.0;
@@ -1915,6 +1922,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           );
 
           // Set the full matrix singular values
+          s.resize(minmn);
           Sfull.setcol(s, i);
         }
         // Free temporaries (if any)
@@ -2006,7 +2014,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           //std::cout << std::endl;
 
           // DBDSVD stage
-          std::vector<double> s(minmn);
+          std::vector<double> s(minmn+pad);
           D_loc       = Dvecs + (i * minmn);
           E_loc       = Evecs + (i * (minmn-1));
           double zero = 0.0;
@@ -2036,6 +2044,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           );
 
           // Set the full matrix singular values
+          s.resize(minmn);
           Sfull.setcol(s, i);
         }
         // Free temporaries (if any)
@@ -2075,6 +2084,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
     }
     std::cout << std::endl;
   }
+  Sfull.clear();
   
   // STAGE 2: Recompute singular values and vectors with correct ranks
 
@@ -2108,7 +2118,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
     if (m >= mnthr) { // Path 1: M >> N (approx M >= 1.6 N)
       // Optimal work size needed for bidiagonal SVD
       dbdsvdwork2  = 14*n;
-      dbdsvdiwork2 = 14*n;
+      dbdsvdiwork2 = 12*n;
       dbdsvdzwork  = li_kmax*(n*2+1);
 
       // Workspace query for bidiagonal reduction stage (max work)
@@ -2136,7 +2146,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
     } else { // Path 2 : M >= N
       // Optimal work size needed for bidiagonal SVD
       dbdsvdwork2  = 14*n;
-      dbdsvdiwork2 = 14*n;
+      dbdsvdiwork2 = 12*n;
       dbdsvdzwork  = li_kmax*(n*2+1);
 
       // Workspace query for bidiagonal reduction stage (max work)
@@ -2157,7 +2167,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
     if (n >= mnthr) { // Path 1t: N >> M (approx N >= 1.6 M)
       // Optimal work size needed for bidiagonal SVD
       dbdsvdwork2  = 14*m;
-      dbdsvdiwork2 = 14*m;
+      dbdsvdiwork2 = 12*m;
       dbdsvdzwork  = li_kmax*(m*2+1);
 
       // Workspace query for bidiagonal reduction stage (max work)
@@ -2185,7 +2195,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
     } else { // Path 2t : N >= M
       // Optimal work size needed for bidiagonal SVD
       dbdsvdwork2  = 14*m;
-      dbdsvdiwork2 = 14*m;
+      dbdsvdiwork2 = 12*m;
       dbdsvdzwork  = li_kmax*(m*2+1);
 
       // Workspace query for bidiagonal reduction stage (max work)
@@ -2259,7 +2269,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
             size_t k = ks[i];
             Matrix Uk(m*k, m, k);
             Matrix Vkt(k*n, k, n);
-            std::vector<double> s(minmn);
+            std::vector<double> s(minmn+pad);
             
             lapack_int ldu = m, ldvt = k;
 
@@ -2461,7 +2471,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
             size_t k = ks[i];
             Matrix Uk(m*k, m, k);
             Matrix Vkt(k*n, k, n);
-            std::vector<double> s(minmn);
+            std::vector<double> s(minmn+pad);
             
             lapack_int ldu = m, ldvt = k;
 
@@ -2638,7 +2648,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
             size_t k = ks[i];
             Matrix Uk(m*k, m, k);
             Matrix Vkt(k*n, k, n);
-            std::vector<double> s(minmn);
+            std::vector<double> s(minmn+pad);
             
             lapack_int ldu = m, ldvt = k;
 
@@ -2841,7 +2851,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
             size_t k = ks[i];
             Matrix Uk(m*k, m, k);
             Matrix Vkt(k*n, k, n);
-            std::vector<double> s(minmn);
+            std::vector<double> s(minmn+pad);
             
             lapack_int ldu = m, ldvt = k;
 
