@@ -151,6 +151,67 @@ def read_ncep_air(data_dir, variable, year_start, year_end):
     return x
 
 
+def read_ncep_air_6(data_dir, variable, year_start, year_end):
+    """Read NCEP Reanalysis pressure-level files for a range of years and return
+    a 6-way Fortran-order float64 tensor with shape (lat, lon, level, tod, doy, year).
+
+    tod  = time-of-day index (4 observations per day, 6-hourly)
+    doy  = day-of-year index (365, Feb 29 dropped from leap years)
+    year = year index
+
+    Each annual file is transposed from (time, level, lat, lon) -> (lat, lon, level, time),
+    Feb 29 (time steps 236-239) is dropped from leap years, and the time axis of length
+    1460 is reshaped into (tod=4, doy=365).  All years are then stacked along a new
+    trailing year axis.
+    """
+    import calendar
+
+    STEPS_PER_DAY = 4
+    DAYS_PER_YEAR = 365
+    STEPS_PER_YEAR = STEPS_PER_DAY * DAYS_PER_YEAR  # 1460
+
+    # Feb 29 starts at step 59*4 = 236 (0-indexed) in a leap year
+    FEB29_START = 59 * STEPS_PER_DAY
+    FEB29_END   = FEB29_START + STEPS_PER_DAY  # exclusive
+
+    years = range(year_start, year_end + 1)
+    per_year = []
+
+    for year in years:
+        filepath = os.path.join(data_dir, f"{variable}.{year}.nc")
+        print(f"  Reading {os.path.basename(filepath)} ...", end=" ", flush=True)
+
+        with xr.open_dataset(filepath) as ds:
+            raw = ds[variable].values
+
+        raw = raw.astype(np.float64)
+        # Transpose (time, level, lat, lon) -> (lat, lon, level, time)
+        arr = np.transpose(raw, (2, 3, 1, 0))
+
+        # Drop Feb 29 from leap years
+        if calendar.isleap(year):
+            arr = np.concatenate([arr[..., :FEB29_START], arr[..., FEB29_END:]], axis=-1)
+
+        if arr.shape[-1] != STEPS_PER_YEAR:
+            raise ValueError(f"Year {year}: expected {STEPS_PER_YEAR} time steps after dropping Feb 29, got {arr.shape[-1]}")
+
+        # Reshape time axis (1460,) -> (tod=4, doy=365)
+        lat, lon, level, _ = arr.shape
+        arr = arr.reshape((lat, lon, level, STEPS_PER_DAY, DAYS_PER_YEAR), order='F')
+
+        print(f"shape={arr.shape}  dtype={arr.dtype}")
+        per_year.append(arr)
+
+    # Stack along a new trailing year axis -> (lat, lon, level, tod, doy, nyears)
+    full = np.stack(per_year, axis=-1)
+    print(f"\nStacked shape (before Fortran copy): {full.shape}")
+
+    x = np.zeros(full.shape, dtype=np.float64, order='F')
+    for i in range(full.shape[-1]):
+        x[..., i] = full[..., i]
+    return x
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-alg",       "--alg",       type=str,   help="Name of the algorithm (tsvdmi or tsvdmii)")
@@ -192,6 +253,8 @@ if __name__ == "__main__":
         arr = read_dcmall_data(dfile)
     elif dname == "ncep-air":
         arr = read_ncep_air(dfile, "air", 1948, 1957)
+    elif dname == "ncep-air-6":
+        arr = read_ncep_air_6(dfile, "air", 1948, 1957)
     else:
         raise ValueError(f"Unknown dname: {dname}")
 

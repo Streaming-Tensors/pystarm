@@ -26,6 +26,14 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib
 matplotlib.rcParams.update(matplotlib.rcParamsDefault)
+matplotlib.rcParams.update({
+    'font.size':        8,
+    'axes.titlesize':   8,
+    'axes.labelsize':   8,
+    'xtick.labelsize':  7,
+    'ytick.labelsize':  7,
+    'legend.fontsize':  7,
+})
 
 # ---------------------------------------------------------------------------
 # Config — edit these to adjust the plot without touching the rest of the script
@@ -44,7 +52,7 @@ CSV_FILE = "scripts/experiments.csv"   # path relative to project root
 OUTFILE  = "plots/cfd_scaling.pdf"     # path relative to project root
 TITLE    = "CFD — Strong Scaling"
 
-FIG_SIZE = (8, 6)
+FIG_SIZE = (3.33, 3.5)
 
 # Hatch pattern applied to tsvdmii bars to distinguish from tsvdmi
 TSVDMII_HATCH = "//"

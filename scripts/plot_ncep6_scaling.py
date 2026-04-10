@@ -1,7 +1,8 @@
 """
-plot_ncep_scaling.py
-====================
-Strong scaling grouped stacked bar chart for the NCEP-Air dataset.
+plot_ncep6_scaling.py
+=====================
+Strong scaling grouped stacked bar chart for the NCEP-Air-6 dataset
+(6-way tensor with time reshaped into tod x doy x year).
 
 Each group on the x-axis corresponds to a thread count. Within each group:
   - Left bar:  tsvdmi  (fixed rank k)
@@ -15,9 +16,9 @@ X-axis: thread count
 Y-axis: runtime (seconds)
 
 Run from the project root:
-    python scripts/plot_ncep_scaling.py
+    python scripts/plot_ncep6_scaling.py
 
-Output: plots/ncep_scaling.pdf
+Output: plots/ncep6_scaling.pdf
 """
 
 import numpy as np
@@ -39,8 +40,8 @@ matplotlib.rcParams.update({
 # Config — edit these to adjust the plot without touching the rest of the script
 # ---------------------------------------------------------------------------
 
-PERM_MODE = "0123"
-DNAME     = "ncep-air"
+PERM_MODE = "012345"
+DNAME     = "ncep-air-6"
 
 K   = 5     # rank parameter for tsvdmi
 TOL = 0.01  # tolerance parameter for tsvdmii
@@ -49,8 +50,8 @@ TOL = 0.01  # tolerance parameter for tsvdmii
 THREADS = [16, 32, 64]
 
 CSV_FILE = "scripts/experiments.csv"    # path relative to project root
-OUTFILE  = "plots/ncep_scaling.pdf"     # path relative to project root
-TITLE    = "NCEP Air — Strong Scaling"
+OUTFILE  = "plots/ncep6_scaling.pdf"    # path relative to project root
+TITLE    = "NCEP Air 6-way — Strong Scaling"
 
 FIG_SIZE = (3.33, 3.5)
 
@@ -123,7 +124,6 @@ fig, ax = plt.subplots(figsize=FIG_SIZE)
 bar_width = 0.35
 x = np.arange(len(THREADS))
 
-# Tracks which component keys have already been added to the legend
 legend_handles = {}
 
 def plot_stacked_bars(ax, df, components, x_positions, width, hatch=None):
@@ -138,17 +138,15 @@ def plot_stacked_bars(ax, df, components, x_positions, width, hatch=None):
                color=COLORS[key], hatch=hatch,
                edgecolor="white", linewidth=0.5)
         bottoms += values
-        # Only add to legend once per component key (shared components appear in both bars)
         if key not in legend_handles:
             legend_handles[key] = mpatches.Patch(color=COLORS[key], label=LABELS[key])
-    return bottoms  # total heights, used for top-of-bar annotations
+    return bottoms
 
 heights_tsvdmi  = plot_stacked_bars(ax, df_tsvdmi,  TSVDMI_COMPONENTS,  x - bar_width / 2, bar_width)
 heights_tsvdmii = plot_stacked_bars(ax, df_tsvdmii, TSVDMII_COMPONENTS, x + bar_width / 2, bar_width,
                                     hatch=TSVDMII_HATCH)
 
-# Annotate top of each bar with the relative error for that experiment.
-# Relative error is thread-independent; we read it per thread slot to be safe.
+# Annotate top of each bar with relative error
 for i, t in enumerate(THREADS):
     if t in df_tsvdmi.index:
         rel_err = df_tsvdmi.loc[t, "relative_err"]
@@ -159,7 +157,6 @@ for i, t in enumerate(THREADS):
         ax.text(x[i] + bar_width / 2, heights_tsvdmii[i], f"{rel_err:.3f}",
                 ha="center", va="bottom", fontsize=7)
 
-# --- x-axis: thread count labels at group centers ---
 ax.set_xticks(x)
 ax.set_xticklabels([str(t) for t in THREADS])
 ax.set_xlabel("number of threads")
@@ -167,8 +164,6 @@ ax.set_ylabel("runtime (seconds)")
 ax.set_title(TITLE)
 ax.grid(True, axis="y")
 
-# --- Legend: component colors + algorithm indicators ---
-# Add tsvdmi / tsvdmii distinguisher patches at the top of the legend
 alg_handles = [
     mpatches.Patch(facecolor="grey", hatch=None,          edgecolor="black", label=f"tsvdmi  (k={K})"),
     mpatches.Patch(facecolor="grey", hatch=TSVDMII_HATCH, edgecolor="black", label=f"tsvdmii (tol={TOL})"),

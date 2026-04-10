@@ -199,7 +199,7 @@ python scripts/parse_logs.py <logdir> <outfile.csv>
 
 Example:
 ```bash
-python scripts/parse_logs.py $SCRATCH/pystarm experiments.csv
+python scripts/parse_logs.py $SCRATCH/pystarm/logs experiments.csv
 ```
 
 The CSV is written to the code root and read by the plotting script.
@@ -324,3 +324,142 @@ See `known_issues/README.md` for known bugs and debugging notes.
 ## Known Issues
 
 See `known_issues/README.md`. Key issue: `tsvdmi` with `mtype=eye` on soccer data crashes under multi-threaded execution. Does not crash single-threaded, with DCT, with tsvdmii, or on traffic data.
+
+## NCEP Analysis Plans
+
+### Analysis 1 — Extreme Event Preservation: EOF vs tsvdmii
+
+**Motivation:** Climate scientists use EOF (Empirical Orthogonal Functions = matrix SVD/PCA) as the standard method for compressing/analyzing atmospheric data. A climate scientist noted that EOF tends to squash extreme weather events. This analysis tests whether tsvdmii preserves extremes better than EOF at the same reconstruction accuracy.
+
+**Data:**
+- Variable: air temperature (`air`)
+- Year range: 1948–1957 (10 years, ~20 GB)
+- All 17 pressure levels
+
+**Method:**
+- Both methods are run at the same relative error tolerance
+- EOF: unfold full tensor to `(73×144×17, 14600)`, apply randomized SVD (`sklearn.utils.extmath.randomized_svd`), determine rank k from tolerance using energy criterion (same as tsvdmii), reconstruct
+- tsvdmii: run on full tensor with matching tolerance `tol`, reconstruct
+- Extreme events: defined per grid point as top 1% (99th percentile) of temperature values over time at 850 hPa (near-surface level)
+- For each grid point `(lat, lon)`: collect all ~146 extreme time steps, compute relative reconstruction error at each, aggregate to **mean** and **max**
+
+**Output (4 global maps):**
+- EOF — mean relative error at extreme grid points
+- EOF — max relative error at extreme grid points
+- tsvdmii — mean relative error at extreme grid points
+- tsvdmii — max relative error at extreme grid points
+
+**Generate data:**
+```bash
+# tsvdmii data already available from existing experiments
+# EOF pipeline needs to be run separately via ncep_extremes.py (not yet implemented)
+```
+
+**Generate plots:**
+```bash
+# Not yet implemented — will be added to ncep_extremes.py
+# Output will go to $SCRATCH/pystarm/extremes/
+# Copy final maps to plots/ manually
+```
+
+**Output plots:** 4 global maps (EOF mean, EOF max, tsvdmii mean, tsvdmii max relative error at extremes)
+
+**Implementation notes (to be decided when implementing):**
+- New standalone script `ncep_extremes.py`
+- Save intermediate results (compressed representations, extreme masks) to avoid rerunning expensive steps
+- Output to `$SCRATCH/pystarm/extremes/{run_name}/`
+- Use cartopy for geographic map projections (coastlines etc.)
+
+**Future extensions:**
+- Extend to 1979–2000 (22 years) once EOF scalability is resolved
+- Add geopotential height (`hgt`) as a second variable
+- Test at multiple pressure levels beyond 850 hPa
+
+### Analysis 4 — tsvdmi vs tsvdmii Compression Quality on NCEP Data
+
+**Status: data collected, plot script ready.**
+
+**Core idea:** Empirically verify on real NCEP atmospheric data that tsvdmii achieves better or equal compression than tsvdmi at the same error level — confirming Theorem 17 from the paper in a real-world setting.
+
+**Generate data:**
+```bash
+# Edit experiments.sh: set MTYPES=("dct"), loop over ncep-air and ncep-air-6
+bash scripts/experiments.sh
+# Parse logs into CSV
+python scripts/parse_logs.py $SCRATCH/pystarm/logs scripts/experiments.csv
+```
+
+**Generate plots:**
+```bash
+cd /path/to/pystarm
+python scripts/plot_ncep_compression.py    # ncep-air
+python scripts/plot_ncep6_compression.py   # ncep-air-6
+```
+
+**Output plots:** `plots/ncep_compression.pdf`, `plots/ncep6_compression.pdf`
+
+**Next steps:**
+- Run plots and verify tsvdmii curve is clearly above tsvdmi (higher compression at same error)
+- Quantify the gap
+
+### Analysis 3 — DCT vs Identity Transform Comparison for NCEP Data
+
+**Status: data collected, plot script ready.**
+
+**Core idea:** Compare DCT transform vs identity (no transform, `eye`) for compressing NCEP air temperature data using tsvdmii. If DCT outperforms identity it confirms that the atmospheric data has strong spectral coherence across the transformed modes (level and time), which is physically expected.
+
+**Generate data:**
+```bash
+# Edit experiments.sh: set MTYPES=("dct" "eye"), loop over ncep-air
+bash scripts/experiments.sh
+# Parse logs into CSV
+python scripts/parse_logs.py $SCRATCH/pystarm/logs scripts/experiments.csv
+```
+
+**Generate per-slice rank data (complementary diagnostic):**
+```bash
+# dct ranks
+python ncep_ranks.py -dname ncep-air -mtype dct -tol 0.01
+# eye ranks
+python ncep_ranks.py -dname ncep-air -mtype eye -tol 0.01
+# Output saved to $SCRATCH/pystarm/ranks/ncep-air_tsvdmii_{tol}_{mtype}_0123_{threads}_ranks/
+# Copy interesting plots to plots/ manually
+```
+
+**Generate plots:**
+```bash
+python scripts/plot_ncep_dct_vs_eye.py
+```
+
+**Output plots:** `plots/ncep_dct_vs_eye.pdf`
+
+**Next steps:**
+- Run plot and verify DCT outperforms eye
+- Compare per-slice rank histograms/barplots for dct vs eye from scratch directory
+
+### Analysis 2 — Higher-Order Tensor Decomposition via Time Mode Splitting
+
+**Status: compression data collected at 64 threads only, scaling data pending.**
+
+**Core idea:** Instead of treating time as a single flat dimension, reshape it into multiple physically meaningful sub-dimensions `(tod=4, doy=365, year=10)` to create a 6-way tensor. The goal is to compare scalability breakdown between ncep-air (4-way) and ncep-air-6 (6-way) — does mode splitting change how time is spent across TTM, SVD, and reconstruction?
+
+**Generate data:**
+```bash
+# Edit experiments.sh: set DNAME loop to ncep-air-6, NTHREADS to desired value (8, 16, 32, 64)
+bash scripts/experiments.sh
+# Parse logs into CSV
+python scripts/parse_logs.py $SCRATCH/pystarm/logs scripts/experiments.csv
+```
+
+**Generate plots:**
+```bash
+python scripts/plot_ncep6_compression.py   # compression quality
+python scripts/plot_ncep6_scaling.py       # scaling breakdown (requires data at multiple thread counts)
+```
+
+**Output plots:** `plots/ncep6_compression.pdf`, `plots/ncep6_scaling.pdf`
+
+**Pending:**
+- ncep-air-6 scaling experiments at 8, 16, 32 threads — currently running
+- Once data is collected: compare scaling stacked bar charts for ncep-air vs ncep-air-6 side by side
+- May need a new combined plot script for the side-by-side comparison

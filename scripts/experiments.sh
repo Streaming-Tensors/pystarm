@@ -4,26 +4,26 @@
 RUN_PYTHON=true
 RUN_MATLAB=false
 
-NTHREADS=8
+NTHREADS=16
 #export OMP_NUM_THREADS=64
 export MKL_NUM_THREADS=$NTHREADS
 export OMP_NUM_THREADS=$NTHREADS
 export MKL_DYNAMIC=FALSE
 
-OUTPUT_DIR="$SCRATCH/pystarm"
+OUTPUT_DIR="$SCRATCH/pystarm/logs"
 OUTPUT_PREFIX=""
 
 # Path to MATLAB Tensor Toolbox — update this before running MATLAB experiments
 TENSOR_TOOLBOX_PATH="/global/homes/t/taufique/Codes/tensor_toolbox-v3.8"
 
-#MTYPES=("eye")
+MTYPES=("eye")
 #MTYPES=("dct" "eye" "hosvd")
-MTYPES=("dct")
+#MTYPES=("dct")
 
 mkdir -p $OUTPUT_DIR
 
-#for DNAME in "soccer" "traffic-color" "traffic-gray" "dcmall" "cfd" "ncep-air"; do
-for DNAME in "cfd" "ncep-air"; do
+#for DNAME in "soccer" "traffic-color" "traffic-gray" "dcmall" "cfd" "ncep-air" "ncep-air-6"; do
+for DNAME in "ncep-air-6"; do
 
     # --- Dataset definitions (shared by Python and MATLAB) ---
     if [ "$DNAME" == "soccer" ]; then
@@ -50,6 +50,10 @@ for DNAME in "cfd" "ncep-air"; do
     elif [ "$DNAME" == "ncep-air" ]; then
         DFILE="/global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure"
         PERM_MODES=("0123")
+        K_VALUES=(5 10 20 40)
+    elif [ "$DNAME" == "ncep-air-6" ]; then
+        DFILE="/global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure"
+        PERM_MODES=("012345")
         K_VALUES=(5 10 20 40)
     fi
 

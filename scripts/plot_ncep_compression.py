@@ -22,6 +22,14 @@ import matplotlib.ticker
 from matplotlib.gridspec import GridSpec
 import matplotlib
 matplotlib.rcParams.update(matplotlib.rcParamsDefault)
+matplotlib.rcParams.update({
+    'font.size':        8,
+    'axes.titlesize':   8,
+    'axes.labelsize':   8,
+    'xtick.labelsize':  7,
+    'ytick.labelsize':  7,
+    'legend.fontsize':  7,
+})
 
 # ---------------------------------------------------------------------------
 # Config — edit these to adjust the plot without touching the rest of the script
@@ -40,10 +48,10 @@ OUTFILE  = "plots/ncep_compression.pdf" # path relative to project root
 TITLE    = "NCEP Air"
 
 # Figure size in inches (width, height)
-FIG_SIZE = (6, 6)
+FIG_SIZE = (3.33, 3.0)
 
 # Font size for k= annotations on tsvdmi data points
-ANNOTATION_FONTSIZE = 7
+ANNOTATION_FONTSIZE = 6
 
 # Offset (in points) for annotations relative to their data point
 ANNOTATION_OFFSET = (5, 5)
