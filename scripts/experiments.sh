@@ -16,13 +16,13 @@ OUTPUT_PREFIX=""
 # Path to MATLAB Tensor Toolbox — update this before running MATLAB experiments
 TENSOR_TOOLBOX_PATH="/global/homes/t/taufique/Codes/tensor_toolbox-v3.8"
 
-MTYPES=("eye")
+#MTYPES=("eye")
 #MTYPES=("dct" "eye" "hosvd")
-#MTYPES=("dct")
+MTYPES=("dct")
 
 mkdir -p $OUTPUT_DIR
 
-#for DNAME in "soccer" "traffic-color" "traffic-gray" "dcmall" "cfd" "ncep-air" "ncep-air-6"; do
+#for DNAME in "soccer" "traffic-color" "traffic-gray" "dcmall" "cfd" "ncep-air" "ncep-air-6" "ncep-slp"; do
 for DNAME in "ncep-air-6"; do
 
     # --- Dataset definitions (shared by Python and MATLAB) ---
@@ -51,19 +51,26 @@ for DNAME in "ncep-air-6"; do
         DFILE="/global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure"
         PERM_MODES=("0123")
         K_VALUES=(5 10 20 40)
+        K_MAX=1000
     elif [ "$DNAME" == "ncep-air-6" ]; then
         DFILE="/global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure"
         PERM_MODES=("012345")
         K_VALUES=(5 10 20 40)
+    elif [ "$DNAME" == "ncep-slp" ]; then
+        DFILE="/global/cfs/cdirs/m4293/taufique/NCEP-NCAR/surface"
+        PERM_MODES=("012")
+        K_VALUES=(5 10 20 40)
+        K_MAX=1000
     fi
 
     for PERM_MODE in "${PERM_MODES[@]}"; do
 
         # --- Python experiments ---
         if [ "$RUN_PYTHON" == "true" ]; then
-            for ALG in "tsvdmi" "tsvdmii"; do
-            #for ALG in "tsvdmii"; do
+            #for ALG in "tsvdmi" "tsvdmii" "eof"; do
+            for ALG in "tsvdmii"; do
             #for ALG in "tsvdmi"; do
+            #for ALG in "eof"; do
 
                 if [ "$ALG" == "tsvdmi" ]; then
                     for K in "${K_VALUES[@]}"; do
@@ -76,12 +83,20 @@ for DNAME in "ncep-air-6"; do
 
                 elif [ "$ALG" == "tsvdmii" ]; then
                     for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25; do
+                    #for TOL in 0.01; do
                     #for TOL in 0.1; do
                         for MTYPE in "${MTYPES[@]}"; do
                             LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${TOL}_${MTYPE}_${PERM_MODE}_${OMP_NUM_THREADS}"
                             echo "Running DNAME=$DNAME ALG=$ALG TOL=$TOL MTYPE=$MTYPE PERM_MODE=$PERM_MODE -> $LOGFILE"
                             python experiments.py -alg $ALG -mtype $MTYPE -tol $TOL -dname $DNAME -dfile $DFILE -perm-mode $PERM_MODE > $LOGFILE 2>&1
                         done
+                    done
+
+                elif [ "$ALG" == "eof" ]; then
+                    for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25; do
+                        LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${TOL}_none_none_${OMP_NUM_THREADS}"
+                        echo "Running DNAME=$DNAME ALG=$ALG TOL=$TOL K_MAX=${K_MAX:-1000} -> $LOGFILE"
+                        python experiments.py -alg $ALG -tol $TOL -k-max ${K_MAX:-1000} -dname $DNAME -dfile $DFILE > $LOGFILE 2>&1
                     done
                 fi
 
@@ -90,7 +105,8 @@ for DNAME in "ncep-air-6"; do
 
         # --- MATLAB HOSVD experiments ---
         if [ "$RUN_MATLAB" == "true" ]; then
-            for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25 0.5; do
+            #for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25 0.5; do
+            for TOL in 0.01; do
                 LOGFILE="${OUTPUT_DIR}/${DNAME}_hosvd_${TOL}_eye_${PERM_MODE}_1"
                 echo "Running MATLAB DNAME=$DNAME TOL=$TOL PERM_MODE=$PERM_MODE -> $LOGFILE"
                 matlab -nodisplay -nosplash -r \

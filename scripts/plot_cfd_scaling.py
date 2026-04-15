@@ -46,7 +46,7 @@ K   = 20   # rank parameter for tsvdmi
 TOL = 0.1  # tolerance parameter for tsvdmii
 
 # Thread counts to include on x-axis (must exist in the CSV)
-THREADS = [16, 32, 64]
+THREADS = [8, 16, 32, 64]
 
 CSV_FILE = "scripts/experiments.csv"   # path relative to project root
 OUTFILE  = "plots/cfd_scaling.pdf"     # path relative to project root
@@ -85,8 +85,6 @@ LABELS = {
 TSVDMI_COMPONENTS = [
     ("compress_ttm",    "time_compress_ttm_total"),
     ("slicewise_svd",   "time_slicewise_svd"),
-    ("reconstruct_mul", "time_reconstruct_matmul"),
-    ("reconstruct_ttm", "time_reconstruct_ttm_total"),
 ]
 
 TSVDMII_COMPONENTS = [
@@ -94,8 +92,6 @@ TSVDMII_COMPONENTS = [
     ("svdvals",         "time_slicewise_svdvals"),
     ("thresholds",      "time_thresholds"),
     ("svdks",           "time_slicewise_svdks"),
-    ("reconstruct_mul", "time_reconstruct_matmul"),
-    ("reconstruct_ttm", "time_reconstruct_ttm_total"),
 ]
 
 # ---------------------------------------------------------------------------

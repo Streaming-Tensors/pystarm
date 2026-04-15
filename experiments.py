@@ -6,6 +6,7 @@ import h5py
 import cv2
 import xarray as xr
 from scipy.fft import dct
+from sklearn.utils.extmath import randomized_svd
 import pystarm
 import pyttb as ttb
 from alg import tsvdm_I_compress, tsvdm_I_reconstruct
@@ -151,6 +152,40 @@ def read_ncep_air(data_dir, variable, year_start, year_end):
     return x
 
 
+def read_ncep_slp(data_dir, year_start, year_end):
+    """Read NCEP Reanalysis surface SLP files for a range of years and return
+    a single Fortran-order float64 tensor with shape (lat, lon, time).
+
+    Each annual file is opened with xarray, the data variable is extracted as
+    a NumPy array, converted to float64, and transposed from (time, lat, lon)
+    -> (lat, lon, time).  All years are then concatenated along the time axis
+    and copied slice-by-slice into a contiguous Fortran-order buffer.
+    """
+    years = range(year_start, year_end + 1)
+    per_year = []
+
+    for year in years:
+        filepath = os.path.join(data_dir, f"slp.{year}.nc")
+        print(f"  Reading {os.path.basename(filepath)} ...", end=" ", flush=True)
+
+        with xr.open_dataset(filepath) as ds:
+            raw = ds["slp"].values
+
+        raw = raw.astype(np.float64)
+        # Transpose (time, lat, lon) -> (lat, lon, time)
+        arr = np.transpose(raw, (1, 2, 0))
+        print(f"shape={arr.shape}  dtype={arr.dtype}")
+        per_year.append(arr)
+
+    full = np.concatenate(per_year, axis=-1)
+    print(f"\nConcatenated shape (before Fortran copy): {full.shape}")
+
+    x = np.zeros(full.shape, dtype=np.float64, order='F')
+    for i in range(full.shape[-1]):
+        x[..., i] = full[..., i]
+    return x
+
+
 def read_ncep_air_6(data_dir, variable, year_start, year_end):
     """Read NCEP Reanalysis pressure-level files for a range of years and return
     a 6-way Fortran-order float64 tensor with shape (lat, lon, level, tod, doy, year).
@@ -217,7 +252,8 @@ if __name__ == "__main__":
     parser.add_argument("-alg",       "--alg",       type=str,   help="Name of the algorithm (tsvdmi or tsvdmii)")
     parser.add_argument("-mtype",     "--mtype",     type=str,   help="Transformation matrix type (dct, eye, hosvd)")
     parser.add_argument("-k",         "--k",         type=int,   help="Slice rank for tsvdm-I")
-    parser.add_argument("-tol",       "--tol",       type=float, help="Error tolerance for tsvdm-II")
+    parser.add_argument("-tol",       "--tol",       type=float, help="Error tolerance for tsvdm-II or EOF")
+    parser.add_argument("-k-max",     "--k-max",     type=int,   default=1000, help="Max rank for randomized SVD (EOF only)")
     parser.add_argument("-dname",     "--dname",     type=str,   help="Data name (e.g. soccer, traffic, cfd)")
     parser.add_argument("-dfile",     "--dfile",     type=str,   help="Path to the data file or directory")
     parser.add_argument("-perm-mode", "--perm-mode", type=str,   help="Permutation of modes as a string of digits (e.g. '120'), so that the last mode becomes the transformation mode")
@@ -232,6 +268,8 @@ if __name__ == "__main__":
     # If no perm-mode is passed, default to identity permutation (no reordering of modes).
     # The actual tuple is deferred until the tensor is loaded, since we need to know the number of dimensions.
     perm_mode = tuple(int(c) for c in args.perm_mode) if args.perm_mode else None
+
+    k_max     = args.k_max
 
     print("alg      :", alg)
     print("mtype    :", mtype)
@@ -255,6 +293,8 @@ if __name__ == "__main__":
         arr = read_ncep_air(dfile, "air", 1948, 1957)
     elif dname == "ncep-air-6":
         arr = read_ncep_air_6(dfile, "air", 1948, 1957)
+    elif dname == "ncep-slp":
+        arr = read_ncep_slp(dfile, 1985, 2015)
     else:
         raise ValueError(f"Unknown dname: {dname}")
 
@@ -325,14 +365,54 @@ if __name__ == "__main__":
         print("Compression ratio:", original_size / (U_hat.getbuflen() + S_hat.getbuflen() + VT_hat.getbuflen()))
         Atilde = tsvdm_II_reconstruct(U_hat, S_hat, VT_hat, MTs, ttm_modes, arr.shape, True)
 
-    arr_reconst = np.frombuffer(Atilde, dtype=np.float64).reshape(Atilde.getdims(), order='F', copy=False)
+    elif alg == "eof":
+        # Unfold tensor to 2D: (all spatial modes flattened, time)
+        orig_shape = arr.shape
+        ntime  = orig_shape[-1]
+        nspace = original_size // ntime
+        A2d = arr.reshape((nspace, ntime), order='F')
 
-    arr_diff         = arr - arr_reconst
-    norm_arr_diff    = np.linalg.norm(arr_diff)
-    norm_arr         = np.linalg.norm(arr)
-    norm_arr_reconst = np.linalg.norm(arr_reconst)
+        print(f"\nRunning randomized SVD (k_max={k_max})...")
+        t0 = time.perf_counter()
+        U, s, VT = randomized_svd(A2d, n_components=k_max, random_state=0)
+        print(f"SVD time: {time.perf_counter() - t0:.1f}s")
 
-    print("Absolute err:", norm_arr_diff)
-    print("Relative err:", norm_arr_diff / norm_arr)
-    print("Norm of original tensor:", norm_arr)
-    print("Norm of reconstructed tensor:", norm_arr_reconst)
+        energy_total      = np.sum(s ** 2)
+        energy_cumulative = np.cumsum(s ** 2)
+        energy_threshold  = (1.0 - tol ** 2) * energy_total
+        k_star = int(np.searchsorted(energy_cumulative, energy_threshold) + 1)
+        k_star = min(k_star, k_max)
+        print(f"k* (effective rank): {k_star}  (out of k_max={k_max})")
+
+        U  = U[:,  :k_star]
+        s  = s[    :k_star]
+        VT = VT[:k_star, :]
+
+        compressed_size = U.size + s.size + VT.size
+        print("Compression ratio:", original_size / compressed_size)
+
+        A2d_reconst = (U * s) @ VT
+        arr_reconst = A2d_reconst.reshape(orig_shape, order='F')
+
+        arr_diff         = arr - arr_reconst
+        norm_arr_diff    = np.linalg.norm(arr_diff)
+        norm_arr         = np.linalg.norm(arr)
+        norm_arr_reconst = np.linalg.norm(arr_reconst)
+
+        print("Absolute err:", norm_arr_diff)
+        print("Relative err:", norm_arr_diff / norm_arr)
+        print("Norm of original tensor:", norm_arr)
+        print("Norm of reconstructed tensor:", norm_arr_reconst)
+
+    if alg in ("tsvdmi", "tsvdmii"):
+        arr_reconst = np.frombuffer(Atilde, dtype=np.float64).reshape(Atilde.getdims(), order='F', copy=False)
+
+        arr_diff         = arr - arr_reconst
+        norm_arr_diff    = np.linalg.norm(arr_diff)
+        norm_arr         = np.linalg.norm(arr)
+        norm_arr_reconst = np.linalg.norm(arr_reconst)
+
+        print("Absolute err:", norm_arr_diff)
+        print("Relative err:", norm_arr_diff / norm_arr)
+        print("Norm of original tensor:", norm_arr)
+        print("Norm of reconstructed tensor:", norm_arr_reconst)
