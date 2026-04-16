@@ -79,6 +79,6 @@ ax.legend()
 ax.set_title(TITLE)
 
 plt.tight_layout()
-plt.savefig(OUTFILE)
+plt.savefig(OUTFILE, bbox_inches='tight')
 plt.close()
 print(f"Saved: {OUTFILE}")

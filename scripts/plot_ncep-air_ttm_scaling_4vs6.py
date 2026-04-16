@@ -133,6 +133,6 @@ mode_handles = [
 ax.legend(handles=dataset_handles + mode_handles, loc="upper right")
 
 plt.tight_layout()
-plt.savefig(OUTFILE)
+plt.savefig(OUTFILE, bbox_inches='tight')
 plt.close()
 print(f"Saved: {os.path.abspath(OUTFILE)}")

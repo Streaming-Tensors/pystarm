@@ -108,6 +108,6 @@ ax.legend()
 ax.grid(True, axis="y")
 
 plt.tight_layout()
-plt.savefig(OUTFILE)
+plt.savefig(OUTFILE, bbox_inches='tight')
 plt.close()
 print(f"Saved: {os.path.abspath(OUTFILE)}")

@@ -160,6 +160,6 @@ component_handles = list(legend_handles.values())
 ax.legend(handles=alg_handles + component_handles, loc="upper right", fontsize=8)
 
 plt.tight_layout()
-plt.savefig(OUTFILE)
+plt.savefig(OUTFILE, bbox_inches='tight')
 plt.close()
 print(f"Saved: {OUTFILE}")

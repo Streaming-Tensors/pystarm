@@ -102,7 +102,7 @@ def plot_histogram(slice_ranks, dname, mtype, tol, perm_mode, outpath):
     ax.set_ylabel("Number of slices")
     ax.set_title(f"Per-slice rank distribution — {dname}, mtype={mtype}, tol={tol}, perm={perm_str}")
     fig.tight_layout()
-    fig.savefig(outpath)
+    fig.savefig(outpath, bbox_inches='tight')
     plt.close(fig)
     print(f"Saved histogram to {outpath}")
 
@@ -119,7 +119,7 @@ def plot_barplot(slice_ranks, dname, mtype, tol, perm_mode, outpath):
     ax.set_ylabel("Rank")
     ax.set_title(f"Per-slice rank — {dname}, mtype={mtype}, tol={tol}, perm={perm_str}")
     fig.tight_layout()
-    fig.savefig(outpath)
+    fig.savefig(outpath, bbox_inches='tight')
     plt.close(fig)
     print(f"Saved barplot to {outpath}")
 
