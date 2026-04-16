@@ -4,7 +4,7 @@
 RUN_PYTHON=true
 RUN_MATLAB=false
 
-NTHREADS=16
+NTHREADS=32
 #export OMP_NUM_THREADS=64
 export MKL_NUM_THREADS=$NTHREADS
 export OMP_NUM_THREADS=$NTHREADS
@@ -68,8 +68,8 @@ for DNAME in "ncep-air-6"; do
         # --- Python experiments ---
         if [ "$RUN_PYTHON" == "true" ]; then
             #for ALG in "tsvdmi" "tsvdmii" "eof"; do
-            for ALG in "tsvdmii"; do
-            #for ALG in "tsvdmi"; do
+            #for ALG in "tsvdmii"; do
+            for ALG in "tsvdmi"; do
             #for ALG in "eof"; do
 
                 if [ "$ALG" == "tsvdmi" ]; then
