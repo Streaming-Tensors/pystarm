@@ -164,8 +164,8 @@ Each annual NetCDF file (`air.{year}.nc`) has the following axes as read by xarr
 | 3 | lon   | 144          | 0° → 357.5°E, 2.5° spacing |
 
 `read_ncep_air` transposes to **(lat, lon, level, time)** so spatial modes come first,
-matching the convention in `experiments.py`.  For 11 years (1948–1958) the tensor
-shape is roughly **73 × 144 × 17 × 16071** (~1.1 GB as float64).
+matching the convention in `experiments.py`.  For 10 years (1948–1957) the tensor
+shape is **73 × 144 × 17 × 14612** (~19.46 GB as float64).
 
 The function to call is `read_ncep_air(data_dir, variable, year_start, year_end)` defined in `experiments.py`.
 
@@ -749,33 +749,157 @@ python scripts/plot_ncep_slp_compression.py    # ncep-slp: EOF vs tsvdmii
    - Climate (ncep-air):
        - Compression quality — 4-way (tsvdmi-dct, tsvdmii-dct, tsvdmii-eye, EOF)
        - Compression quality — 4-way vs 6-way (tsvdmii-dct)
-       - Scaling — 4-way (tsvdmi vs tsvdmii, compress time only, wall time vs threads)
+       - Scaling — 6-way (tsvdmi vs tsvdmii, compress time only, wall time vs threads)
        - TTM scaling — 4-way vs 6-way
        - Per-slice rank (DCT vs eye, tsvdmii tol=0.01)
    - CFD:
        - Compression quality (tsvdmi-dct vs tsvdmii-dct)
-         Narrative: tsvdmii > tsvdmi even on hard-to-compress turbulence data
        - Scaling (compress time only, wall time vs threads)
-         Narrative: implementation scales well regardless of data compressibility
+   - X-ray Crystallography:
+       - Compression quality (tsvdmi-dct vs tsvdmii-dct)
+       - Scaling (compress time only, wall time vs threads)
 ```
 
-### Todo — Immediate (no new experiments needed)
+---
 
-- [x] Uncomment EOF series in `scripts/plot_ncep-air_compression.py` and regenerate
-  - **Note:** EOF has 3 overlapping data points at CR=13,507x / rel_err=0.033 (tol=0.05, 0.1, 0.25) because k_max=1000 was hit. Deduplication or annotation needed before final paper version.
-- [x] Verify `scripts/plot_ncep-air_compression_4vs6.py` is paper-ready; regenerate
-- [x] Remove reconstruct time from `scripts/plot_ncep_scaling.py`; add 8-thread data (THREADS=[8,16,32,64]); regenerate
-- [x] Remove reconstruct time from `scripts/plot_cfd_scaling.py`; add 8-thread data (THREADS=[8,16,32,64]); regenerate
-- [x] Verify `scripts/plot_cfd_compression.py` is paper-ready; regenerate
-- [x] Verify `scripts/plot_ncep-air_ranks.py` is paper-ready; regenerate
+## Experiment Plan
 
-### Todo — Pending Data
+### General conventions
 
-- [ ] Wait for ncep-air-6 32-thread runs to complete; update `experiments.csv`; regenerate 4-way vs 6-way TTM scaling plot
-- [ ] Run parallelization benchmarks (TTM batched BLAS vs loop-GEMM; tSVDM-I variants; tSVDM-II variants) on ncep-air and cfd
+- **Strong scaling thread counts:** 1, 2, 4, 8, 16, 32, 64 (doubling from 1)
+- **Strong scaling parameters:** one fixed (tol, k) pair per dataset — do not sweep all values
+  - ncep-air-6: tsvdmii tol=0.01, tsvdmi k=5
+  - cfd: tsvdmii tol=0.1, tsvdmi k=20
+  - crystallography: TBD, will mirror CFD setup
+- **Datasets for benchmarks:** ncep-air-6, cfd, crystallography (when available)
 
-### Todo — Stretch Goals
+---
+
+### Category 1 — Parallel Performance
+
+These experiments go in the Design/Implementation section of the paper.
+
+#### Q1: Does batched GEMM outperform loop GEMM for TTM?
+
+**Why it matters:** The paper claims batched GEMM is better than a loop over individual GEMMs, but we have no data to back this up. Both `ttm()` (batched) and `ttm_loop()` (loop) are already implemented in `cpp/ops.cpp`.
+
+**Experiments needed:**
+- Dedicated benchmark script `scripts/benchmark_ttm.py` — loads actual dataset, runs TTM only (no full compress pipeline)
+- For each configuration: run 5 times, record each run as a separate row
+- Thread count controlled by bash script via `OMP_NUM_THREADS` / `MKL_NUM_THREADS` env vars; Python script reads from environment
+- Run TTM on all modes (all modes beyond first two), both variants, all thread counts
+- Datasets: ncep-air-6, cfd (crystallography when available)
+
+**CSV:** `scripts/benchmark_ttm.csv` with columns `dname, mode, ttm_variant, threads, run_id, time`
+- Upsert behavior: re-running updates matching rows (keyed on `dname, mode, ttm_variant, threads, run_id`) rather than overwriting the whole file
+
+**Bash script:** loops over thread counts 1, 2, 4, 8, 16, 32, 64; sets env vars; calls `benchmark_ttm.py` once per thread count
+
+**Status:** `ttm()` and `ttm_loop()` implemented in C++. `benchmark_ttm.py` and bash driver not yet written.
+
+---
+
+#### Q2: Does parfor+sequential SVD outperform loop+parallel-MKL SVD?
+
+**Why it matters:** The paper describes two parallelization strategies for slicewise SVD. Currently only parfor+sequential is implemented. The parallel-MKL variant (sequential loop, each call uses all MKL threads) needs to be added.
+
+**Experiments needed:**
+- Dedicated benchmark script `scripts/benchmark_svd.py` — loads actual dataset, runs slicewise SVD only (no TTM, no full compress pipeline)
+- For each configuration: run 5 times, record each run as a separate row
+- Thread count controlled by bash script via env vars; Python script reads from environment
+- Both SVD variants exposed as separate pybind11 functions (not via env var dispatch)
+- Datasets: ncep-air-6, cfd (crystallography when available)
+
+**CSV:** `scripts/benchmark_svd.csv` with columns `dname, svd_variant, threads, run_id, time`
+- Upsert behavior: re-running updates matching rows (keyed on `dname, svd_variant, threads, run_id`)
+
+**Bash script:** loops over thread counts 1, 2, 4, 8, 16, 32, 64; sets env vars; calls `benchmark_svd.py` once per thread count
+
+**Status:** parfor+sequential implemented. Parallel-MKL variant needs new C++ function (`slicewise_svd_mkl_parallel`) and Python binding.
+
+**IMPORTANT:** The local copy of `ops.cpp` does not have `mkl_set_num_threads_local(1)` in the slicewise SVD functions — it may exist on NERSC but was not committed. Before implementing anything here, every design decision (where to call `mkl_set_num_threads_local`, how to structure the new variant, how to expose it via pybind11) must be discussed and agreed upon first. Do not implement automatically.
+
+---
+
+#### Q3: Which tSVDM-II strategy is most efficient?
+
+**Why it matters:** The paper describes 3 strategies for tSVDM-II. Only strategy 2 (SVDvals first + targeted recompute) is currently implemented and used. Strategies 1 (full decompose then truncate) and 3 (SVDvals + memory-efficient storage) need to be implemented and benchmarked.
+
+**Experiments needed:**
+- Run tsvdmii compress at 1, 2, 4, 8, 16, 32, 64 threads with each strategy
+- Fixed parameters per dataset
+- Log total compress time and breakdown (SVDvals, SVDks)
+- Datasets: ncep-air-6, cfd (crystallography when available)
+
+**Status:** Strategy 2 implemented (current default). Strategy 1 and 3 need C++ implementation. Note: paper text in `03_algorithms.tex` incorrectly says strategy 1 is the current implementation — needs correction.
+
+---
+
+### Category 2 — Application
+
+**Note:** Each dataset section in the paper needs a visualization of the actual data (e.g. a representative snapshot or slice). Brainstorm and design these once the CFD and crystallography dataset details are known.
+
+These experiments go in the Application section of the paper.
+
+#### Q4: Does tensor compression beat matrix compression (EOF)?
+
+**Experiments:** tsvdmi-dct, tsvdmii-dct, tsvdmii-eye, EOF on ncep-air — compression ratio vs relative error curve.
+**Status:** Data collected. Plot ready (`plots/ncep-air_compression.pdf`). ✅
+
+---
+
+#### Q5: Does tsvdmii beat tsvdmi?
+
+**Experiments:** Same compression quality sweep as Q4; also cfd compression quality.
+**Status:** Data collected. Plots ready for ncep-air and cfd. ✅
+
+---
+
+#### Q6: Does DCT transform help vs identity?
+
+**Experiments:** tsvdmii-dct vs tsvdmii-eye on ncep-air — compression curve + per-slice rank distribution.
+**Status:** Data collected. Plots ready (`plots/ncep-air_compression.pdf`, `plots/ncep-air_ranks.pdf`). ✅
+
+---
+
+#### Q7: Does 6-way decomposition improve TTM scalability without hurting compression?
+
+Two sub-questions with separate data sources:
+
+**Q7a — Compression quality (4-way vs 6-way):**
+- Run via `experiments.py` as today, all tol values, 64 threads, tsvdmii-dct
+- Datasets: ncep-air (perm_mode=0123) and ncep-air-6 (perm_mode=012345)
+- **Status:** Data collected, plot ready (`plots/ncep-air_compression_4vs6.pdf`) ✅
+
+**Q7b — TTM scaling (4-way vs 6-way):**
+- Uses `benchmark_ttm.py` (same script as Q1) — include both ncep-air and ncep-air-6
+- Per-mode TTM times captured naturally by the CSV structure (one row per mode per run)
+- Thread counts: 1, 2, 4, 8, 16, 32, 64; 5 runs each
+- **Status:** Pending `benchmark_ttm.py` implementation ⬜
+
+---
+
+#### Q8: How does the implementation scale with thread count?
+
+**Experiments:** Strong scaling at 1, 2, 4, 8, 16, 32, 64 threads, fixed parameters per dataset.
+- ncep-air-6: tsvdmii tol=0.01, tsvdmi k=5
+- cfd: tsvdmii tol=0.1, tsvdmi k=20
+- crystallography: TBD, mirror CFD setup
+
+**Multiple runs:** Run each configuration 5 times. Log files named with `_run{i}` suffix (e.g. `ncep-air-6_tsvdmii_0.01_dct_012345_64_run1`). `parse_logs.py` extracts `run_id` from filename and rebuilds CSV from scratch each time — no upsert needed.
+
+**Changes needed:**
+- Update `experiments.sh` to loop over run IDs and include `_run{i}` in log file name
+- Update `parse_logs.py` to extract `run_id` from filename and add as a column in CSV
+
+**Status:**
+- ncep-air-6: data at 8/16/32/64 threads (single run). Need re-run at 1, 2, 4 threads and 5 runs each. ⬜
+- cfd: data at 8/16/32/64 threads (single run). Need re-run at 1, 2, 4 threads and 5 runs each. ⬜
+- crystallography: pending dataset availability. ⬜
+
+---
+
+### Stretch Goals
 
 - [ ] Extreme event analysis: ncep-air 850hPa EOF vs tsvdmii (Analysis 1)
 - [ ] SLP extreme events + Cyclone Sidr snapshot (Analysis 5, 6)
-- [ ] Crystallography / VarPro application

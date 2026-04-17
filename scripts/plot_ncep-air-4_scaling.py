@@ -39,8 +39,8 @@ matplotlib.rcParams.update({
 # Config — edit these to adjust the plot without touching the rest of the script
 # ---------------------------------------------------------------------------
 
-PERM_MODE = "012345"
-DNAME     = "ncep-air-6"
+PERM_MODE = "0123"
+DNAME     = "ncep-air"
 
 K   = 5     # rank parameter for tsvdmi
 TOL = 0.01  # tolerance parameter for tsvdmii
@@ -48,9 +48,9 @@ TOL = 0.01  # tolerance parameter for tsvdmii
 # Thread counts to include on x-axis (must exist in the CSV)
 THREADS = [8, 16, 32, 64]
 
-CSV_FILE = "scripts/experiments.csv"        # path relative to project root
-OUTFILE  = "plots/ncep_scaling.pdf"         # path relative to project root
-TITLE    = f"ncep-air-6: strong scaling (tsvdmi rel.err≈0.006, tsvdmii rel.err≈0.010)"
+CSV_FILE = "scripts/experiments.csv"    # path relative to project root
+OUTFILE  = "plots/ncep_scaling.pdf"     # path relative to project root
+TITLE    = f"ncep-air: strong scaling (tsvdmi rel.err≈0.006, tsvdmii rel.err≈0.010)"
 
 FIG_SIZE = (3.33, 3.5)
 

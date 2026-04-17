@@ -34,8 +34,8 @@ matplotlib.rcParams.update({
 OMP_NUM_THREADS = 64
 CSV_FILE        = "scripts/experiments.csv"
 OUTFILE         = "plots/ncep-air_compression_4vs6.pdf"
-TITLE           = "NCEP Air — Compression Ratio vs Relative Error: 4-way vs 6-way (tsvdmii-dct)"
-FIG_SIZE        = (8.0, 6.0)
+TITLE           = "ncep-air: compression ratio (4-way vs 6-way)"
+FIG_SIZE        = (3.5, 2.8)
 
 ANNOTATE_4WAY = False
 ANNOTATE_6WAY = False
@@ -55,8 +55,8 @@ data = data[
     (data["complete"]      == True)
 ]
 
-data_4way = data[data["dname_f"] == "ncep-air"  ].sort_values("relative_err")
-data_6way = data[data["dname_f"] == "ncep-air-6"].sort_values("relative_err")
+data_4way = data[(data["dname_f"] == "ncep-air"  ) & (data["perm_mode_f"] == "0123"  )].sort_values("relative_err")
+data_6way = data[(data["dname_f"] == "ncep-air-6") & (data["perm_mode_f"] == "012345")].sort_values("relative_err")
 
 # ---------------------------------------------------------------------------
 # Plot
@@ -83,6 +83,7 @@ if not data_6way.empty:
                         fontsize=ANNOTATION_FONTSIZE)
 
 ax.set_yscale("log")
+ax.set_xlim(left=0)
 ax.set_xlabel("relative error")
 ax.set_ylabel("compression ratio")
 ax.set_title(TITLE)

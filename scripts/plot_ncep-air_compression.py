@@ -46,10 +46,10 @@ OMP_NUM_THREADS = 64
 DNAME    = "ncep-air"
 CSV_FILE = "scripts/experiments.csv"   # path relative to project root
 OUTFILE  = "plots/ncep-air_compression.pdf" # path relative to project root
-TITLE    = "NCEP Air — Compression Ratio vs Relative Error"
+TITLE    = "ncep-air: compression ratio"
 
 # Figure size in inches (width, height)
-FIG_SIZE = (8.0, 6.0)
+FIG_SIZE = (3.5, 2.8)
 
 # Font size for annotations on data points
 ANNOTATION_FONTSIZE = 6
@@ -151,6 +151,7 @@ ax.set_yscale("log")
 # ax.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
 # ax.yaxis.get_major_formatter().set_scientific(False)
 
+ax.set_xlim(left=0, right=0.075)
 ax.set_xlabel("relative error")
 ax.set_ylabel("compression ratio")
 ax.grid(True)

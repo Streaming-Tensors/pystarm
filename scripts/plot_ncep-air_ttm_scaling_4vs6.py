@@ -41,8 +41,8 @@ matplotlib.rcParams.update({
 
 LOGDIR   = os.path.join(os.environ["SCRATCH"], "pystarm", "logs")
 OUTFILE  = "plots/ncep-air_ttm_scaling_4vs6.pdf"
-TITLE    = "NCEP Air — Compress TTM Strong Scaling: 4-way vs 6-way (tsvdmii-dct, tol=0.01)"
-FIG_SIZE = (8.0, 6.0)
+TITLE    = "ncep-air: TTM strong scaling (4-way vs 6-way)"
+FIG_SIZE = (3.5, 2.8)
 
 ALG = "tsvdmii"
 TOL = "0.01"
