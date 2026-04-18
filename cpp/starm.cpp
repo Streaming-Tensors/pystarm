@@ -157,6 +157,9 @@ PYBIND11_MODULE(pystarm, m) {
         py::arg("A"), py::arg("verbose") = false);
 	m.def("slicewise_svd", &slicewise_svd, "Compute the slice-wise thin SVD of a tensor",
         py::arg("A"), py::arg("verbose") = false);
+	m.def("slicewise_svd_seq", &slicewise_svd_seq,
+        "Compute slice-wise thin SVD sequentially — one MKL-threaded dgesvd per slice (benchmark variant)",
+        py::arg("A"), py::arg("verbose") = false);
 	m.def("slicewise_svdx", &slicewise_svdx, "Compute the truncated slice-wise SVD of a tensor",
         py::arg("A"), py::arg("k"), py::arg("verbose") = false);
 	m.def("slicewise_svdks", &slicewise_svdks, "Compute the truncated slice-wise SVD of a tensor with different ranks per frontal slice",

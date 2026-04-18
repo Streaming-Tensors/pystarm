@@ -4,7 +4,7 @@
 RUN_PYTHON=true
 RUN_MATLAB=false
 
-NTHREADS=32
+NTHREADS=16
 #export OMP_NUM_THREADS=64
 export MKL_NUM_THREADS=$NTHREADS
 export OMP_NUM_THREADS=$NTHREADS
@@ -19,6 +19,8 @@ TENSOR_TOOLBOX_PATH="/global/homes/t/taufique/Codes/tensor_toolbox-v3.8"
 #MTYPES=("eye")
 #MTYPES=("dct" "eye" "hosvd")
 MTYPES=("dct")
+
+NUM_RUNS=5
 
 mkdir -p $OUTPUT_DIR
 
@@ -75,9 +77,11 @@ for DNAME in "ncep-air-6"; do
                 if [ "$ALG" == "tsvdmi" ]; then
                     for K in "${K_VALUES[@]}"; do
                         for MTYPE in "${MTYPES[@]}"; do
-                            LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${K}_${MTYPE}_${PERM_MODE}_${OMP_NUM_THREADS}"
-                            echo "Running DNAME=$DNAME ALG=$ALG K=$K MTYPE=$MTYPE PERM_MODE=$PERM_MODE -> $LOGFILE"
-                            python experiments.py -alg $ALG -mtype $MTYPE -k $K -dname $DNAME -dfile $DFILE -perm-mode $PERM_MODE > $LOGFILE 2>&1
+                            for RUN_ID in $(seq 1 $NUM_RUNS); do
+                                LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${K}_${MTYPE}_${PERM_MODE}_${OMP_NUM_THREADS}_run${RUN_ID}"
+                                echo "Running DNAME=$DNAME ALG=$ALG K=$K MTYPE=$MTYPE PERM_MODE=$PERM_MODE RUN=$RUN_ID -> $LOGFILE"
+                                python experiments.py -alg $ALG -mtype $MTYPE -k $K -dname $DNAME -dfile $DFILE -perm-mode $PERM_MODE > $LOGFILE 2>&1
+                            done
                         done
                     done
 
@@ -86,17 +90,21 @@ for DNAME in "ncep-air-6"; do
                     #for TOL in 0.01; do
                     #for TOL in 0.1; do
                         for MTYPE in "${MTYPES[@]}"; do
-                            LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${TOL}_${MTYPE}_${PERM_MODE}_${OMP_NUM_THREADS}"
-                            echo "Running DNAME=$DNAME ALG=$ALG TOL=$TOL MTYPE=$MTYPE PERM_MODE=$PERM_MODE -> $LOGFILE"
-                            python experiments.py -alg $ALG -mtype $MTYPE -tol $TOL -dname $DNAME -dfile $DFILE -perm-mode $PERM_MODE > $LOGFILE 2>&1
+                            for RUN_ID in $(seq 1 $NUM_RUNS); do
+                                LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${TOL}_${MTYPE}_${PERM_MODE}_${OMP_NUM_THREADS}_run${RUN_ID}"
+                                echo "Running DNAME=$DNAME ALG=$ALG TOL=$TOL MTYPE=$MTYPE PERM_MODE=$PERM_MODE RUN=$RUN_ID -> $LOGFILE"
+                                python experiments.py -alg $ALG -mtype $MTYPE -tol $TOL -dname $DNAME -dfile $DFILE -perm-mode $PERM_MODE > $LOGFILE 2>&1
+                            done
                         done
                     done
 
                 elif [ "$ALG" == "eof" ]; then
                     for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25; do
-                        LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${TOL}_none_none_${OMP_NUM_THREADS}"
-                        echo "Running DNAME=$DNAME ALG=$ALG TOL=$TOL K_MAX=${K_MAX:-1000} -> $LOGFILE"
-                        python experiments.py -alg $ALG -tol $TOL -k-max ${K_MAX:-1000} -dname $DNAME -dfile $DFILE > $LOGFILE 2>&1
+                        for RUN_ID in $(seq 1 $NUM_RUNS); do
+                            LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${TOL}_none_none_${OMP_NUM_THREADS}_run${RUN_ID}"
+                            echo "Running DNAME=$DNAME ALG=$ALG TOL=$TOL K_MAX=${K_MAX:-1000} RUN=$RUN_ID -> $LOGFILE"
+                            python experiments.py -alg $ALG -tol $TOL -k-max ${K_MAX:-1000} -dname $DNAME -dfile $DFILE > $LOGFILE 2>&1
+                        done
                     done
                 fi
 

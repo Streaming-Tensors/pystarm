@@ -29,10 +29,15 @@ def findall_sum(pattern, text):
 def parse_filename(filename):
     """Parse experiment metadata from log filename.
 
-    Expected format: {dname}_{alg}_{k_or_tol}_{mtype}_{perm_mode}_{omp_threads}
-    Example: traffic_tsvdmii_0.1_eye_0123_64
+    Expected format: {dname}_{alg}_{k_or_tol}_{mtype}_{perm_mode}_{omp_threads}[_run{N}]
+    Example: traffic_tsvdmii_0.1_eye_0123_64_run3
+    Old files without a run suffix parse with run_id=None.
     """
     parts = filename.split('_')
+    run_id = None
+    if parts and re.match(r'^run\d+$', parts[-1]):
+        run_id = parts[-1]
+        parts = parts[:-1]
     if len(parts) < 6:
         return {}
     return {
@@ -42,6 +47,7 @@ def parse_filename(filename):
         'mtype_f':       parts[3],
         'perm_mode_f':   parts[4],
         'omp_threads_f': parts[5],
+        'run_id':        run_id,
     }
 
 
@@ -118,7 +124,7 @@ def parse_logfile(filepath):
 COLUMNS = [
     'filename', 'complete',
     # From filename
-    'dname_f', 'alg_f', 'k_or_tol_f', 'mtype_f', 'perm_mode_f', 'omp_threads_f',
+    'dname_f', 'alg_f', 'k_or_tol_f', 'mtype_f', 'perm_mode_f', 'omp_threads_f', 'run_id',
     # Parameters from content
     'alg', 'mtype', 'k', 'tol', 'dname', 'dfile', 'perm_mode',
     # Tensor info

@@ -1117,7 +1117,8 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=f
   // Call slice-wise SVDs
 #pragma omp parallel
   {
-      // Temporary slicewise SVD objects 
+      mkl_set_num_threads_local(1);
+      // Temporary slicewise SVD objects
       //Matrix Us(Udims[0] * r, Udims[0], r);
       //Matrix Vst(r * Vtdims[1], r, Vtdims[1]);
       Matrix Us;
@@ -1138,7 +1139,43 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=f
       // Clear temporary stuff
       Us.clear();
       Vst.clear();
+      mkl_set_num_threads_local(0);
   }
+
+  return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
+}
+
+// slicewise_svd_seq: sequential variant of slicewise_svd for benchmarking purposes.
+// Processes one slice at a time (no OMP parallelism), so each dgesvd call inside
+// svd() runs with all available MKL threads. Contrast with slicewise_svd which
+// runs OMP threads in parallel each doing a single-threaded dgesvd.
+std::tuple<Tensor, Matrix, Tensor> slicewise_svd_seq(const Tensor &A, bool verbose=false) {
+  size_t r = std::min(A.dims[0], A.dims[1]);
+
+  std::vector<size_t> Udims = A.dims;
+  Udims[1] = r;
+  size_t Ubuflen = std::accumulate(Udims.begin(), Udims.end(), (size_t)1, std::multiplies<size_t>());
+  Tensor U(Ubuflen, A.ndim, Udims);
+
+  std::vector<size_t> Vtdims = A.dims;
+  Vtdims[0] = r;
+  size_t Vtbuflen = std::accumulate(Vtdims.begin(), Vtdims.end(), (size_t)1, std::multiplies<size_t>());
+  Tensor Vt(Vtbuflen, A.ndim, Vtdims);
+  Matrix S(r*A.nslices, r, A.nslices);
+
+  Matrix Us;
+  Matrix Vst;
+  std::vector<double> s(r);
+
+  for (size_t i = 0; i < A.nslices; i++) {
+    std::tie(Us, s, Vst) = svd(A.getfrontalslice_copy(i), verbose);
+    U.setfrontalslice(Us, i);
+    S.setcol(s, i);
+    Vt.setfrontalslice(Vst, i);
+  }
+
+  Us.clear();
+  Vst.clear();
 
   return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
 }
@@ -1161,7 +1198,8 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svdx(const Tensor &A, size_t k,
   // Call slice-wise SVDs
 #pragma omp parallel
   {
-    // Temporary slicewise SVD objects 
+    mkl_set_num_threads_local(1);
+    // Temporary slicewise SVD objects
     //Matrix Us(Udims[0] * k, Udims[0], k);
     //Matrix Vst(k * Vtdims[1], k, Vtdims[1]);
     Matrix Us;
@@ -1182,6 +1220,7 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svdx(const Tensor &A, size_t k,
     // Clear temporary stuff
     Us.clear();
     Vst.clear();
+    mkl_set_num_threads_local(0);
   }
 
   return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
@@ -1194,7 +1233,8 @@ Matrix slicewise_svdvals(const Tensor &A, bool verbose=false) {
   // Call slice-wise SVD values
 #pragma omp parallel
   {
-      // Temporary slicewise SVD objects 
+      mkl_set_num_threads_local(1);
+      // Temporary slicewise SVD objects
       std::vector<double> s(r);
 #pragma omp for
       for (size_t i = 0; i < A.nslices; i++) {
@@ -1205,6 +1245,7 @@ Matrix slicewise_svdvals(const Tensor &A, bool verbose=false) {
         // Set the output tensors
         S.setcol(s, i);
       }
+      mkl_set_num_threads_local(0);
   }
 
   return S;
@@ -1233,7 +1274,8 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svdks(
   // Call slice-wise SVDs
 #pragma omp parallel
   {
-    // Temporary slicewise SVD objects 
+    mkl_set_num_threads_local(1);
+    // Temporary slicewise SVD objects
     Matrix Us;
     Matrix Vst;
 #pragma omp for
@@ -1254,6 +1296,7 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svdks(
     // Clear temporary stuff
     Us.clear();
     Vst.clear();
+    mkl_set_num_threads_local(0);
   }
 
   return std::make_tuple(std::move(U), std::move(S), std::move(Vt));

@@ -783,41 +783,43 @@ These experiments go in the Design/Implementation section of the paper.
 
 **Why it matters:** The paper claims batched GEMM is better than a loop over individual GEMMs, but we have no data to back this up. Both `ttm()` (batched) and `ttm_loop()` (loop) are already implemented in `cpp/ops.cpp`.
 
-**Experiments needed:**
-- Dedicated benchmark script `scripts/benchmark_ttm.py` — loads actual dataset, runs TTM only (no full compress pipeline)
-- For each configuration: run 5 times, record each run as a separate row
-- Thread count controlled by bash script via `OMP_NUM_THREADS` / `MKL_NUM_THREADS` env vars; Python script reads from environment
-- Run TTM on all modes (all modes beyond first two), both variants, all thread counts
-- Datasets: ncep-air-6, cfd (crystallography when available)
+**To collect data:**
+```bash
+sbatch scripts/job_nersc_benchmark_ttm.sh
+# or directly:
+bash scripts/benchmark_ttm.sh
+```
 
-**CSV:** `scripts/benchmark_ttm.csv` with columns `dname, mode, ttm_variant, threads, run_id, time`
-- Upsert behavior: re-running updates matching rows (keyed on `dname, mode, ttm_variant, threads, run_id`) rather than overwriting the whole file
-
-**Bash script:** loops over thread counts 1, 2, 4, 8, 16, 32, 64; sets env vars; calls `benchmark_ttm.py` once per thread count
-
-**Status:** `ttm()` and `ttm_loop()` implemented in C++. `benchmark_ttm.py` and bash driver not yet written.
+**Output:** `scripts/benchmark_ttm.csv` with columns `dname, mode, ttm_variant, threads, run_id, time_sec`
+- Upsert behavior: safe to re-run; writes sentinel `-1` before each run and overwrites with actual time on success
+- Datasets: ncep-air, ncep-air-6, cfd; thread counts 64→1; 5 runs each
 
 ---
 
 #### Q2: Does parfor+sequential SVD outperform loop+parallel-MKL SVD?
 
-**Why it matters:** The paper describes two parallelization strategies for slicewise SVD. Currently only parfor+sequential is implemented. The parallel-MKL variant (sequential loop, each call uses all MKL threads) needs to be added.
+**Why it matters:** The paper describes two parallelization strategies for slicewise SVD:
+- **parfor+sequential** (`slicewise_svd`): OMP parallel loop over slices, each `dgesvd` call uses 1 MKL thread
+- **sequential+MKL** (`slicewise_svd_seq`): sequential loop over slices, each `dgesvd` call uses all MKL threads
 
-**Experiments needed:**
-- Dedicated benchmark script `scripts/benchmark_svd.py` — loads actual dataset, runs slicewise SVD only (no TTM, no full compress pipeline)
-- For each configuration: run 5 times, record each run as a separate row
-- Thread count controlled by bash script via env vars; Python script reads from environment
-- Both SVD variants exposed as separate pybind11 functions (not via env var dispatch)
-- Datasets: ncep-air-6, cfd (crystallography when available)
+**C++ implementation:**
+- `mkl_set_num_threads_local(1)` added to all 4 parallel slicewise SVD functions in `cpp/ops.cpp`
+- `slicewise_svd_seq` added to `cpp/ops.cpp` with comment explaining its purpose
+- pybind11 binding added in `cpp/starm.cpp`
+- Rebuild required: `make all`
 
-**CSV:** `scripts/benchmark_svd.csv` with columns `dname, svd_variant, threads, run_id, time`
-- Upsert behavior: re-running updates matching rows (keyed on `dname, svd_variant, threads, run_id`)
+**To collect data:**
+```bash
+sbatch scripts/job_nersc_benchmark_svd.sh
+# or directly:
+bash scripts/benchmark_svd.sh
+```
 
-**Bash script:** loops over thread counts 1, 2, 4, 8, 16, 32, 64; sets env vars; calls `benchmark_svd.py` once per thread count
-
-**Status:** parfor+sequential implemented. Parallel-MKL variant needs new C++ function (`slicewise_svd_mkl_parallel`) and Python binding.
-
-**IMPORTANT:** The local copy of `ops.cpp` does not have `mkl_set_num_threads_local(1)` in the slicewise SVD functions — it may exist on NERSC but was not committed. Before implementing anything here, every design decision (where to call `mkl_set_num_threads_local`, how to structure the new variant, how to expose it via pybind11) must be discussed and agreed upon first. Do not implement automatically.
+**Output:** `scripts/benchmark_svd.csv` with columns `dname, svd_variant, threads, run_id, time_sec`
+- Variants: `parfor` vs `seq`
+- Datasets: ncep-air-6, cfd; thread counts 64→1; 5 runs each
+- TTM pre-applied before benchmarking so input matches real compress pipeline
+- Upsert behavior: safe to re-run; writes sentinel `-1` before each run
 
 ---
 
@@ -831,7 +833,7 @@ These experiments go in the Design/Implementation section of the paper.
 - Log total compress time and breakdown (SVDvals, SVDks)
 - Datasets: ncep-air-6, cfd (crystallography when available)
 
-**Status:** Strategy 2 implemented (current default). Strategy 1 and 3 need C++ implementation. Note: paper text in `03_algorithms.tex` incorrectly says strategy 1 is the current implementation — needs correction.
+**Status:** Strategy 2 implemented (current default). Strategy 1 and 3 need C++ implementation. Note: paper text in `03_algorithms.tex` incorrectly says strategy 1 is the current implementation — needs correction. Deferred to a future session.
 
 ---
 
@@ -872,10 +874,11 @@ Two sub-questions with separate data sources:
 - **Status:** Data collected, plot ready (`plots/ncep-air_compression_4vs6.pdf`) ✅
 
 **Q7b — TTM scaling (4-way vs 6-way):**
-- Uses `benchmark_ttm.py` (same script as Q1) — include both ncep-air and ncep-air-6
+- Uses same `benchmark_ttm.sh` as Q1 — ncep-air (4-way) and ncep-air-6 (6-way) both included
 - Per-mode TTM times captured naturally by the CSV structure (one row per mode per run)
-- Thread counts: 1, 2, 4, 8, 16, 32, 64; 5 runs each
-- **Status:** Pending `benchmark_ttm.py` implementation ⬜
+- Thread counts: 64→1; 5 runs each
+
+**To collect data:** same run as Q1 — `bash scripts/benchmark_ttm.sh`
 
 ---
 
@@ -886,16 +889,22 @@ Two sub-questions with separate data sources:
 - cfd: tsvdmii tol=0.1, tsvdmi k=20
 - crystallography: TBD, mirror CFD setup
 
-**Multiple runs:** Run each configuration 5 times. Log files named with `_run{i}` suffix (e.g. `ncep-air-6_tsvdmii_0.01_dct_012345_64_run1`). `parse_logs.py` extracts `run_id` from filename and rebuilds CSV from scratch each time — no upsert needed.
+**Multiple runs:** Run each configuration 5 times. Log files named with `_run{i}` suffix (e.g. `ncep-air-6_tsvdmii_0.01_dct_012345_64_run1`). `parse_logs.py` extracts `run_id` from filename automatically.
 
-**Changes needed:**
-- Update `experiments.sh` to loop over run IDs and include `_run{i}` in log file name
-- Update `parse_logs.py` to extract `run_id` from filename and add as a column in CSV
+**To collect data:**
+1. Edit `experiments.sh`: set DNAME loop to `"ncep-air" "ncep-air-6" "cfd"`, set ALG loop to `"tsvdmi" "tsvdmii"`, set fixed k/tol per dataset (see General conventions above), loop over NTHREADS 1 2 4 8 16 32 64
+2. Run:
+```bash
+sbatch scripts/job_nersc_experiments.sh
+# or directly:
+bash scripts/experiments.sh
+```
+3. Parse logs:
+```bash
+python scripts/parse_logs.py $SCRATCH/pystarm/logs scripts/experiments.csv
+```
 
-**Status:**
-- ncep-air-6: data at 8/16/32/64 threads (single run). Need re-run at 1, 2, 4 threads and 5 runs each. ⬜
-- cfd: data at 8/16/32/64 threads (single run). Need re-run at 1, 2, 4 threads and 5 runs each. ⬜
-- crystallography: pending dataset availability. ⬜
+**Note:** Existing data at 8/16/32/64 threads is single-run only. Full 5-run data is needed at all 7 thread counts.
 
 ---
 
@@ -903,3 +912,44 @@ Two sub-questions with separate data sources:
 
 - [ ] Extreme event analysis: ncep-air 850hPa EOF vs tsvdmii (Analysis 1)
 - [ ] SLP extreme events + Cyclone Sidr snapshot (Analysis 5, 6)
+
+---
+
+## Data Visualization
+
+### ncep-air 3D Seasonal Snapshot
+
+**Script:** `scripts/plot_ncep-air_3d_seasons.py`
+
+**Purpose:** 3D stacked pressure-level visualization of NCEP air temperature at the four seasonal snapshots (March equinox, June solstice, September equinox, December solstice) for a given year. Shows all 17 pressure levels as stacked translucent planes with temperature in °C (RdBu_r, centered at 0°C). Bottom level (1000 hPa) is fully opaque; upper levels fade out.
+
+**Command:**
+```bash
+python scripts/plot_ncep-air_3d_seasons.py \
+    --data-dir /global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure \
+    --year 1952 \
+    --outdir plots/
+```
+
+**Output:** `plots/ncep-air_3d_seasons_{year}.pdf` — 1×4 figure, one panel per season.
+
+**Known issue:** Coastline overlay not working correctly — to be fixed in a future session.
+
+---
+
+## NERSC Job Scripts
+
+Slurm batch scripts for running experiments on Perlmutter (account: m4293, regular QOS, 1 CPU node).
+
+| Script | Wall time | Runs |
+|---|---|---|
+| `scripts/job_nersc_benchmark_ttm.sh` | 23:00:00 | `benchmark_ttm.sh` |
+| `scripts/job_nersc_benchmark_svd.sh` | 23:00:00 | `benchmark_svd.sh` |
+| `scripts/job_nersc_experiments.sh`   | 04:00:00 | `experiments.sh` |
+
+Submit with:
+```bash
+sbatch scripts/job_nersc_benchmark_ttm.sh
+sbatch scripts/job_nersc_benchmark_svd.sh
+sbatch scripts/job_nersc_experiments.sh
+```
