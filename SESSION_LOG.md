@@ -43,6 +43,10 @@
 - Reverted due to OOM crash on NERSC — the ~20GB tensor leaves insufficient headroom
 - **TODO:** revisit centering — implement memory-efficient slice-by-slice approach
 
+#### Plot scripts added
+- `scripts/plot_benchmark_ttm.py` — line plots for TTM batched vs loop benchmark; one PDF per dataset (ncep-air, ncep-air-6, cfd); one panel per TTM mode stacked vertically; x = thread count (log2), y = mean wall time (s); output: `plots/benchmark_ttm_{dname}.pdf`
+- `scripts/plot_benchmark_svd.py` — line plots for SVD parfor vs seq benchmark; one PDF per dataset (ncep-air-6, cfd); single panel per figure; same axis conventions; output: `plots/benchmark_svd_{dname}.pdf`
+
 #### Experiment readiness assessment
 | Q | Status |
 |---|---|
