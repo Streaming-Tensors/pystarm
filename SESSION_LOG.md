@@ -2,6 +2,63 @@
 
 ---
 
+## Session — 2026-04-20
+
+### What was done
+
+#### Benchmark data collected
+- Ran `benchmark_ttm.sh` and `benchmark_svd.sh` on NERSC — data now in `scripts/benchmark_ttm.csv` and `scripts/benchmark_svd.csv`
+
+#### SVD benchmark data analysis
+- **parfor** scales perfectly from 1→64 threads (time halves with every thread doubling) on both cfd and ncep-air-6
+- **seq** degrades as threads increase — at 64 threads it is ~550× slower than parfor for ncep-air-6, ~84× slower for cfd
+- At 1 thread both variants are identical (as expected)
+- Degradation of seq is a well-known MKL behavior: for small matrices (73×144), thread spin-up and per-call memory allocation overhead dominates over actual computation. More threads → more idle thread spinning → worse total time
+- The degradation pattern is **not well documented in literature** for the slicewise setting — could be a paper contribution
+- Note: SVD benchmarks should be re-run on a dataset with larger slice matrix dimensions to further characterize the behavior
+- References:
+  - [GESVD is slow on small matrix - Intel Community](https://community.intel.com/t5/Intel-oneAPI-Math-Kernel-Library/GESVD-is-slow-on-small-matrix-compared-to-numerical-recipes/td-p/882288)
+  - [Large overhead and spin time in MKL functions - Intel Community](https://community.intel.com/t5/Intel-oneAPI-Math-Kernel-Library/Large-overhead-and-spin-time-reported-in-MKL-functions/td-p/971581)
+  - [MKL Compact Matrix Functions - Inside HPC](https://insidehpc.com/2018/02/intel-mkl-compact-matrix-functions-attain-significant-speedups/)
+  - [OpenBLAS dsytrd multi-thread degradation](https://github.com/OpenMathLib/OpenBLAS/issues/3801)
+  - [STFC LAPACK benchmark study](https://epubs.stfc.ac.uk/manifestation/1885/DLTR-2007-005.pdf)
+
+#### TTM benchmark data analysis
+- Batched GEMM clearly outperforms loop for mode 2 at high thread counts (e.g. ~11× faster for ncep-air mode 2 at 64 threads)
+- For large dimensions (ncep-air mode 3, time dim 14612) batched and loop are essentially tied — both reduce to a single large GEMM
+- For cfd (small dimensions) batched and loop are essentially identical across all thread counts
+- ncep-air mode 3 at 1 thread missing (-1) — likely wall time exhaustion, not OOM
+- 4-way vs 6-way TTM scaling clearly visible: mode 3 in 4-way is very expensive; in 6-way time is split into small dims making all TTMs cheap
+
+#### C++ diagnostic prints added then commented out
+- `cpp/ops.cpp` `slicewise_svd_seq`: added `mkl_get_max_threads` / `mkl_domain_get_max_threads(MKL_DOMAIN_LAPACK)` print and per-slice timing — now commented out
+- `cpp/ops.cpp` `slicewise_svd`: added per-slice timing — now commented out
+- Requires `make all` to take effect
+
+#### Plot changes
+- `ncep-air_extremes.py`: updated `plot_maps` for single ACM column format — 2×1 stacked layout, vertical colorbar on right, figure size 3.33×4.0 inches, reduced font sizes, dpi=300
+
+#### Centering changes attempted and reverted
+- Attempted to add time-mean centering to `ncep-air_tsvdmii.py` and `ncep-air_eof.py` before compression and add mean back after reconstruction
+- Reverted due to OOM crash on NERSC — the ~20GB tensor leaves insufficient headroom
+- **TODO:** revisit centering — implement memory-efficient slice-by-slice approach
+
+#### Experiment readiness assessment
+| Q | Status |
+|---|---|
+| Q1 | Data sufficient for conclusions ✅ |
+| Q2 | Data sufficient for conclusions ✅ |
+| Q3 | Not started ❌ |
+| Q4 | Data sufficient ✅ |
+| Q5 | Data sufficient ✅ |
+| Q6 | Data sufficient ✅ |
+| Q7a | Data sufficient ✅ |
+| Q7b | Data sufficient ✅ |
+| Q8 | Partial — missing 1/2/4 thread runs with 5 repeats ⚠️ |
+| Analysis 1 (air extremes) | Reconstructions running — pending ⚠️ |
+
+---
+
 ## Session — 2026-04-18
 
 ### What was done

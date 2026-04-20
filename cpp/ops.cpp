@@ -1128,7 +1128,10 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=f
       for (size_t i = 0; i < A.nslices; i++) {
 
         // Compute the SVD
+        //double t0 = omp_get_wtime();
         std::tie(Us, s, Vst) = svd(A.getfrontalslice_copy(i), verbose);
+        //double t1 = omp_get_wtime();
+        //printf("[slicewise_svd] slice %zu: %.6f s\n", i, t1 - t0);
 
         // Set the output tensors
         U.setfrontalslice(Us, i);
@@ -1167,8 +1170,15 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd_seq(const Tensor &A, bool verbo
   Matrix Vst;
   std::vector<double> s(r);
 
+  //printf("[slicewise_svd_seq] mkl_get_max_threads = %d, mkl_domain_get_max_threads(LAPACK) = %d\n",
+  //       mkl_get_max_threads(), mkl_domain_get_max_threads(MKL_DOMAIN_LAPACK));
+
+  //double t0, t1;
   for (size_t i = 0; i < A.nslices; i++) {
+    //t0 = omp_get_wtime();
     std::tie(Us, s, Vst) = svd(A.getfrontalslice_copy(i), verbose);
+    //t1 = omp_get_wtime();
+    //printf("[slicewise_svd_seq] slice %zu: %.6f s\n", i, t1 - t0);
     U.setfrontalslice(Us, i);
     S.setcol(s, i);
     Vt.setfrontalslice(Vst, i);
