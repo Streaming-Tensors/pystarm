@@ -1189,6 +1189,124 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svdx(const Tensor &A, size_t k,
   return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
 }
 
+std::tuple<Tensor, Matrix, Tensor> slicewise_svd_mkl(const Tensor &A, bool verbose=false) {
+  size_t r = std::min(A.dims[0], A.dims[1]);
+
+  // Create the variables
+  std::vector<size_t> Udims = A.dims;
+  Udims[1] = r;
+  size_t Ubuflen = std::accumulate(Udims.begin(), Udims.end(), (size_t)1, std::multiplies<size_t>());
+  Tensor U(Ubuflen, A.ndim, Udims);
+
+  std::vector<size_t> Vtdims = A.dims;
+  Vtdims[0] = r;
+  size_t Vtbuflen = std::accumulate(Vtdims.begin(), Vtdims.end(), (size_t)1, std::multiplies<size_t>());
+  Tensor Vt(Vtbuflen, A.ndim, Vtdims);
+  Matrix S(r*A.nslices, r, A.nslices);
+
+  // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-fortran/2025-0/gesvda-batch-strided.html
+
+  // Input parameters
+  size_t nparams  = 16;
+
+  MKL_INT *iparm, *irank;
+  iparm = (MKL_INT*) malloc(nparams * sizeof(MKL_INT));
+  irank = (MKL_INT*) malloc(A.nslices * sizeof(MKL_INT));
+
+  MKL_INT m, n, lda, stride_a, stride_s, ldu, stride_u, ldvt, stride_vt;
+  MKL_INT batch_size, lwork, info;
+
+  double *work, wkopt, tol;
+
+  // Set params
+  iparm[0] = 0; // Compute truncated SVD with help of array irank
+  iparm[1] = 0; // Only compute singular values
+  iparm[2] = 0; // SVD is computed as product of three matrices (should not matter)
+  iparm[3] = 0; // Residual not computed
+
+  // Compute all singular values
+  for (size_t ii = 0; ii < A.nslices; ii++) {
+    irank[ii] = r;
+  }
+  m          = (MKL_INT) A.dims[0];
+  n          = (MKL_INT) A.dims[1];
+  lda        = (MKL_INT) A.dims[0];
+  stride_a   = m * n;
+  stride_s   = (MKL_INT) r;
+  ldu        = (MKL_INT) A.dims[0];
+  stride_u   = m * m;
+  ldvt       = (MKL_INT) r;
+  stride_vt  = n * n;
+  batch_size = (MKL_INT) A.nslices;
+  tol        = 0.0;
+
+  // Workspace query
+  lwork = -1;  
+
+  dgesvda_batch_strided(
+    iparm,        // iparm: Options for truncated SVD
+    irank,        // irank: Specifies ranks to compute for each batch
+    &m,           // m: No. of rows in the matrices A_i
+    &n,           // n: No. of columns in the matrices A_i
+    A.data_ptr,   // A: Array of input matrices A_i
+    &lda,         // lda: Leading dimension of A_i
+    &stride_a,    // stride_a: Stride between two A_i matrices
+    S.data_ptr,   // S: Array containing the S_i matrices
+    &stride_s,    // stride_s: Stride between two S_i matrices
+    U.data_ptr,   // U: Array to hold U_i matrices (not needed)
+    &ldu,         // ldu: Leading dimension of U_i
+    &stride_u,    // stride_u: Stride between two U_i matrices
+    Vt.data_ptr,  // Vt: Array to hold Vt_i matrices (not needed)
+    &ldvt,        // ldvt: Leading dimension of Vt_i
+    &stride_vt,   // stride_vt: Stride between two Vt_i matrices
+    &tol,         // tolerance: Used for stopping SVD (not referenced)
+    nullptr,      // residual: Store residuals here (not referenced)
+    &wkopt,       // work: Scratch space
+    &lwork,       // lwork: Dimension of the array work
+    &batch_size,  // batch_size: No. of problems in a batch
+    &info         // info: Exit code.
+  );
+
+  lwork = (MKL_INT) wkopt;
+  work  = (double*) malloc(lwork * sizeof(double));  
+
+  if (verbose) {
+    std::cout << "Size of the work array: " << lwork << std::endl;
+  }
+
+  // Compute the batch SVD
+  dgesvda_batch_strided(
+    iparm,        // iparm: Options for truncated SVD
+    irank,        // irank: Specifies ranks to compute for each batch
+    &m,            // m: No. of rows in the matrices A_i
+    &n,            // n: No. of columns in the matrices A_i
+    A.data_ptr,   // A: Array of input matrices A_i
+    &lda,          // lda: Leading dimension of A_i
+    &stride_a,     // stride_a: Stride between two A_i matrices
+    S.data_ptr,   // S: Array containing the S_i matrices
+    &stride_s,     // stride_s: Stride between two S_i matrices
+    U.data_ptr,   // U: Array to hold U_i matrices (not needed)
+    &ldu,          // ldu: Leading dimension of U_i
+    &stride_u,     // stride_u: Stride between two U_i matrices
+    Vt.data_ptr,  // Vt: Array to hold Vt_i matrices (not needed)
+    &ldvt,         // ldvt: Leading dimension of Vt_i
+    &stride_vt,    // stride_vt: Stride between two Vt_i matrices
+    &tol,          // tolerance: Used for stopping SVD (not referenced)
+    nullptr,      // residual: Store residuals here (not referenced)
+    work,         // work: Scratch space
+    &lwork,       // lwork: Dimension of the array work
+    &batch_size,   // batch_size: No. of problems in a batch
+    &info          // info: Exit code.
+  );
+
+  // Free temporaries
+  free(work);
+  free(iparm);
+  free(irank);
+
+  return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
+}
+
 Matrix slicewise_svdvals(const Tensor &A, bool verbose=false) {
   size_t r = std::min(A.dims[0], A.dims[1]);
   Matrix S(r*A.nslices, r, A.nslices);
@@ -1208,6 +1326,113 @@ Matrix slicewise_svdvals(const Tensor &A, bool verbose=false) {
         S.setcol(s, i);
       }
   }
+
+  return S;
+}
+
+Matrix slicewise_svdvals_mkl(const Tensor &A, bool verbose=false) {
+  size_t r = std::min(A.dims[0], A.dims[1]);
+  Matrix S(r*A.nslices, r, A.nslices);
+
+  // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-fortran/2025-0/gesvda-batch-strided.html
+
+  // Input parameters
+  size_t nparams = 16;
+  
+  MKL_INT *iparm, *irank;
+  iparm = (MKL_INT*) malloc(nparams * sizeof(MKL_INT));
+  irank = (MKL_INT*) malloc(A.nslices * sizeof(MKL_INT));
+
+  MKL_INT m, n, lda, stride_a, stride_s, ldu, stride_u, ldvt, stride_vt;
+  MKL_INT batch_size, lwork, info;
+
+  double *work, wkopt, tol;
+
+  // Set params
+  iparm[0] = 0; // Compute truncated SVD with help of array irank
+  iparm[1] = 1; // Only compute singular values
+  iparm[2] = 0; // SVD is computed as product of three matrices (should not matter)
+  iparm[3] = 0; // Residual not computed
+
+  // Compute all singular values
+  for (size_t ii = 0; ii < A.nslices; ii++) {
+    irank[ii] = r;
+  }
+  m          = (MKL_INT) A.dims[0];
+  n          = (MKL_INT) A.dims[1];
+  lda        = (MKL_INT) A.dims[0];
+  stride_a   = m * n;
+  stride_s   = (MKL_INT) r;
+  ldu        = (MKL_INT) A.dims[0];
+  stride_u   = m * m;
+  ldvt       = (MKL_INT) r;
+  stride_vt  = n * n;
+  batch_size = (MKL_INT) A.nslices;
+  tol        = 0.0;
+
+  // Workspace query
+  lwork = -1;  
+
+  dgesvda_batch_strided(
+    iparm,        // iparm: Options for truncated SVD
+    irank,        // irank: Specifies ranks to compute for each batch
+    &m,           // m: No. of rows in the matrices A_i
+    &n,           // n: No. of columns in the matrices A_i
+    A.data_ptr,   // A: Array of input matrices A_i
+    &lda,         // lda: Leading dimension of A_i
+    &stride_a,    // stride_a: Stride between two A_i matrices
+    S.data_ptr,   // S: Array containing the S_i matrices
+    &stride_s,    // stride_s: Stride between two S_i matrices
+    nullptr,      // U: Array to hold U_i matrices (not needed)
+    &ldu,         // ldu: Leading dimension of U_i
+    &stride_u,    // stride_u: Stride between two U_i matrices
+    nullptr,      // Vt: Array to hold Vt_i matrices (not needed)
+    &ldvt,        // ldvt: Leading dimension of Vt_i
+    &stride_vt,   // stride_vt: Stride between two Vt_i matrices
+    &tol,         // tolerance: Used for stopping SVD (not referenced)
+    nullptr,      // residual: Store residuals here (not referenced)
+    &wkopt,       // work: Scratch space
+    &lwork,       // lwork: Dimension of the array work
+    &batch_size,  // batch_size: No. of problems in a batch
+    &info         // info: Exit code.
+  );
+
+  lwork = (MKL_INT) wkopt;
+  work  = (double*) malloc(lwork * sizeof(double));  
+
+  if (verbose) {
+    std::cout << "Size of the work array: " << lwork << std::endl;
+  }
+
+  // Compute the batch SVD
+  dgesvda_batch_strided(
+    iparm,        // iparm: Options for truncated SVD
+    irank,        // irank: Specifies ranks to compute for each batch
+    &m,           // m: No. of rows in the matrices A_i
+    &n,           // n: No. of columns in the matrices A_i
+    A.data_ptr,   // A: Array of input matrices A_i
+    &lda,         // lda: Leading dimension of A_i
+    &stride_a,    // stride_a: Stride between two A_i matrices
+    S.data_ptr,   // S: Array containing the S_i matrices
+    &stride_s,    // stride_s: Stride between two S_i matrices
+    nullptr,      // U: Array to hold U_i matrices (not needed)
+    &ldu,         // ldu: Leading dimension of U_i
+    &stride_u,    // stride_u: Stride between two U_i matrices
+    nullptr,      // Vt: Array to hold Vt_i matrices (not needed)
+    &ldvt,        // ldvt: Leading dimension of Vt_i
+    &stride_vt,   // stride_vt: Stride between two Vt_i matrices
+    &tol,         // tolerance: Used for stopping SVD (not referenced)
+    nullptr,      // residual: Store residuals here (not referenced)
+    work,         // work: Scratch space
+    &lwork,       // lwork: Dimension of the array work
+    &batch_size,  // batch_size: No. of problems in a batch
+    &info         // info: Exit code.
+  );
+
+  // Free temporaries
+  free(work);
+  free(iparm);
+  free(irank);
 
   return S;
 }
@@ -1389,6 +1614,11 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
     }
   }
 
+  #pragma omp barrier
+  double t0, t1;
+  double qr_time = 0.0, brd_time = 0.0, svd_time = 0.0;
+  t0 = omp_get_wtime(); 
+
   // STAGE 1: Compute the singular values, thresholds, and save computations
   // Get dimensions and workspace for paths
   lapack_int m = A_copy.dims[0];
@@ -1522,6 +1752,9 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp parallel
       {
+        // Capture thread id
+        int tid = omp_get_thread_num();
+
         // Create temporaries
         // QR stage
         double* workqr = (double*) malloc(qrwork * sizeof(double));
@@ -1537,6 +1770,9 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp for
         for (size_t i = 0; i < nslices; i++) {
+          //#pragma omp barrier
+          double t0_qr = omp_get_wtime();
+
           // QR stage
           double* slice_loc = A_copy.data_ptr + (i * slice_size);
           double* tau_loc   = tau + (i * minmn);
@@ -1554,6 +1790,15 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
             &qrwork,   // LWORK: Dimension of the array WORK.
             &info      // INFO: Exit code.
           );
+
+          //#pragma omp barrier
+          double t1_qr = omp_get_wtime();
+          if (tid == 0) {
+            qr_time += t1_qr - t0_qr;
+          }
+
+          //#pragma omp barrier
+          double t0_brd = omp_get_wtime();
 
           // BRD stage
           // Copy over R from the QR stage to a temporary
@@ -1593,6 +1838,12 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
             &info     // INFO: Exit code.
           );
 
+          //#pragma omp barrier
+          double t1_brd = omp_get_wtime();
+          if (tid == 0) {
+            brd_time += t1_brd - t0_brd;
+          }
+
           //std::cout << "Printing Dvecs[" << i << "]" << std::endl;
           //for (size_t ii = 0; ii < minmn; ii++) {
           //  std::cout << Dvecs[i*minmn + ii] << " ";
@@ -1604,6 +1855,8 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           //  std::cout << Evecs[i*(minmn-1) + ii] << " ";
           //}
           //std::cout << std::endl;
+          //#pragma omp barrier
+          double t0_svd = omp_get_wtime();
 
           // DBDSVD stage
           std::vector<double> s(minmn+pad);
@@ -1638,6 +1891,12 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           // Set the full matrix singular values
           s.resize(minmn);
           Sfull.setcol(s, i);
+
+          //#pragma omp barrier
+          double t1_svd = omp_get_wtime();
+          if (tid == 0) {
+            svd_time += t1_svd - t0_svd;
+          }
         }
 
         // Free temporaries (if any)
@@ -1681,6 +1940,9 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp parallel
       {
+        // Capture thread id
+        int tid = omp_get_thread_num();
+
         // Create temporaries
         // BRD stage
         double* workbrd  = (double*) malloc(brdwork * sizeof(double));
@@ -1693,6 +1955,9 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp for
         for (size_t i = 0; i < nslices; i++) {
+          //#pragma omp barrier
+          double t0_brd = omp_get_wtime();
+
           // BRD stage
           double* A_loc    = A_copy.data_ptr + (i * slice_size);
           double* tauq_loc = tauq + (i * minmn);
@@ -1717,6 +1982,12 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
             &info
           );
 
+          //#pragma omp barrier
+          double t1_brd = omp_get_wtime();
+          if (tid == 0) {
+            brd_time += t1_brd - t0_brd;
+          }
+
           //std::cout << "Printing Dvecs[" << i << "]" << std::endl;
           //for (size_t ii = 0; ii < minmn; ii++) {
           //  std::cout << Dvecs[i*minmn + ii] << " ";
@@ -1727,6 +1998,9 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           //  std::cout << Evecs[i*(minmn-1) + ii] << " ";
           //}
           //std::cout << std::endl;
+
+          //#pragma omp barrier
+          double t0_svd = omp_get_wtime();
 
           // DBDSVD stage
           std::vector<double> s(minmn+pad);
@@ -1761,6 +2035,12 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           // Set the full matrix singular values
           s.resize(minmn);
           Sfull.setcol(s, i);
+
+          //#pragma omp barrier
+          double t1_svd = omp_get_wtime();
+          if (tid == 0) {
+            svd_time += t1_svd - t0_svd;
+          }
         }
         // Free temporaries (if any)
         // BRD stage
@@ -1809,6 +2089,9 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp parallel
       {
+        // Capture thread id
+        int tid = omp_get_thread_num();
+
         // Create temporaries
         // LQ stage
         double* workqr = (double*) malloc(qrwork * sizeof(double));
@@ -1824,6 +2107,9 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp for
         for (size_t i = 0; i < nslices; i++) {
+          //#pragma omp barrier
+          double t0_qr = omp_get_wtime();
+
           // LQ stage
           double* slice_loc = A_copy.data_ptr + (i * slice_size);
           double* tau_loc   = tau + (i * minmn);
@@ -1841,6 +2127,15 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
             &qrwork,   // LWORK: Dimension of the array WORK.
             &info      // INFO: Exit code.
           );
+
+          //#pragma omp barrier
+          double t1_qr = omp_get_wtime();
+          if (tid == 0) {
+            qr_time += t1_qr - t0_qr;
+          }
+
+          //#pragma omp barrier
+          double t0_brd = omp_get_wtime();
 
           // BRD stage
           // Copy over L from the LQ stage to a temporary
@@ -1880,6 +2175,12 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
             &info
           );
 
+          //#pragma omp barrier
+          double t1_brd = omp_get_wtime();
+          if (tid == 0) {
+            brd_time += t1_brd - t0_brd;
+          }
+
           //std::cout << "Printing Dvecs[" << i << "]" << std::endl;
           //for (size_t ii = 0; ii < minmn; ii++) {
           //  std::cout << Dvecs[i*minmn + ii] << " ";
@@ -1890,6 +2191,8 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           //  std::cout << Evecs[i*(minmn-1) + ii] << " ";
           //}
           //std::cout << std::endl;
+          //#pragma omp barrier
+          double t0_svd = omp_get_wtime();
 
           // DBDSVD stage
           std::vector<double> s(minmn+pad);
@@ -1924,6 +2227,12 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           // Set the full matrix singular values
           s.resize(minmn);
           Sfull.setcol(s, i);
+
+          //#pragma omp barrier
+          double t1_svd = omp_get_wtime();
+          if (tid == 0) {
+            svd_time += t1_svd - t0_svd;
+          }
         }
         // Free temporaries (if any)
         // LQ stage
@@ -1966,6 +2275,9 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp parallel
       {
+        // Capture thread id
+        int tid = omp_get_thread_num();
+
         // Create temporaries
         // BRD stage
         double* workbrd = (double*) malloc(brdwork * sizeof(double));
@@ -1978,6 +2290,9 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp for
         for (size_t i = 0; i < nslices; i++) {
+          //#pragma omp barrier
+          double t0_brd = omp_get_wtime();
+
           // BRD stage
           double* A_loc = A_copy.data_ptr + (i * slice_size);
           double* tauq_loc = tauq + (i * minmn);
@@ -2002,6 +2317,12 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
             &info
           );
 
+          //#pragma omp barrier
+          double t1_brd = omp_get_wtime();
+          if (tid == 0) {
+            brd_time += t1_brd - t0_brd;
+          }
+
           //std::cout << "Printing Dvecs[" << i << "]" << std::endl;
           //for (size_t ii = 0; ii < minmn; ii++) {
           //  std::cout << Dvecs[i*minmn + ii] << " ";
@@ -2012,6 +2333,8 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           //  std::cout << Evecs[i*(minmn-1) + ii] << " ";
           //}
           //std::cout << std::endl;
+          //#pragma omp barrier
+          double t0_svd = omp_get_wtime();
 
           // DBDSVD stage
           std::vector<double> s(minmn+pad);
@@ -2046,6 +2369,12 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
           // Set the full matrix singular values
           s.resize(minmn);
           Sfull.setcol(s, i);
+
+          //#pragma omp barrier
+          double t1_svd = omp_get_wtime();
+          if (tid == 0) {
+            svd_time += t1_svd - t0_svd;
+          }
         }
         // Free temporaries (if any)
         // BRD stage
@@ -2074,7 +2403,12 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
   //std::cout << "Singular values computed." << std::endl;
   //Sfull.print();
+  #pragma omp barrier
+  t1 = omp_get_wtime();
+  double stage1_time = t1 - t0;
 
+  #pragma omp barrier
+  t0 = omp_get_wtime();
   // Compute the thresholds
   std::vector<size_t> ks = thresholds(Sfull, tol);
   if (verbose) {
@@ -2085,7 +2419,12 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
     std::cout << std::endl;
   }
   Sfull.clear();
+  #pragma omp barrier
+  t1 = omp_get_wtime();
+  double thr_time = t1 - t0;
   
+  #pragma omp barrier
+  t0 = omp_get_wtime();
   // STAGE 2: Recompute singular values and vectors with correct ranks
 
   // Create the output variables
@@ -2983,6 +3322,17 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
       free(Evecs);
     }
   }
+  #pragma omp barrier
+  t1 = omp_get_wtime();
+  double stage2_time = t1 - t0;
+
+  std::cout << "Stage 1 time: " << stage1_time << std::endl
+            << "  QR time   : " << qr_time << std::endl
+            << "  BRD time  : " << brd_time << std::endl
+            << "  SVD time  : " << svd_time << std::endl
+            << "Thr time    : " << thr_time << std::endl
+            << "Stage 2 time: " << stage2_time << std::endl;
+
 
   // Undo scaling
   if (lscl) {
