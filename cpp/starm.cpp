@@ -168,6 +168,8 @@ PYBIND11_MODULE(pystarm, m) {
 	m.def("slicewise_matmul", &slicewise_matmul, "Compute the slice-wise multiplication of the output of slicewise_svd - U, VT and S");
 	m.def("slicewise_svd_thr", &slicewise_svd_thr, "Compute the slice-wise SVD of a tensor given an error tolerance.",
         py::arg("A"), py::arg("tol"), py::arg("verbose") = false);
+	m.def("slicewise_svd_thr2", &slicewise_svd_thr2, "Compute the slice-wise SVD of a tensor given an error tolerance.",
+        py::arg("A"), py::arg("tol"), py::arg("verbose") = false);
 	m.def("slicewise_matmulks", &slicewise_matmulks, "Compute the slice-wise multiplication of the output of slicewise_svdks - U, VT and S");
 	m.def("transform", &transform, "Transform tensor with (multi)ttm in a specified order");
 	m.def("truncate_factors", &truncate_factors, "Truncate a complete TSVDM set of factors given slicewise ranks.",
