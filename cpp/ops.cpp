@@ -1553,6 +1553,10 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svdks(
 std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
   const Tensor &A, double tol, bool verbose=false) {
 
+  #pragma omp barrier
+  double t0, t1;
+  t0 = omp_get_wtime();
+
   // STAGE 0: Preprocessing
   Tensor A_copy(A); // call a copy tensor
 
@@ -1604,6 +1608,10 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
     );
   }
 
+  #pragma omp barrier
+  t1 = omp_get_wtime();
+  double pre_time = t1 - t0;
+
   if (verbose) {
     std::cout << "Maximum entry in tensor: " << anrm << std::endl;
     if (lscl) {
@@ -1615,7 +1623,6 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
   }
 
   #pragma omp barrier
-  double t0, t1;
   double qr_time = 0.0, brd_time = 0.0, svd_time = 0.0;
   t0 = omp_get_wtime(); 
 
@@ -3338,13 +3345,8 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
   t1 = omp_get_wtime();
   double stage2_time = t1 - t0;
 
-  std::cout << "Stage 1 time: " << stage1_time << std::endl
-            << "  QR time   : " << qr_time << std::endl
-            << "  BRD time  : " << brd_time << std::endl
-            << "  SVD time  : " << svd_time << std::endl
-            << "Thr time    : " << thr_time << std::endl
-            << "Stage 2 time: " << stage2_time << std::endl;
-
+  #pragma omp barrier
+  t0 = omp_get_wtime();
 
   // Undo scaling
   if (lscl) {
@@ -3383,11 +3385,28 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
   // Free the copied tensor
   A_copy.clear();
 
+  #pragma omp barrier
+  t1 = omp_get_wtime();
+  double post_time = t1 - t0;
+
+  std::cout << "Pre time    : " << pre_time << std::endl
+            << "Stage 1 time: " << stage1_time << std::endl
+            << "  QR time   : " << qr_time << std::endl
+            << "  BRD time  : " << brd_time << std::endl
+            << "  SVD time  : " << svd_time << std::endl
+            << "Thr time    : " << thr_time << std::endl
+            << "Stage 2 time: " << stage2_time << std::endl
+            << "Post time   : " << post_time << std::endl;
+
   return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
 }
 
 std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr2(
   const Tensor &A, double tol, bool verbose=false) {
+
+  #pragma omp barrier
+  double t0, t1;
+  t0 = omp_get_wtime();
 
   // STAGE 0: Preprocessing
   Tensor A_copy(A); // call a copy tensor
@@ -3440,6 +3459,10 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr2(
     );
   }
 
+  #pragma omp barrier
+  t1 = omp_get_wtime();
+  double pre_time = t1 - t0;
+
   if (verbose) {
     std::cout << "Maximum entry in tensor: " << anrm << std::endl;
     if (lscl) {
@@ -3451,7 +3474,6 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr2(
   }
 
   #pragma omp barrier
-  double t0, t1;
   double qr_time = 0.0, brd_time = 0.0, svd_time = 0.0;
   t0 = omp_get_wtime(); 
 
@@ -5162,13 +5184,8 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr2(
   t1 = omp_get_wtime();
   double stage2_time = t1 - t0;
 
-  std::cout << "Stage 1 time: " << stage1_time << std::endl
-            << "  QR time   : " << qr_time << std::endl
-            << "  BRD time  : " << brd_time << std::endl
-            << "  SVD time  : " << svd_time << std::endl
-            << "Thr time    : " << thr_time << std::endl
-            << "Stage 2 time: " << stage2_time << std::endl;
-
+  #pragma omp barrier
+  t0 = omp_get_wtime();
 
   // Undo scaling
   if (lscl) {
@@ -5206,6 +5223,19 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr2(
 
   // Free the copied tensor
   A_copy.clear();
+
+  #pragma omp barrier
+  t1 = omp_get_wtime();
+  double post_time = t1 - t0;
+
+  std::cout << "Pre time    : " << pre_time << std::endl
+            << "Stage 1 time: " << stage1_time << std::endl
+            << "  QR time   : " << qr_time << std::endl
+            << "  BRD time  : " << brd_time << std::endl
+            << "  SVD time  : " << svd_time << std::endl
+            << "Thr time    : " << thr_time << std::endl
+            << "Stage 2 time: " << stage2_time << std::endl
+            << "Post time   : " << post_time << std::endl;
 
   return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
 }
