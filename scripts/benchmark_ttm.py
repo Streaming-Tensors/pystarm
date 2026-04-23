@@ -119,9 +119,14 @@ def main():
 
     rows = load_csv(args.outcsv)
 
+    # variants = [
+        # ('batched', pystarm.ttm),
+        # ('loop',    pystarm.ttm_loop),
+        # ('parfor',  pystarm.ttm_parfor),
+    # ]
+
     variants = [
-        ('batched', pystarm.ttm),
-        ('loop',    pystarm.ttm_loop),
+        ('parfor',  pystarm.ttm_parfor)
     ]
 
     for variant_name, fn in variants:

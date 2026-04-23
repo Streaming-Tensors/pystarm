@@ -841,6 +841,106 @@ Tensor ttm_loop(Tensor& T, Matrix& M, size_t mode){
     return TO;
 }
 
+Tensor ttm_parfor(Tensor& T, Matrix& M, size_t mode){
+    std::vector<size_t> ten_dims = T.getdims();
+    std::vector<size_t> mat_dims = M.getdims();
+    assert(mat_dims[1] == ten_dims[mode]);
+
+    std::vector<size_t> out_ten_dims(ten_dims);
+    out_ten_dims[mode] = mat_dims[0];
+    size_t buflen = 1;
+    for (size_t i = 0; i<out_ten_dims.size(); i++) buflen = buflen * out_ten_dims[i];
+
+    Tensor TO(buflen, out_ten_dims.size(), out_ten_dims);
+
+    if(mode == 0) {
+        // TTM on first mode — identical to ttm_loop
+        MKL_INT cblas_m = (MKL_INT) mat_dims[0];
+        MKL_INT cblas_k = (MKL_INT) ten_dims[mode];
+        MKL_INT cblas_n = 1;
+        for (size_t i = mode+1; i<out_ten_dims.size(); i++){
+            cblas_n = cblas_n * (MKL_INT) out_ten_dims[i];
+        }
+        double cblas_alpha = 1.0;
+        double cblas_beta = 0.0;
+        double* cblas_a = M.data_ptr;
+        MKL_INT cblas_lda = (MKL_INT) mat_dims[0];
+        double* cblas_b = T.data_ptr;
+        MKL_INT cblas_ldb = (MKL_INT) ten_dims[0];
+        double* cblas_c = TO.data_ptr;
+        MKL_INT cblas_ldc = (MKL_INT) out_ten_dims[0];
+
+        cblas_dgemm(
+            CblasColMajor,
+            CblasNoTrans,
+            CblasNoTrans,
+            cblas_m,
+            cblas_n,
+            cblas_k,
+            cblas_alpha,
+            cblas_a,
+            cblas_lda,
+            cblas_b,
+            cblas_ldb,
+            cblas_beta,
+            cblas_c,
+            cblas_ldc
+        );
+    }
+    else {
+        // Variable names are following Algorithm 3.1 from Tensor textbook
+        size_t Mk = 1;
+        for (size_t i = 0; i<mode; i++){
+            Mk = Mk * ten_dims[i];
+        }
+        size_t Pk = 1;
+        for (size_t i = mode+1; i<ten_dims.size(); i++){
+            Pk = Pk * ten_dims[i];
+        }
+        size_t T_stride_len = Mk * ten_dims[mode];
+        size_t TO_stride_len = Mk * out_ten_dims[mode];
+
+#pragma omp parallel
+        {
+            mkl_set_num_threads_local(1);
+#pragma omp for
+            for(size_t l = 0; l < Pk; l++){
+                MKL_INT cblas_m = (MKL_INT) Mk;
+                MKL_INT cblas_k = (MKL_INT) ten_dims[mode];
+                MKL_INT cblas_n = (MKL_INT) mat_dims[0];
+                double cblas_alpha = 1.0;
+                double cblas_beta = 0.0;
+                double* cblas_a = T.data_ptr + T_stride_len * l;
+                MKL_INT cblas_lda = (MKL_INT) Mk;
+                double* cblas_b = M.data_ptr;
+                MKL_INT cblas_ldb = (MKL_INT) mat_dims[0];
+                double* cblas_c = TO.data_ptr + TO_stride_len * l;
+                MKL_INT cblas_ldc = (MKL_INT) Mk;
+
+                cblas_dgemm(
+                    CblasColMajor,
+                    CblasNoTrans,
+                    CblasTrans,
+                    cblas_m,
+                    cblas_n,
+                    cblas_k,
+                    cblas_alpha,
+                    cblas_a,
+                    cblas_lda,
+                    cblas_b,
+                    cblas_ldb,
+                    cblas_beta,
+                    cblas_c,
+                    cblas_ldc
+                );
+            }
+            mkl_set_num_threads_local(0);
+        }
+    }
+
+    return TO;
+}
+
 Tensor ttm(Tensor& T, Matrix& M, size_t mode){
     std::vector<size_t> ten_dims = T.getdims();
     std::vector<size_t> mat_dims = M.getdims();

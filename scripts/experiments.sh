@@ -4,7 +4,7 @@
 RUN_PYTHON=true
 RUN_MATLAB=false
 
-NTHREADS=16
+NTHREADS=64
 #export OMP_NUM_THREADS=64
 export MKL_NUM_THREADS=$NTHREADS
 export OMP_NUM_THREADS=$NTHREADS
@@ -20,7 +20,7 @@ TENSOR_TOOLBOX_PATH="/global/homes/t/taufique/Codes/tensor_toolbox-v3.8"
 #MTYPES=("dct" "eye" "hosvd")
 MTYPES=("dct")
 
-NUM_RUNS=5
+NUM_RUNS=1
 
 mkdir -p $OUTPUT_DIR
 
@@ -52,12 +52,13 @@ for DNAME in "ncep-air-6"; do
     elif [ "$DNAME" == "ncep-air" ]; then
         DFILE="/global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure"
         PERM_MODES=("0123")
-        K_VALUES=(5 10 20 40)
+        #K_VALUES=(5 10 20 40)
+        K_VALUES=(1 2 3 4)
         K_MAX=1000
     elif [ "$DNAME" == "ncep-air-6" ]; then
         DFILE="/global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure"
         PERM_MODES=("012345")
-        K_VALUES=(5 10 20 40)
+        K_VALUES=(1 2 3 4 5 10 20 40)
     elif [ "$DNAME" == "ncep-slp" ]; then
         DFILE="/global/cfs/cdirs/m4293/taufique/NCEP-NCAR/surface"
         PERM_MODES=("012")
@@ -86,9 +87,11 @@ for DNAME in "ncep-air-6"; do
                     done
 
                 elif [ "$ALG" == "tsvdmii" ]; then
-                    for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25; do
-                    #for TOL in 0.01; do
+                    #for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25; do
+                    #for TOL in 0.002 0.003 0.005 0.007; do
+                    #for TOL in 0.008; do
                     #for TOL in 0.1; do
+                    for TOL in 0.0082 0.0085 0.0088 0.009 0.0092 0.0095 0.0098; do
                         for MTYPE in "${MTYPES[@]}"; do
                             for RUN_ID in $(seq 1 $NUM_RUNS); do
                                 LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${TOL}_${MTYPE}_${PERM_MODE}_${OMP_NUM_THREADS}_run${RUN_ID}"

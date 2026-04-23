@@ -9,7 +9,8 @@ OUTCSV="scripts/benchmark_ttm.csv"
 NRUNS=5
 
 #DATASETS=("ncep-air" "ncep-air-6" "cfd")
-DATASETS=("ncep-air-6" "cfd")
+#DATASETS=("ncep-air-6" "cfd")
+DATASETS=("ncep-air")
 #DATASETS=("cfd")
 #THREADS=(64)
 THREADS=(64 32 16 8 4 2 1)

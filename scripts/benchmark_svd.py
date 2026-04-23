@@ -180,7 +180,6 @@ def main():
             })
             save_csv(args.outcsv, rows)
 
-    A_hat.clear()
     print(f"\nResults written to {args.outcsv}")
 
 
