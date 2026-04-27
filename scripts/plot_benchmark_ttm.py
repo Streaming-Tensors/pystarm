@@ -8,7 +8,7 @@ Each figure has one subplot per TTM mode.
 Each subplot: three lines (batched, loop, parfor), x = thread count (log2), y = mean time (s).
 Runs with time_sec == -1 are excluded. Multiple runs are averaged.
 
-Input:  scripts/benchmark_ttm.csv
+Input:  scripts/benchmark_ttm_<machine>.csv
 Output: plots/benchmark_ttm_ncep-air.pdf
         plots/benchmark_ttm_ncep-air-6.pdf
         plots/benchmark_ttm_cfd.pdf
@@ -37,7 +37,7 @@ matplotlib.rcParams.update({
 # Config
 # ---------------------------------------------------------------------------
 
-CSV_PATH = "scripts/benchmark_ttm.csv"
+CSV_PATH = "scripts/benchmark_ttm_nersc-perlmutter-cpu.csv"
 OUTDIR   = "plots"
 
 DATASETS = {

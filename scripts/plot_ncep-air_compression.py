@@ -44,7 +44,7 @@ PERM_MODE = "0123"
 OMP_NUM_THREADS = 64
 
 DNAME    = "ncep-air"
-CSV_FILE = "scripts/experiments.csv"   # path relative to project root
+CSV_FILE = "scripts/experiments_nersc-perlmutter-cpu.csv"   # path relative to project root
 OUTFILE  = "plots/ncep-air_compression.pdf" # path relative to project root
 TITLE    = "ncep-air: compression ratio"
 

@@ -49,7 +49,7 @@ TOL = 0.01  # tolerance parameter for tsvdmii
 # Thread counts to include on x-axis (must exist in the CSV)
 THREADS = [16, 32, 64]
 
-CSV_FILE = "scripts/experiments.csv"    # path relative to project root
+CSV_FILE = "scripts/experiments_nersc-perlmutter-cpu.csv"    # path relative to project root
 OUTFILE  = "plots/ncep6_scaling.pdf"    # path relative to project root
 TITLE    = "NCEP Air 6-way — Strong Scaling"
 

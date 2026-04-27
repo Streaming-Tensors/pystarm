@@ -44,7 +44,7 @@ PERM_MODE = "01234"
 OMP_NUM_THREADS = 64
 
 DNAME    = "cfd"
-CSV_FILE = "scripts/experiments.csv"   # path relative to project root
+CSV_FILE = "scripts/experiments_nersc-perlmutter-cpu.csv"   # path relative to project root
 OUTFILE  = "plots/cfd_compression.pdf" # path relative to project root
 TITLE    = "cfd: compression ratio"
 

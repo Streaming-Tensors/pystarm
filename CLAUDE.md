@@ -107,9 +107,9 @@ cpp/                    C++ source code
 alg.py                  tsvdm-I and tsvdm-II compress and reconstruct functions
 experiments.py          Unified experiment script for all datasets (tsvdmi, tsvdmii, eof)
 ncep_ranks.py           Run tsvdmii on NCEP data and analyze per-slice rank distributions
-ncep-air_tsvdmii.py     Load NCEP air data, compress+reconstruct with tsvdmii, save reconstruction
-ncep-air_eof.py         Load NCEP air data, compress+reconstruct with EOF (randomized SVD), save reconstruction
-ncep-air_extremes.py    Compare EOF vs tsvdmii reconstruction quality at extreme temperature events
+scripts/ncep/ncep-air_tsvdmii.py     Load NCEP air data, compress+reconstruct with tsvdmii, save reconstruction
+scripts/ncep/ncep-air_eof.py         Load NCEP air data, compress+reconstruct with EOF (randomized SVD), save reconstruction
+scripts/ncep/ncep-air_extremes.py    Compare EOF vs tsvdmii reconstruction quality at extreme temperature events
 ncep-air_snapshot.py    Plot air temperature reconstruction error and values at a single time snapshot
 ncep-slp_tsvdmii.py     Load NCEP SLP data, compress+reconstruct with tsvdmii, save reconstruction
 ncep-slp_eof.py         Load NCEP SLP data, compress+reconstruct with EOF (randomized SVD), save reconstruction
@@ -144,6 +144,7 @@ test.py                 Unit tests and usage examples for pystarm
 | cfd            | .h5 (HDF5)    | 5-way tensor                | No  | `read_cfd_data`          | 01234         |
 | ncep-air       | .nc (NetCDF)  | 73 × 144 × 17 × T (per yr) | No  | `read_ncep_air`           | —             |
 | ncep-slp       | .nc (NetCDF)  | 73 × 144 × T (per yr)      | No  | `read_ncep_slp`           | —             |
+| xray           | .npy (numpy)  | 300 × 400 × 400             | No  | `read_xray_data`          | 012           |
 
 - `traffic-gray` is derived from `traffic.bin` using BT.601 luminance weights matching MATLAB's `im2gray`.
 - `dcmall` is the DC Mall hyperspectral image from `$CFS/m4293/HSI/Hyperspectral_Project/dc.tif`. It is not normalized.
@@ -383,9 +384,9 @@ See `known_issues/README.md`. Key issue: `tsvdmi` with `mtype=eye` on soccer dat
 **Scripts:**
 | Script | Purpose |
 |---|---|
-| `ncep-air_tsvdmii.py` | Load NCEP data, compress+reconstruct with tsvdmii, save `reconstruction.npy` |
-| `ncep-air_eof.py` | Load NCEP data, compress+reconstruct with EOF, save `reconstruction.npy` |
-| `ncep-air_extremes.py` | Load both reconstructions, compute extreme errors, save maps + PDF |
+| `scripts/ncep/ncep-air_tsvdmii.py` | Load NCEP data, compress+reconstruct with tsvdmii, save `reconstruction.npy` |
+| `scripts/ncep/ncep-air_eof.py` | Load NCEP data, compress+reconstruct with EOF, save `reconstruction.npy` |
+| `scripts/ncep/ncep-air_extremes.py` | Load both reconstructions, compute extreme errors, save maps + PDF |
 
 **Output directory structure:**
 ```
@@ -409,7 +410,7 @@ export OMP_NUM_THREADS=64
 export MKL_NUM_THREADS=64
 export MKL_DYNAMIC=FALSE
 
-python ncep-air_tsvdmii.py \
+python scripts/ncep/ncep-air_tsvdmii.py \
     --data-dir /global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure \
     --year-start 1948 --year-end 1957 \
     --tol 0.01 --mtype dct --perm-mode 0123 \
@@ -422,7 +423,7 @@ export OMP_NUM_THREADS=64
 export MKL_NUM_THREADS=64
 export MKL_DYNAMIC=FALSE
 
-python ncep-air_eof.py \
+python scripts/ncep/ncep-air_eof.py \
     --data-dir /global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure \
     --year-start 1948 --year-end 1957 \
     --tol 0.01 --k-max 1000 \
@@ -431,7 +432,7 @@ python ncep-air_eof.py \
 
 **Generate extreme error maps and plots:**
 ```bash
-python ncep-air_extremes.py \
+python scripts/ncep/ncep-air_extremes.py \
     --data-dir /global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure \
     --year-start 1948 --year-end 1957 \
     --tsvdmii-dir /pscratch/sd/t/taufique/pystarm/extremes/ncep-air_tsvdmii_0.01_dct_0123_64 \
@@ -781,7 +782,12 @@ These experiments go in the Design/Implementation section of the paper.
 
 #### Q1: Does batched GEMM outperform loop GEMM for TTM?
 
-**Why it matters:** The paper claims batched GEMM is better than a loop over individual GEMMs, but we have no data to back this up. Both `ttm()` (batched) and `ttm_loop()` (loop) are already implemented in `cpp/ops.cpp`.
+**Why it matters:** The paper claims batched GEMM is better than a loop over individual GEMMs, but we have no data to back this up. Three variants are implemented in `cpp/ops.cpp`:
+- `ttm()` (batched): single `cblas_dgemm_batch_strided` call — MKL manages all blocks
+- `ttm_loop()` (loop): serial loop over blocks, one `cblas_dgemm` per block, multi-threaded MKL per call
+- `ttm_parfor()` (parfor): OMP parallel loop over blocks, each `cblas_dgemm` uses `mkl_set_num_threads_local(1)` — mirrors the slicewise SVD parallelism strategy
+
+pybind11 bindings for all three are in `cpp/starm.cpp`. Rebuild required after any C++ changes: `make all`.
 
 **To collect data:**
 ```bash
@@ -793,6 +799,7 @@ bash scripts/benchmark_ttm.sh
 **Output:** `scripts/benchmark_ttm.csv` with columns `dname, mode, ttm_variant, threads, run_id, time_sec`
 - Upsert behavior: safe to re-run; writes sentinel `-1` before each run and overwrites with actual time on success
 - Datasets: ncep-air, ncep-air-6, cfd; thread counts 64→1; 5 runs each
+- `ttm_variant` values: `batched`, `loop`, `parfor`
 
 ---
 

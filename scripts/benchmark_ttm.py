@@ -9,7 +9,7 @@ Usage:
     python scripts/benchmark_ttm.py \
         --dname ncep-air \
         --dfile /path/to/data \
-        --outcsv scripts/benchmark_ttm.csv \
+        --outcsv scripts/benchmark_ttm_<machine>.csv \
         --nruns 5
 
 Thread count is read from OMP_NUM_THREADS environment variable.
@@ -28,7 +28,7 @@ from scipy.fft import dct
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import pystarm
 from experiments import (
-    read_ncep_air, read_ncep_air_6, read_cfd_data
+    read_ncep_air, read_ncep_air_6, read_cfd_data, read_xray_data
 )
 
 
@@ -74,6 +74,8 @@ def load_data(dname, dfile):
         arr = read_ncep_air_6(dfile, 'air', 1948, 1957)
     elif dname == 'cfd':
         arr = read_cfd_data(dfile)
+    elif dname == 'xray':
+        arr = read_xray_data(dfile)
     else:
         raise ValueError(f"Unknown dname: {dname}")
 
@@ -91,7 +93,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dname',  required=True,  help='Dataset name: ncep-air, ncep-air-6, cfd')
     parser.add_argument('--dfile',  required=True,  help='Path to data directory')
-    parser.add_argument('--outcsv', default=os.path.join(os.path.dirname(__file__), 'benchmark_ttm.csv'),
+    parser.add_argument('--outcsv', default=os.path.join(os.path.dirname(__file__), 'benchmark_ttm_nersc-perlmutter-cpu.csv'),
                         help='Output CSV path')
     parser.add_argument('--nruns',  type=int, default=5, help='Number of timed repetitions')
     args = parser.parse_args()
@@ -119,15 +121,15 @@ def main():
 
     rows = load_csv(args.outcsv)
 
-    # variants = [
-        # ('batched', pystarm.ttm),
-        # ('loop',    pystarm.ttm_loop),
-        # ('parfor',  pystarm.ttm_parfor),
-    # ]
-
     variants = [
-        ('parfor',  pystarm.ttm_parfor)
+        ('batched', pystarm.ttm),
+        ('loop',    pystarm.ttm_loop),
+        ('parfor',  pystarm.ttm_parfor),
     ]
+
+    # variants = [
+        # ('parfor',  pystarm.ttm_parfor)
+    # ]
 
     for variant_name, fn in variants:
         print(f"\n=== variant='{variant_name}' ===")

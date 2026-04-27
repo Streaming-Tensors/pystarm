@@ -34,7 +34,7 @@ matplotlib.rcParams.update({
 PERM_MODE       = "0123"
 OMP_NUM_THREADS = 64
 DNAME           = "ncep-air"
-CSV_FILE        = "scripts/experiments.csv"
+CSV_FILE        = "scripts/experiments_nersc-perlmutter-cpu.csv"
 OUTFILE         = "plots/ncep_dct_vs_eye.pdf"
 TITLE           = "NCEP Air — DCT vs Identity (tsvdmii)"
 FIG_SIZE        = (3.33, 3.0)

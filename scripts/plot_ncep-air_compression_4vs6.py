@@ -32,7 +32,7 @@ matplotlib.rcParams.update({
 # ---------------------------------------------------------------------------
 
 OMP_NUM_THREADS = 64
-CSV_FILE        = "scripts/experiments.csv"
+CSV_FILE        = "scripts/experiments_nersc-perlmutter-cpu.csv"
 OUTFILE         = "plots/ncep-air_compression_4vs6.pdf"
 TITLE           = "ncep-air: compression ratio (4-way vs 6-way)"
 FIG_SIZE        = (3.5, 2.8)

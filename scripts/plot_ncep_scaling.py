@@ -48,7 +48,7 @@ TOL = 0.01  # tolerance parameter for tsvdmii
 # Thread counts to include on x-axis (must exist in the CSV)
 THREADS = [8, 16, 32, 64]
 
-CSV_FILE = "scripts/experiments.csv"        # path relative to project root
+CSV_FILE = "scripts/experiments_nersc-perlmutter-cpu.csv"        # path relative to project root
 OUTFILE  = "plots/ncep_scaling.pdf"         # path relative to project root
 TITLE    = f"ncep-air-6: strong scaling (tsvdmi rel.err≈0.006, tsvdmii rel.err≈0.010)"
 

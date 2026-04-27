@@ -2,6 +2,112 @@
 
 ---
 
+## Session — 2026-04-27
+
+### What was done
+
+#### Xray crystallography data integrated
+
+New dataset `xray` added (`z3d_movo.npy`, shape `300×400×400`, no normalization, perm-mode `012`).
+
+**Files changed:**
+- `experiments.py`: Added `read_xray_data` function; added `xray` branch in dname if/elif block; updated `-dname` help string
+- `scripts/benchmark_ttm.py`: Imported `read_xray_data`; added `xray` branch in `load_data`; updated `--outcsv` default and docstring
+- `scripts/benchmark_svd.py`: Same changes as benchmark_ttm.py
+- `scripts/benchmark_ttm.sh`: Added `DFILE_XRAY` path
+- `scripts/benchmark_svd.sh`: Added `DFILE_XRAY` path
+- `scripts/experiments.sh`: Added xray dataset block (`DFILE`, `PERM_MODES=("012")`, `K_VALUES=(5 10 20 40 80 100 150 200 250)`); added xray to commented-out full dataset list; active loop set to `"xray"`
+- `CLAUDE.md`: Added xray row to datasets table
+
+---
+
+#### Benchmark scripts updated for multi-machine support + configurable iterations
+
+**Machine separation:** All benchmark CSV output files now include the machine name. Existing NERSC data files renamed accordingly.
+
+**Files renamed:**
+- `scripts/benchmark_ttm.csv` → `scripts/benchmark_ttm_nersc-perlmutter-cpu.csv`
+- `scripts/benchmark_svd.csv` → `scripts/benchmark_svd_nersc-perlmutter-cpu.csv`
+- `scripts/experiments.csv` → `scripts/experiments_nersc-perlmutter-cpu.csv`
+
+**`scripts/benchmark_ttm.sh` and `scripts/benchmark_svd.sh` restructured:**
+- Added `MACHINE` variable — change this one value to switch between machines (e.g. `nersc-perlmutter-cpu`, `alcf-aurora`)
+- `OUTCSV` derived automatically as `benchmark_ttm_${MACHINE}.csv`
+- All data paths moved to named variables at the top (`DFILE_NCEP_AIR`, `DFILE_CFD`, `DFILE_XRAY`, etc.) — update these per machine
+- `NRUNS` now resolved per-thread via bash indirect expansion: set `NRUNS_1=`, `NRUNS_2=`, etc. to override for slow thread counts, or leave empty to use `NRUNS_DEFAULT`
+
+**All plot scripts updated** to reference renamed CSV files:
+- `plot_benchmark_ttm.py`, `plot_benchmark_svd.py`: updated `CSV_PATH`
+- All `plot_ncep*.py`, `plot_cfd*.py`: updated `CSV_FILE`
+- `benchmark_ttm.py`, `benchmark_svd.py`: updated `--outcsv` defaults and docstrings
+
+**To run on Aurora:** set `MACHINE="alcf-aurora"` and update `DFILE_*` paths at the top of each bash script.
+
+---
+
+#### NCEP air extreme plot — padding tightened
+
+`scripts/ncep/ncep-air_extremes.py` `plot_maps` function updated:
+- `hspace` reduced from 0.15 → 0.05
+- Explicit `top=0.92`, `bottom=0.03`, `left=0.02` added to `subplots_adjust`
+- Colorbar axes adjusted from `[0.85, 0.15, 0.03, 0.7]` → `[0.85, 0.05, 0.03, 0.88]`
+
+Regenerate plot with: `bash scripts/ncep-air_extreme.sh` (comment out steps 1 and 2 to skip reconstructions and only replot).
+
+---
+
+## Session — 2026-04-22
+
+### What was done
+
+#### Added `ttm_parfor` — new TTM benchmark variant
+
+A third TTM parallelization strategy added alongside `ttm` (batched BLAS) and `ttm_loop` (serial loop):
+
+- **`ttm_parfor`**: OMP parallel loop over the `Pk` blocks, each `cblas_dgemm` call bracketed with `mkl_set_num_threads_local(1)` / `(0)` — single-threaded MKL per block. Mirrors the slicewise SVD parallelism pattern exactly.
+- Mode 0 is identical to `ttm_loop` and `ttm` (single `cblas_dgemm`, nothing to parallelize).
+
+**Files changed:**
+- `cpp/ops.cpp`: Added `ttm_parfor` function (inserted before `ttm`)
+- `cpp/starm.cpp`: Added pybind11 binding for `ttm_parfor`
+- `scripts/benchmark_ttm.py`: Added `('parfor', pystarm.ttm_parfor)` as third entry in `variants` (note: existing variants commented out to run parfor only — restore all three when re-running full benchmark)
+- `scripts/plot_benchmark_ttm.py`: Added `parfor` series (green, dotted, triangle marker); legend `ncol` 2→3; suptitle and docstring updated
+- `CLAUDE.md`: Q1 section updated to document all three variants
+
+**Next steps:**
+- `make all` on NERSC to rebuild
+- Re-run `benchmark_ttm.sh` to collect parfor timing data
+
+---
+
+#### Time-mean centering added to NCEP air extreme event scripts
+
+Following standard EOF analysis practice, temporal mean is now subtracted before compression and added back after reconstruction in both scripts. This ensures both methods compress anomalies rather than the raw temperature field.
+
+Centering is the universally accepted standard preprocessing step before EOF analysis in climate science — it ensures the decomposition captures variability rather than the climatological mean state. References:
+- [UCAR Climate Data Guide — EOF Analysis](https://climatedataguide.ucar.edu/climate-tools/empirical-orthogonal-function-eof-analysis-and-rotated-eof-analysis): *"Preprocessing involves removing the temporal mean (climatology) at each spatial point to obtain anomalies"*
+- [EOFs via Eigenanalysis — Climate and Geophysical Data Analysis](https://kls2177.github.io/Climate-and-Geophysical-Data-Analysis/chapters/Week7/eofs.html)
+- [Wikipedia — Empirical orthogonal functions](https://en.wikipedia.org/wiki/Empirical_orthogonal_functions)
+
+**Files changed:**
+- `scripts/ncep/ncep-air_tsvdmii.py`: Compute `mean = arr.mean(axis=-1)`, subtract before compress, add back after reconstruct, compute relative error in original uncentered space
+- `scripts/ncep/ncep-air_eof.py`: Same centering pattern applied
+
+#### NCEP scripts reorganized into `scripts/ncep/`
+
+Three scripts moved from project root to `scripts/ncep/`:
+- `ncep-air_tsvdmii.py` → `scripts/ncep/ncep-air_tsvdmii.py`
+- `ncep-air_eof.py` → `scripts/ncep/ncep-air_eof.py`
+- `ncep-air_extremes.py` → `scripts/ncep/ncep-air_extremes.py`
+
+`sys.path.insert` added to `ncep-air_tsvdmii.py` and `ncep-air_eof.py` to resolve `experiments` and `alg` imports from the project root. All scripts still run from the project root.
+
+**New script:** `scripts/ncep-air_extreme.sh` — runs the full Analysis 1 pipeline (tsvdmii → EOF → extremes plot) with separate `TOL_TSVDMII` and `TOL_EOF` variables at the top.
+
+**Files updated:** `CLAUDE.md`, `scripts/ncep-air_extreme.sh`
+
+---
+
 ## Session — 2026-04-20
 
 ### What was done

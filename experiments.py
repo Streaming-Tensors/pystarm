@@ -117,6 +117,15 @@ def read_dcmall_data(filepath):
     return arr
 
 
+def read_xray_data(filepath):
+    """Read xray crystallography data from a .npy file and return a Fortran-order float64 tensor."""
+    arr = np.load(filepath).astype(np.float64)
+    print("Xray raw shape:", arr.shape)
+    x = np.zeros(arr.shape, dtype=np.float64, order='F')
+    x[...] = arr
+    return x
+
+
 def read_ncep_air(data_dir, variable, year_start, year_end):
     """Read NCEP Reanalysis pressure-level files for a range of years and return
     a single Fortran-order float64 tensor with shape (lat, lon, level, time).
@@ -254,7 +263,7 @@ if __name__ == "__main__":
     parser.add_argument("-k",         "--k",         type=int,   help="Slice rank for tsvdm-I")
     parser.add_argument("-tol",       "--tol",       type=float, help="Error tolerance for tsvdm-II or EOF")
     parser.add_argument("-k-max",     "--k-max",     type=int,   default=1000, help="Max rank for randomized SVD (EOF only)")
-    parser.add_argument("-dname",     "--dname",     type=str,   help="Data name (e.g. soccer, traffic, cfd)")
+    parser.add_argument("-dname",     "--dname",     type=str,   help="Data name (e.g. soccer, traffic, cfd, xray)")
     parser.add_argument("-dfile",     "--dfile",     type=str,   help="Path to the data file or directory")
     parser.add_argument("-perm-mode", "--perm-mode", type=str,   help="Permutation of modes as a string of digits (e.g. '120'), so that the last mode becomes the transformation mode")
     args = parser.parse_args()
@@ -295,6 +304,8 @@ if __name__ == "__main__":
         arr = read_ncep_air_6(dfile, "air", 1948, 1957)
     elif dname == "ncep-slp":
         arr = read_ncep_slp(dfile, 1985, 2015)
+    elif dname == "xray":
+        arr = read_xray_data(dfile)
     else:
         raise ValueError(f"Unknown dname: {dname}")
 

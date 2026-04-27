@@ -7,7 +7,7 @@ One PDF per dataset (ncep-air-6, cfd).
 Each figure: two lines (parfor, seq), x = thread count (log2), y = mean time (s).
 Runs with time_sec == -1 are excluded. Multiple runs are averaged.
 
-Input:  scripts/benchmark_svd.csv
+Input:  scripts/benchmark_svd_<machine>.csv
 Output: plots/benchmark_svd_ncep-air-6.pdf
         plots/benchmark_svd_cfd.pdf
 
@@ -34,7 +34,7 @@ matplotlib.rcParams.update({
 # Config
 # ---------------------------------------------------------------------------
 
-CSV_PATH = "scripts/benchmark_svd.csv"
+CSV_PATH = "scripts/benchmark_svd_nersc-perlmutter-cpu.csv"
 
 DATASETS = {
     "ncep-air-6": "plots/benchmark_svd_ncep-air-6.pdf",

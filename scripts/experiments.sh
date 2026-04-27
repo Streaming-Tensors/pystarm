@@ -24,8 +24,8 @@ NUM_RUNS=1
 
 mkdir -p $OUTPUT_DIR
 
-#for DNAME in "soccer" "traffic-color" "traffic-gray" "dcmall" "cfd" "ncep-air" "ncep-air-6" "ncep-slp"; do
-for DNAME in "ncep-air-6"; do
+#for DNAME in "soccer" "traffic-color" "traffic-gray" "dcmall" "cfd" "ncep-air" "ncep-air-6" "ncep-slp" "xray"; do
+for DNAME in "xray"; do
 
     # --- Dataset definitions (shared by Python and MATLAB) ---
     if [ "$DNAME" == "soccer" ]; then
@@ -64,15 +64,19 @@ for DNAME in "ncep-air-6"; do
         PERM_MODES=("012")
         K_VALUES=(5 10 20 40)
         K_MAX=1000
+    elif [ "$DNAME" == "xray" ]; then
+        DFILE="/global/cfs/cdirs/m4293/xray/z3d_movo.npy"
+        PERM_MODES=("012")
+        K_VALUES=(5 10 20 40 80 100 150 200 250)
     fi
 
     for PERM_MODE in "${PERM_MODES[@]}"; do
 
         # --- Python experiments ---
         if [ "$RUN_PYTHON" == "true" ]; then
-            #for ALG in "tsvdmi" "tsvdmii" "eof"; do
+            for ALG in "tsvdmi" "tsvdmii"; do
             #for ALG in "tsvdmii"; do
-            for ALG in "tsvdmi"; do
+            #for ALG in "tsvdmi"; do
             #for ALG in "eof"; do
 
                 if [ "$ALG" == "tsvdmi" ]; then
@@ -87,11 +91,11 @@ for DNAME in "ncep-air-6"; do
                     done
 
                 elif [ "$ALG" == "tsvdmii" ]; then
-                    #for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25; do
+                    for TOL in 0.0001 0.001 0.01 0.025 0.050 0.1 0.25; do
                     #for TOL in 0.002 0.003 0.005 0.007; do
                     #for TOL in 0.008; do
                     #for TOL in 0.1; do
-                    for TOL in 0.0082 0.0085 0.0088 0.009 0.0092 0.0095 0.0098; do
+                    #for TOL in 0.0082 0.0085 0.0088 0.009 0.0092 0.0095 0.0098; do
                         for MTYPE in "${MTYPES[@]}"; do
                             for RUN_ID in $(seq 1 $NUM_RUNS); do
                                 LOGFILE="${OUTPUT_DIR}/${OUTPUT_PREFIX}${DNAME}_${ALG}_${TOL}_${MTYPE}_${PERM_MODE}_${OMP_NUM_THREADS}_run${RUN_ID}"
