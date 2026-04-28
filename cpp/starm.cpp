@@ -155,12 +155,12 @@ PYBIND11_MODULE(pystarm, m) {
 	m.def("ttm", &ttm, "Tensor times matrix multiply on a specific mode by batched BLAS");
 	m.def("slicewise_svdvals", &slicewise_svdvals, "Compute the slice-wise singular values of a tensor",
         py::arg("A"), py::arg("verbose") = false);
-	m.def("slicewise_svdvals_mkl", &slicewise_svdvals_mkl, "Compute the slice-wise singular values of a tensor using batched LAPACK",
-        py::arg("A"), py::arg("verbose") = false);
+	//m.def("slicewise_svdvals_mkl", &slicewise_svdvals_mkl, "Compute the slice-wise singular values of a tensor using batched LAPACK",
+  //      py::arg("A"), py::arg("verbose") = false);
 	m.def("slicewise_svd", &slicewise_svd, "Compute the slice-wise thin SVD of a tensor",
         py::arg("A"), py::arg("verbose") = false);
-	m.def("slicewise_svd_mkl", &slicewise_svd_mkl, "Compute the slice-wise thin SVD of a tensor using batched LAPACK",
-        py::arg("A"), py::arg("verbose") = false);
+	//m.def("slicewise_svd_mkl", &slicewise_svd_mkl, "Compute the slice-wise thin SVD of a tensor using batched LAPACK",
+  //      py::arg("A"), py::arg("verbose") = false);
 	m.def("slicewise_svdx", &slicewise_svdx, "Compute the truncated slice-wise SVD of a tensor",
         py::arg("A"), py::arg("k"), py::arg("verbose") = false);
 	m.def("slicewise_svdks", &slicewise_svdks, "Compute the truncated slice-wise SVD of a tensor with different ranks per frontal slice",

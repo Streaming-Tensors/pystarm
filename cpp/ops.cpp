@@ -1145,50 +1145,7 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd(const Tensor &A, bool verbose=f
   return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
 }
 
-std::tuple<Tensor, Matrix, Tensor> slicewise_svdx(const Tensor &A, size_t k,
-                                                    bool verbose=false) {
-  // Create the variables
-  std::vector<size_t> Udims = A.dims;
-  Udims[1] = k;
-  size_t Ubuflen = std::accumulate(Udims.begin(), Udims.end(), (size_t)1, std::multiplies<size_t>());
-  Tensor U(Ubuflen, A.ndim, Udims);
-
-  std::vector<size_t> Vtdims = A.dims;
-  Vtdims[0] = k;
-  size_t Vtbuflen = std::accumulate(Vtdims.begin(), Vtdims.end(), (size_t)1, std::multiplies<size_t>());
-  Tensor Vt(Vtbuflen, A.ndim, Vtdims);
-
-  Matrix S(k*A.nslices, k, A.nslices);
-
-  // Call slice-wise SVDs
-#pragma omp parallel
-  {
-    // Temporary slicewise SVD objects 
-    //Matrix Us(Udims[0] * k, Udims[0], k);
-    //Matrix Vst(k * Vtdims[1], k, Vtdims[1]);
-    Matrix Us;
-    Matrix Vst;
-    std::vector<double> s(k);
-#pragma omp for
-    for (size_t i = 0; i < A.nslices; i++) {
-
-        // Compute the SVD
-        std::tie(Us, s, Vst) = svdx(A.getfrontalslice_copy(i), k, verbose);
-
-        // Set the output tensors
-        U.setfrontalslice(Us, i);
-        S.setcol(s, i);
-        Vt.setfrontalslice(Vst, i);
-    }
-
-    // Clear temporary stuff
-    Us.clear();
-    Vst.clear();
-  }
-
-  return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
-}
-
+/* TODO: Need to work around instabilities in MKL SVD batch strided
 std::tuple<Tensor, Matrix, Tensor> slicewise_svd_mkl(const Tensor &A, bool verbose=false) {
   size_t r = std::min(A.dims[0], A.dims[1]);
 
@@ -1306,6 +1263,51 @@ std::tuple<Tensor, Matrix, Tensor> slicewise_svd_mkl(const Tensor &A, bool verbo
 
   return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
 }
+*/
+
+std::tuple<Tensor, Matrix, Tensor> slicewise_svdx(const Tensor &A, size_t k,
+                                                    bool verbose=false) {
+  // Create the variables
+  std::vector<size_t> Udims = A.dims;
+  Udims[1] = k;
+  size_t Ubuflen = std::accumulate(Udims.begin(), Udims.end(), (size_t)1, std::multiplies<size_t>());
+  Tensor U(Ubuflen, A.ndim, Udims);
+
+  std::vector<size_t> Vtdims = A.dims;
+  Vtdims[0] = k;
+  size_t Vtbuflen = std::accumulate(Vtdims.begin(), Vtdims.end(), (size_t)1, std::multiplies<size_t>());
+  Tensor Vt(Vtbuflen, A.ndim, Vtdims);
+
+  Matrix S(k*A.nslices, k, A.nslices);
+
+  // Call slice-wise SVDs
+#pragma omp parallel
+  {
+    // Temporary slicewise SVD objects 
+    //Matrix Us(Udims[0] * k, Udims[0], k);
+    //Matrix Vst(k * Vtdims[1], k, Vtdims[1]);
+    Matrix Us;
+    Matrix Vst;
+    std::vector<double> s(k);
+#pragma omp for
+    for (size_t i = 0; i < A.nslices; i++) {
+
+        // Compute the SVD
+        std::tie(Us, s, Vst) = svdx(A.getfrontalslice_copy(i), k, verbose);
+
+        // Set the output tensors
+        U.setfrontalslice(Us, i);
+        S.setcol(s, i);
+        Vt.setfrontalslice(Vst, i);
+    }
+
+    // Clear temporary stuff
+    Us.clear();
+    Vst.clear();
+  }
+
+  return std::make_tuple(std::move(U), std::move(S), std::move(Vt));
+}
 
 Matrix slicewise_svdvals(const Tensor &A, bool verbose=false) {
   size_t r = std::min(A.dims[0], A.dims[1]);
@@ -1330,6 +1332,7 @@ Matrix slicewise_svdvals(const Tensor &A, bool verbose=false) {
   return S;
 }
 
+/* TODO: Need to work around instabilities in MKL SVD batch strided
 Matrix slicewise_svdvals_mkl(const Tensor &A, bool verbose=false) {
   size_t r = std::min(A.dims[0], A.dims[1]);
   Matrix S(r*A.nslices, r, A.nslices);
@@ -1436,6 +1439,7 @@ Matrix slicewise_svdvals_mkl(const Tensor &A, bool verbose=false) {
 
   return S;
 }
+*/
 
 std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> truncate_factors(
   const Tensor &U, const Matrix &S, const Tensor &Vt, std::vector<size_t> ks) {
@@ -1558,7 +1562,17 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
   t0 = omp_get_wtime();
 
   // STAGE 0: Preprocessing
-  Tensor A_copy(A); // call a copy tensor
+  //Tensor A_copy(A); // call a copy tensor
+  Tensor A_copy(A.buflen, A.ndim, A.dims);
+
+  /*
+#pragma omp for
+  for (size_t ii = 0; ii < A.nslices; ii++) {
+    Matrix As = A.getfrontalslice_copy(ii);
+    A_copy.setfrontalslice(A.getfrontalslice_copy(ii), ii);
+    As.clear();
+  }
+  */
 
   // Scale the data
   // Get the machine constants
@@ -1772,6 +1786,11 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp for
         for (size_t i = 0; i < nslices; i++) {
+          // Copy over a slice
+          Matrix As = A.getfrontalslice_copy(i);
+          A_copy.setfrontalslice(A.getfrontalslice_copy(i), i);
+          As.clear();
+
           //#pragma omp barrier
           double t0_qr = omp_get_wtime();
 
@@ -1961,6 +1980,11 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp for
         for (size_t i = 0; i < nslices; i++) {
+          // Copy over a slice
+          Matrix As = A.getfrontalslice_copy(i);
+          A_copy.setfrontalslice(A.getfrontalslice_copy(i), i);
+          As.clear();
+
           //#pragma omp barrier
           double t0_brd = omp_get_wtime();
 
@@ -2117,6 +2141,11 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp for
         for (size_t i = 0; i < nslices; i++) {
+          // Copy over a slice
+          Matrix As = A.getfrontalslice_copy(i);
+          A_copy.setfrontalslice(A.getfrontalslice_copy(i), i);
+          As.clear();
+
           //#pragma omp barrier
           double t0_qr = omp_get_wtime();
 
@@ -2304,6 +2333,11 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp for
         for (size_t i = 0; i < nslices; i++) {
+          // Copy over a slice
+          Matrix As = A.getfrontalslice_copy(i);
+          A_copy.setfrontalslice(A.getfrontalslice_copy(i), i);
+          As.clear();
+
           //#pragma omp barrier
           double t0_brd = omp_get_wtime();
 
