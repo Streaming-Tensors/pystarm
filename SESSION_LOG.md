@@ -2,6 +2,52 @@
 
 ---
 
+## Session — 2026-04-28
+
+### What was done
+
+#### Aurora (ALCF) support added to experiment scripts
+
+All benchmark and experiment scripts updated to support ALCF Aurora alongside NERSC Perlmutter. Switch between machines by setting `MACHINE=` at the top of each bash script.
+
+**New PBS job scripts (Aurora):**
+- `scripts/job_alcf_benchmark_ttm.sh` — 12h, account=DFTCalc2, queue=prod, 1 node, filesystems=home:flare
+- `scripts/job_alcf_benchmark_svd.sh` — same
+- `scripts/job_alcf_experiments.sh` — same
+
+Submit with: `qsub scripts/job_alcf_<script>.sh`
+
+**`scripts/benchmark_ttm.sh`:**
+- Added `#MACHINE="alcf-aurora"` toggle (comment/uncomment to switch)
+- Data paths moved into `if/elif` block per machine
+- Aurora paths: NCEP → `.../starM-HPC/starMData/ncep/pressure`, CFD → `.../starMData/cfd`, xray → `.../starMData/xray/z3d_movo.npy`
+
+**`scripts/benchmark_svd.sh`:**
+- Same machine toggle and data path block as benchmark_ttm.sh
+
+**`scripts/experiments.sh` (significant restructure):**
+- Added `MACHINE` toggle with machine-based `OUTPUT_DIR` and `DFILE_*` paths
+  - Aurora output: `/lus/flare/projects/DFTCalc2/pystarm/logs`
+- Added outer thread sweep loop: `THREADS=(64 32 16 8 4 2 1)` — applies to both Perlmutter and Aurora (was previously fixed at `NTHREADS=1`)
+- `NUM_RUNS` increased from 1 → 3
+- `ncep-air` k values updated: `1 2 3 4` → `1 2 3 4 5 10 20 40` (matches ncep-air-6)
+- Active dataset loop set to `ncep-air ncep-air-6 cfd xray`
+
+**`Makefile`:**
+- Added comment documenting `MKLROOT` for both machines:
+  - Perlmutter: `/global/common/software/nersc9/intel/oneapi/mkl/2024.1`
+  - Aurora: `/opt/aurora/26.26.0/oneapi/mkl/latest`
+
+**Aurora machine details:**
+- Compiler: GNU gcc/g++ (same as Perlmutter)
+- Scheduler: PBS Pro (`qsub`)
+- Cores/node: 104 (thread sweep kept at 64→1, not extended to 104)
+- Code dir: `/home/mth/Codes/pystarm`
+- Env setup: `source scripts/alcf-env-setup.sh` (script already exists on Aurora)
+- Project/account: `DFTCalc2`
+
+---
+
 ## Session — 2026-04-27
 
 ### What was done

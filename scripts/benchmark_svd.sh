@@ -7,18 +7,25 @@ export MKL_DYNAMIC=FALSE
 
 # --- Machine ---
 MACHINE="nersc-perlmutter-cpu"
+#MACHINE="alcf-aurora"
 
 # --- Output ---
 OUTCSV="scripts/benchmark_svd_${MACHINE}.csv"
 
 # --- Datasets ---
-#DATASETS=("ncep-air-6" "cfd")
+#DATASETS=("ncep-air-6" "cfd" "xray")
 DATASETS=("xray")
 
-# --- Data paths (update for each machine) ---
-DFILE_NCEP_AIR_6="/global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure"
-DFILE_CFD="/global/cfs/cdirs/m4293/starMData/"
-DFILE_XRAY="/global/cfs/cdirs/m4293/xray/z3d_movo.npy"
+# --- Data paths ---
+if [ "$MACHINE" == "nersc-perlmutter-cpu" ]; then
+    DFILE_NCEP_AIR_6="/global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure"
+    DFILE_CFD="/global/cfs/cdirs/m4293/starMData/"
+    DFILE_XRAY="/global/cfs/cdirs/m4293/xray/z3d_movo.npy"
+elif [ "$MACHINE" == "alcf-aurora" ]; then
+    DFILE_NCEP_AIR_6="/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure"
+    DFILE_CFD="/lus/flare/projects/DFTCalc2/starM-HPC/starMData/cfd"
+    DFILE_XRAY="/lus/flare/projects/DFTCalc2/starM-HPC/starMData/xray/z3d_movo.npy"
+fi
 
 # --- Thread counts ---
 THREADS=(64 32 16 8 4 2 1)

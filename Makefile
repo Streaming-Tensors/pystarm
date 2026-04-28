@@ -1,5 +1,9 @@
 ## Following: https://pybind11.readthedocs.io/en/stable/compiling.html#building-manually
 ## Comments generated with claude-code
+##
+## Set MKLROOT before building:
+##   NERSC Perlmutter: export MKLROOT=/global/common/software/nersc9/intel/oneapi/mkl/2024.1
+##   ALCF Aurora:      export MKLROOT=/opt/aurora/26.26.0/oneapi/mkl/latest
 
 ## Base compiler flags shared between production and ASAN builds
 # -Wall      : enable all compiler warnings
