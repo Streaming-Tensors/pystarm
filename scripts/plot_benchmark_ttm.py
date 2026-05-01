@@ -37,20 +37,30 @@ matplotlib.rcParams.update({
 # Config
 # ---------------------------------------------------------------------------
 
-CSV_PATH = "scripts/benchmark_ttm_nersc-perlmutter-cpu.csv"
+CSV_PATH = "scripts/benchmark_ttm_alcf-aurora.csv"
 OUTDIR   = "plots"
 
 DATASETS = {
     "ncep-air":   {"modes": [2, 3],       "outfile": "plots/benchmark_ttm_ncep-air.pdf"},
     "ncep-air-6": {"modes": [2, 3, 4, 5], "outfile": "plots/benchmark_ttm_ncep-air-6.pdf"},
     "cfd":        {"modes": [2, 3, 4],    "outfile": "plots/benchmark_ttm_cfd.pdf"},
+    "xray":       {"modes": [2],          "outfile": "plots/benchmark_ttm_xray.pdf"},
 }
+
+# Mode dimension sizes (0-based mode index → size). Omit entries where size is unknown.
+MODE_DIMS = {
+    "ncep-air":   {2: 17,  3: 14612},
+    "ncep-air-6": {2: 17,  3: 4,    4: 365, 5: 10},
+    "xray":       {2: 400},
+}
+
+DISPLAY_NAMES = {"ncep-air": "ncep-air-4", "ncep-air-6": "ncep-air-6", "cfd": "cfd", "xray": "xray"}
 
 # ACM two-column: one column ~ 3.33 inches wide
 COL_WIDTH = 3.33
 ROW_HEIGHT = 1.5
 
-COLORS = {"batched": "#4C72B0", "loop": "#DD8452", "parfor": "#55A868"}
+COLORS = {"batched": "tab:blue", "loop": "tab:orange", "parfor": "tab:green"}
 LSTYLE = {"batched": "-",       "loop": "--",      "parfor": ":"}
 MARKER = {"batched": "o",       "loop": "s",       "parfor": "^"}
 
@@ -100,6 +110,7 @@ for dname, cfg in DATASETS.items():
                     label=variant)
 
         ax.set_xscale("log", base=2)
+        ax.set_yscale("log")
         threads_present = sorted(agg.loc[
             (agg["dname"] == dname) & (agg["mode"] == mode), "threads"
         ].unique())
@@ -107,14 +118,17 @@ for dname, cfg in DATASETS.items():
         ax.set_xticklabels([str(t) for t in threads_present])
         ax.set_xlabel("threads")
         ax.set_ylabel("time (s)")
-        ax.set_title(f"mode {mode}")
+        mode_1based = mode + 1
+        dim = MODE_DIMS.get(dname, {}).get(mode)
+        title = f"mode {mode_1based} (dimension={dim})" if dim is not None else f"mode {mode_1based}"
+        ax.set_title(title)
         ax.grid(True, axis="y", alpha=0.4)
 
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=3,
-               bbox_to_anchor=(0.5, -0.08))
+               bbox_to_anchor=(0.5, -0.04))
 
-    fig.suptitle(f"TTM batched vs loop vs parfor — {dname}", fontsize=8, y=1.01)
+    fig.suptitle(f"TTM Benchmarking — {DISPLAY_NAMES[dname]}", fontsize=8, y=1.01)
     plt.tight_layout()
     plt.savefig(cfg["outfile"], bbox_inches="tight")
     plt.close()

@@ -50,7 +50,7 @@ THREADS = [8, 16, 32, 64]
 
 CSV_FILE = "scripts/experiments_nersc-perlmutter-cpu.csv"    # path relative to project root
 OUTFILE  = "plots/ncep_scaling.pdf"     # path relative to project root
-TITLE    = f"ncep-air: strong scaling (tsvdmi rel.err≈0.006, tsvdmii rel.err≈0.010)"
+TITLE    = f"ncep-air-4: strong scaling (t-SVDM-I rel.err≈0.006, t-SVDM-II rel.err≈0.010)"
 
 FIG_SIZE = (3.33, 3.5)
 
@@ -155,8 +155,8 @@ ax.grid(True, axis="y")
 # --- Legend: component colors + algorithm indicators ---
 # Add tsvdmi / tsvdmii distinguisher patches at the top of the legend
 alg_handles = [
-    mpatches.Patch(facecolor="grey", hatch=None,          edgecolor="black", label=f"tsvdmi  (k={K})"),
-    mpatches.Patch(facecolor="grey", hatch=TSVDMII_HATCH, edgecolor="black", label=f"tsvdmii (tol={TOL})"),
+    mpatches.Patch(facecolor="grey", hatch=None,          edgecolor="black", label=f"t-SVDM-I (k={K})"),
+    mpatches.Patch(facecolor="grey", hatch=TSVDMII_HATCH, edgecolor="black", label=f"t-SVDM-II (tol={TOL})"),
 ]
 component_handles = list(legend_handles.values())
 ax.legend(handles=alg_handles + component_handles, loc="upper right", fontsize=8)

@@ -36,7 +36,7 @@ OMP_NUM_THREADS = 64
 DNAME           = "ncep-air"
 CSV_FILE        = "scripts/experiments_nersc-perlmutter-cpu.csv"
 OUTFILE         = "plots/ncep_dct_vs_eye.pdf"
-TITLE           = "NCEP Air — DCT vs Identity (tsvdmii)"
+TITLE           = "ncep-air-4 — DCT vs Identity (t-SVDM-II)"
 FIG_SIZE        = (3.33, 3.0)
 
 # ---------------------------------------------------------------------------
@@ -64,11 +64,11 @@ ax  = fig.add_subplot(gs[0, 0])
 
 if not data_tsvdmii_dct.empty:
     ax.plot(data_tsvdmii_dct["relative_err"], data_tsvdmii_dct["compression_ratio"],
-            marker="x", label="tsvdmii-dct")
+            marker="x", label="t-SVDM-II-DCT")
 
 if not data_tsvdmii_eye.empty:
     ax.plot(data_tsvdmii_eye["relative_err"], data_tsvdmii_eye["compression_ratio"],
-            marker="s", label="tsvdmii-eye")
+            marker="s", label="t-SVDM-II-Identity")
 
 
 ax.set_yscale("log")

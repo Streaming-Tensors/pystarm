@@ -141,7 +141,7 @@ test.py                 Unit tests and usage examples for pystarm
 | traffic-color  | .bin (binary) | H × W × 3 × T              | Yes | `read_traffic_data`      | 0123, 0321    |
 | traffic-gray   | .bin (binary) | H × W × T                  | Yes | `read_traffic_gray_data` | 012, 021, 120 |
 | dcmall         | .tif (image)  | 191 × 1280 × 307            | No  | `read_dcmall_data`       | 021           |
-| cfd            | .h5 (HDF5)    | 5-way tensor                | No  | `read_cfd_data`          | 01234         |
+| cfd            | .h5 (HDF5)    | 253 × 253 × 253 × 4 × 6    | No  | `read_cfd_data`          | 01234         |
 | ncep-air       | .nc (NetCDF)  | 73 × 144 × 17 × T (per yr) | No  | `read_ncep_air`           | —             |
 | ncep-slp       | .nc (NetCDF)  | 73 × 144 × T (per yr)      | No  | `read_ncep_slp`           | —             |
 | xray           | .npy (numpy)  | 300 × 400 × 400             | No  | `read_xray_data`          | 012           |

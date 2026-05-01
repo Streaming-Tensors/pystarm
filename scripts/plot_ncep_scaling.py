@@ -50,7 +50,7 @@ THREADS = [8, 16, 32, 64]
 
 CSV_FILE = "scripts/experiments_nersc-perlmutter-cpu.csv"        # path relative to project root
 OUTFILE  = "plots/ncep_scaling.pdf"         # path relative to project root
-TITLE    = f"ncep-air-6: strong scaling (tsvdmi rel.err≈0.006, tsvdmii rel.err≈0.010)"
+TITLE    = f"ncep-air-6: strong scaling (t-SVDM-I rel.err≈0.006, t-SVDM-II rel.err≈0.010)"
 
 FIG_SIZE = (3.33, 3.5)
 
@@ -72,7 +72,7 @@ COLORS = {
 }
 
 LABELS = {
-    "compress_ttm":    "compress TTM",
+    "compress_ttm":    "TTM",
     "slicewise_svd":   "slicewise SVD",
     "svdvals":         "slicewise SVDvals",
     "thresholds":      "thresholds",
@@ -143,25 +143,36 @@ heights_tsvdmi  = plot_stacked_bars(ax, df_tsvdmi,  TSVDMI_COMPONENTS,  x - bar_
 heights_tsvdmii = plot_stacked_bars(ax, df_tsvdmii, TSVDMII_COMPONENTS, x + bar_width / 2, bar_width,
                                     hatch=TSVDMII_HATCH)
 
+# --- Speedup annotations relative to first available thread count ---
+for heights, x_positions in [(heights_tsvdmi, x - bar_width / 2),
+                              (heights_tsvdmii, x + bar_width / 2)]:
+    baseline = next((h for h in heights if h > 0), None)
+    for i, h in enumerate(heights):
+        if h <= 0 or h == baseline:
+            continue
+        speedup = baseline / h
+        ax.text(x_positions[i], h, f"{speedup:.1f}×",
+                ha='center', va='bottom', fontsize=5)
 
 # --- x-axis: thread count labels at group centers ---
 ax.set_xticks(x)
 ax.set_xticklabels([str(t) for t in THREADS])
 ax.set_xlabel("number of threads")
 ax.set_ylabel("runtime (seconds)")
+ax.set_yscale("log")
 ax.set_title(TITLE)
 ax.grid(True, axis="y")
 
-# --- Legend: component colors + algorithm indicators ---
-# Add tsvdmi / tsvdmii distinguisher patches at the top of the legend
+# --- Legend outside below ---
 alg_handles = [
-    mpatches.Patch(facecolor="grey", hatch=None,          edgecolor="black", label=f"tsvdmi  (k={K})"),
-    mpatches.Patch(facecolor="grey", hatch=TSVDMII_HATCH, edgecolor="black", label=f"tsvdmii (tol={TOL})"),
+    mpatches.Patch(facecolor="grey", hatch=None,          edgecolor="black", label=f"t-SVDM-I (k={K})"),
+    mpatches.Patch(facecolor="grey", hatch=TSVDMII_HATCH, edgecolor="black", label=f"t-SVDM-II (tol={TOL})"),
 ]
 component_handles = list(legend_handles.values())
-ax.legend(handles=alg_handles + component_handles, loc="upper right", fontsize=8)
+fig.legend(handles=alg_handles + component_handles,
+           loc="lower center", bbox_to_anchor=(0.5, 0), ncol=3, fontsize=7)
 
-plt.tight_layout()
+plt.tight_layout(rect=[0, 0.18, 1, 1])
 plt.savefig(OUTFILE, bbox_inches='tight')
 plt.close()
 print(f"Saved: {OUTFILE}")

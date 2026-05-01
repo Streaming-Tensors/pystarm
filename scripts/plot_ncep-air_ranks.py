@@ -71,7 +71,7 @@ for ax, cfg in zip(axes, SERIES):
     ax.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
     ax.grid(True, axis="y")
 
-plt.suptitle("NCEP Air — Per-slice Rank Retained by tsvdmii (perm_mode=0123, 64 threads)",
+plt.suptitle("ncep-air-4 — Per-slice Rank Retained by tsvdmii (perm_mode=0123, 64 threads)",
              fontsize=9)
 plt.tight_layout()
 plt.savefig(OUTFILE, bbox_inches='tight')

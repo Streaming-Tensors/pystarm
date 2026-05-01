@@ -11,7 +11,7 @@ Within each group:
 
 If data for a thread count is missing, the bar is absent.
 
-Algorithm: tsvdmii-dct, tol=0.01, perm_mode=0123 (4-way) / 012345 (6-way)
+Input:  scripts/benchmark_ttm.csv  (batched variant, averaged across runs)
 
 Run from the project root:
     python scripts/plot_ncep-air_ttm_scaling_4vs6.py
@@ -20,7 +20,7 @@ Output: plots/ncep-air_ttm_scaling_4vs6.pdf
 """
 
 import os
-import re
+import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -39,55 +39,48 @@ matplotlib.rcParams.update({
 # Config
 # ---------------------------------------------------------------------------
 
-LOGDIR   = os.path.join(os.environ["SCRATCH"], "pystarm", "logs")
+CSV_PATH = "scripts/benchmark_ttm_alcf-aurora.csv"
 OUTFILE  = "plots/ncep-air_ttm_scaling_4vs6.pdf"
-TITLE    = "ncep-air: TTM strong scaling (4-way vs 6-way)"
-FIG_SIZE = (3.5, 2.8)
-
-ALG = "tsvdmii"
-TOL = "0.01"
+TITLE    = "TTM strong scaling: ncep-air-4 vs ncep-air-6"
+FIG_SIZE = (3.33, 2.8)
 
 DATASETS = {
-    "4-way": {"dname": "ncep-air",   "perm_mode": "0123",   "modes": [2, 3]},
-    "6-way": {"dname": "ncep-air-6", "perm_mode": "012345", "modes": [2, 3, 4, 5]},
+    "4-way": {"dname": "ncep-air",   "modes": [2, 3]},
+    "6-way": {"dname": "ncep-air-6", "modes": [2, 3, 4, 5]},
 }
 
-THREADS = [8, 16, 32, 64]
+THREADS = [1, 2, 4, 8, 16, 32, 64]
 
-# One color per TTM mode — shared across both datasets for consistency
 MODE_COLORS = {
-    2: "#4C72B0",  # blue
-    3: "#DD8452",  # orange
-    4: "#55A868",  # green
-    5: "#C44E52",  # red
+    2: "tab:blue",
+    3: "tab:orange",
+    4: "tab:green",
+    5: "tab:red",
 }
 
 # ---------------------------------------------------------------------------
-# Parse log files
+# Load and aggregate (batched variant only, mean across runs)
 # ---------------------------------------------------------------------------
 
-def parse_ttm_times(logfile):
-    """Return dict {mode: time} for compress TTM lines. Returns {} if file missing."""
-    if not os.path.exists(logfile):
-        return {}
-    times = {}
-    pattern = re.compile(
-        r'^\[tsvdm_II_compress\] Time for TTM on mode (\d+) :\s+([\d.e+\-]+)',
-        re.MULTILINE
-    )
-    with open(logfile) as f:
-        content = f.read()
-    for m in pattern.finditer(content):
-        times[int(m.group(1))] = float(m.group(2))
-    return times
+df = pd.read_csv(CSV_PATH)
+df = df[(df["time_sec"] > 0) & (df["ttm_variant"] == "batched")]
 
-# data[dataset_label][threads] = {mode: time}
+agg = (df.groupby(["dname", "mode", "threads"])["time_sec"]
+         .mean()
+         .reset_index()
+         .rename(columns={"time_sec": "mean_time"}))
+
+# data[dataset_label][threads] = {mode: mean_time}
 data = {}
 for label, cfg in DATASETS.items():
     data[label] = {}
+    sub = agg[agg["dname"] == cfg["dname"]]
     for t in THREADS:
-        fname = f"{cfg['dname']}_{ALG}_{TOL}_dct_{cfg['perm_mode']}_{t}"
-        data[label][t] = parse_ttm_times(os.path.join(LOGDIR, fname))
+        row = sub[sub["threads"] == t]
+        if row.empty:
+            data[label][t] = {}
+        else:
+            data[label][t] = dict(zip(row["mode"], row["mean_time"]))
 
 # ---------------------------------------------------------------------------
 # Plot
@@ -100,6 +93,9 @@ n_threads   = len(THREADS)
 x           = np.arange(n_threads)
 offsets     = {"4-way": x - bar_width / 2, "6-way": x + bar_width / 2}
 
+# Track total bar heights for speedup annotations
+total_heights = {label: {} for label in DATASETS}
+
 for label, cfg in DATASETS.items():
     for i, t in enumerate(THREADS):
         times = data[label][t]
@@ -108,11 +104,27 @@ for label, cfg in DATASETS.items():
         bottom = 0.0
         for mode in cfg["modes"]:
             val = times.get(mode, 0.0)
+            hatch = "//" if label == "6-way" else None
             ax.bar(offsets[label][i], val, bar_width,
                    bottom=bottom, color=MODE_COLORS[mode],
-                   edgecolor="white", linewidth=0.5)
+                   hatch=hatch, edgecolor="white", linewidth=0.5)
             bottom += val
+        total_heights[label][t] = bottom
 
+# Speedup annotations relative to 1 thread
+for label in DATASETS:
+    baseline = total_heights[label].get(1, None)
+    if baseline is None:
+        continue
+    for i, t in enumerate(THREADS):
+        if t == 1 or t not in total_heights[label]:
+            continue
+        speedup = baseline / total_heights[label][t]
+        ax.text(offsets[label][i], total_heights[label][t],
+                f"{speedup:.1f}×",
+                ha='center', va='bottom', fontsize=5, rotation=90)
+
+ax.set_yscale("log")
 ax.set_xticks(x)
 ax.set_xticklabels([str(t) for t in THREADS])
 ax.set_xlabel("number of threads")
@@ -120,19 +132,18 @@ ax.set_ylabel("time (seconds)")
 ax.set_title(TITLE)
 ax.grid(True, axis="y")
 
-# --- Legend ---
-# Algorithm/dataset indicators
+# --- Legend outside the plot (below) ---
 dataset_handles = [
-    mpatches.Patch(facecolor="grey", hatch=None,  edgecolor="black", label="4-way (ncep-air)"),
-    mpatches.Patch(facecolor="grey", hatch="//",  edgecolor="black", label="6-way (ncep-air-6)"),
+    mpatches.Patch(facecolor="grey", hatch=None,  edgecolor="black", label="ncep-air-4"),
+    mpatches.Patch(facecolor="grey", hatch="//",  edgecolor="black", label="ncep-air-6"),
 ]
-# TTM mode colors
 mode_handles = [
-    mpatches.Patch(color=MODE_COLORS[m], label=f"TTM mode {m}") for m in sorted(MODE_COLORS)
+    mpatches.Patch(color=MODE_COLORS[m], label=f"TTM mode {m + 1}") for m in sorted(MODE_COLORS)
 ]
-ax.legend(handles=dataset_handles + mode_handles, loc="upper right")
+fig.legend(handles=dataset_handles + mode_handles,
+           loc="lower center", bbox_to_anchor=(0.5, 0), ncol=3, fontsize=7)
 
-plt.tight_layout()
+plt.tight_layout(rect=[0, 0.18, 1, 1])
 plt.savefig(OUTFILE, bbox_inches='tight')
 plt.close()
 print(f"Saved: {os.path.abspath(OUTFILE)}")

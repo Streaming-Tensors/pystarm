@@ -34,8 +34,8 @@ matplotlib.rcParams.update({
 OMP_NUM_THREADS = 64
 CSV_FILE        = "scripts/experiments_nersc-perlmutter-cpu.csv"
 OUTFILE         = "plots/ncep-air_compression_4vs6.pdf"
-TITLE           = "ncep-air: compression ratio (4-way vs 6-way)"
-FIG_SIZE        = (3.5, 2.8)
+TITLE           = "ncep-air-4 vs ncep-air-6: compression ratio"
+FIG_SIZE        = (3.33, 2.0)
 
 ANNOTATE_4WAY = False
 ANNOTATE_6WAY = False
@@ -66,7 +66,7 @@ fig, ax = plt.subplots(figsize=FIG_SIZE)
 
 if not data_4way.empty:
     ax.plot(data_4way["relative_err"], data_4way["compression_ratio"],
-            marker="s", label="tsvdmii-dct 4-way")
+            marker="s", label="t-SVDM-II-DCT (ncep-air-4)")
     if ANNOTATE_4WAY:
         for _, row in data_4way.iterrows():
             ax.annotate(f"tol={row['tol']}", (row["relative_err"], row["compression_ratio"]),
@@ -75,15 +75,15 @@ if not data_4way.empty:
 
 if not data_6way.empty:
     ax.plot(data_6way["relative_err"], data_6way["compression_ratio"],
-            marker="^", label="tsvdmii-dct 6-way")
+            marker="^", label="t-SVDM-II-DCT (ncep-air-6)")
     if ANNOTATE_6WAY:
         for _, row in data_6way.iterrows():
             ax.annotate(f"tol={row['tol']}", (row["relative_err"], row["compression_ratio"]),
                         textcoords="offset points", xytext=ANNOTATION_OFFSET,
                         fontsize=ANNOTATION_FONTSIZE)
 
+ax.set_xscale("log")
 ax.set_yscale("log")
-ax.set_xlim(left=0)
 ax.set_xlabel("relative error")
 ax.set_ylabel("compression ratio")
 ax.set_title(TITLE)

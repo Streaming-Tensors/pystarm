@@ -1,24 +1,23 @@
 """
-plot_ncep6_scaling.py
-=====================
-Strong scaling grouped stacked bar chart for the NCEP-Air-6 dataset
-(6-way tensor with time reshaped into tod x doy x year).
+plot_xray_scaling.py
+====================
+Strong scaling grouped stacked bar chart for the X-ray Crystallography dataset.
 
 Each group on the x-axis corresponds to a thread count. Within each group:
   - Left bar:  tsvdmi  (fixed rank k)
   - Right bar: tsvdmii (tolerance tol)
 
-Each bar is stacked with timing components. Shared components (compress TTM,
-reconstruct matmul, reconstruct TTM) use the same color across both algorithms.
-tsvdmii bars are hatched to visually distinguish them from tsvdmi bars.
+Each bar is stacked with timing components. Shared components use the same
+color across both algorithms. tsvdmii bars are hatched to visually distinguish
+them from tsvdmi bars.
 
 X-axis: thread count
 Y-axis: runtime (seconds)
 
 Run from the project root:
-    python scripts/plot_ncep6_scaling.py
+    python scripts/plot_xray_scaling.py
 
-Output: plots/ncep6_scaling.pdf
+Output: plots/xray_scaling.pdf
 """
 
 import numpy as np
@@ -40,18 +39,18 @@ matplotlib.rcParams.update({
 # Config — edit these to adjust the plot without touching the rest of the script
 # ---------------------------------------------------------------------------
 
-PERM_MODE = "012345"
-DNAME     = "ncep-air-6"
+PERM_MODE = "012"
+DNAME     = "xray"
 
-K   = 1     # rank parameter for tsvdmi
-TOL = 0.01  # tolerance parameter for tsvdmii
+K   = 150     # rank parameter for tsvdmi
+TOL = 0.0001  # tolerance parameter for tsvdmii
 
 # Thread counts to include on x-axis (must exist in the CSV)
 THREADS = [1, 2, 4, 8, 16, 32, 64]
 
-CSV_FILE = "scripts/experiments_alcf-aurora.csv"    # path relative to project root
-OUTFILE  = "plots/ncep6_scaling.pdf"    # path relative to project root
-TITLE    = "ncep-air-6 — Strong Scaling"
+CSV_FILE = "scripts/experiments_alcf-aurora.csv"   # path relative to project root
+OUTFILE  = "plots/xray_scaling.pdf"                # path relative to project root
+TITLE    = "X-ray — Strong Scaling"
 
 FIG_SIZE = (3.33, 3.0)
 
@@ -63,23 +62,19 @@ TSVDMII_HATCH = "//"
 # ---------------------------------------------------------------------------
 
 COLORS = {
-    "compress_ttm":    "tab:blue",
-    "slicewise_svd":   "tab:orange",
-    "svdvals":         "tab:green",
-    "thresholds":      "tab:red",
-    "svdks":           "tab:purple",
-    "reconstruct_mul": "tab:brown",
-    "reconstruct_ttm": "tab:pink",
+    "compress_ttm":  "tab:blue",
+    "slicewise_svd": "tab:orange",
+    "svdvals":       "tab:green",
+    "thresholds":    "tab:red",
+    "svdks":         "tab:purple",
 }
 
 LABELS = {
-    "compress_ttm":    "transform TTM",
-    "slicewise_svd":   "slicewise SVD",
-    "svdvals":         "slicewise SVD (values)",
-    "thresholds":      "thresholds",
-    "svdks":           "slicewise SVD (vectors)",
-    "reconstruct_mul": "reconstruct matmul",
-    "reconstruct_ttm": "reconstruct TTM",
+    "compress_ttm":  "transform TTM",
+    "slicewise_svd": "slicewise SVD",
+    "svdvals":       "slicewise SVD (values)",
+    "thresholds":    "thresholds",
+    "svdks":         "slicewise SVD (vectors)",
 }
 
 # Stack order for each algorithm
@@ -130,7 +125,6 @@ x = np.arange(len(THREADS))
 legend_handles = {}
 
 def plot_stacked_bars(ax, df, components, x_positions, width, hatch=None):
-    """Draw stacked bars for one algorithm. Returns total bar heights (one per thread)."""
     bottoms = np.zeros(len(THREADS))
     for key, col in components:
         values = np.array([

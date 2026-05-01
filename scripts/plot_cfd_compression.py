@@ -49,13 +49,8 @@ OUTFILE  = "plots/cfd_compression.pdf" # path relative to project root
 TITLE    = "cfd: compression ratio"
 
 # Figure size in inches (width, height)
-FIG_SIZE = (3.5, 2.8)
+FIG_SIZE = (3.33, 2.0)
 
-# Font size for k= annotations on tsvdmi data points
-ANNOTATION_FONTSIZE = 6
-
-# Offset (in points) for annotations relative to their data point
-ANNOTATION_OFFSET = (5, 5)
 
 # ---------------------------------------------------------------------------
 # Load and filter
@@ -87,35 +82,24 @@ ax  = fig.add_subplot(gs[0, 0])
 
 if not data_tsvdmi.empty:
     ax.plot(data_tsvdmi["relative_err"], data_tsvdmi["compression_ratio"],
-            marker="s", label="tsvdmi-dct")
-    # Annotate each point with its rank parameter k
-    for _, row in data_tsvdmi.iterrows():
-        ax.annotate(f"k={int(row['k'])}", (row["relative_err"], row["compression_ratio"]),
-                    textcoords="offset points", xytext=ANNOTATION_OFFSET,
-                    fontsize=ANNOTATION_FONTSIZE)
+            marker="s", label="t-SVDM-I-DCT")
 
 if not data_tsvdmii.empty:
     ax.plot(data_tsvdmii["relative_err"], data_tsvdmii["compression_ratio"],
-            marker="x", label="tsvdmii-dct")
-    # Annotations for tsvdmii (tol parameter) — disabled for readability; re-enable if needed
-    # for _, row in data_tsvdmii.iterrows():
-    #     ax.annotate(f"tol={row['tol']}", (row["relative_err"], row["compression_ratio"]),
-    #                 textcoords="offset points", xytext=ANNOTATION_OFFSET,
-    #                 fontsize=ANNOTATION_FONTSIZE)
+            marker="x", label="t-SVDM-II-DCT")
 
 # Y-axis log scale helps spread out compression ratios that span orders of magnitude.
 # Switch to "linear" if the data range is narrow.
+ax.set_xscale("log")
 ax.set_yscale("log")
-# ax.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-# ax.yaxis.get_major_formatter().set_scientific(False)
 
-ax.set_xlim(left=0)
 ax.set_xlabel("relative error")
 ax.set_ylabel("compression ratio")
 ax.grid(True)
 ax.legend()
 ax.set_title(TITLE)
 
+plt.tight_layout()
 plt.savefig(OUTFILE, bbox_inches='tight')
 plt.close()
 print(f"Saved: {OUTFILE}")
