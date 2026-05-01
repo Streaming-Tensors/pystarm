@@ -566,9 +566,9 @@ ncep-air-6_tsvdmii_0.25_dct_012345_64_run3,True,ncep-air-6,tsvdmii,0.25,dct,0123
 ncep-air-6_tsvdmii_0.25_dct_012345_8_run1,False,ncep-air-6,tsvdmii,0.25,dct,012345,8,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air-6_tsvdmii_0.25_dct_012345_8_run2,False,ncep-air-6,tsvdmii,0.25,dct,012345,8,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air-6_tsvdmii_0.25_dct_012345_8_run3,False,ncep-air-6,tsvdmii,0.25,dct,012345,8,run3,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_10_dct_0123_16_run1,False,ncep-air,tsvdmi,10,dct,0123,16,run1,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_10_dct_0123_16_run2,False,ncep-air,tsvdmi,10,dct,0123,16,run2,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_10_dct_0123_16_run3,False,ncep-air,tsvdmi,10,dct,0123,16,run3,,,,,,,,,,,,,,,,,,,,,,
+ncep-air_tsvdmi_10_dct_0123_16_run1,True,ncep-air,tsvdmi,10,dct,0123,16,run1,tsvdmi,dct,10,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.473996660206467,1.634424552321434e-05,4.822018348623853,51.74390225112438,14.087975342292339,,,,0.5003682780079544,51.30338489403948,35735.190801221834,0.0029364059846654334,12169703.708492275,12169651.241873719
+ncep-air_tsvdmi_10_dct_0123_16_run2,True,ncep-air,tsvdmi,10,dct,0123,16,run2,tsvdmi,dct,10,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.787918284069747,1.5624798834323883e-05,4.822018348623853,51.64310699189082,14.091524180024862,,,,0.5003524059429765,51.80468180542812,35735.190801221834,0.0029364059846654334,12169703.708492275,12169651.241873719
+ncep-air_tsvdmi_10_dct_0123_16_run3,True,ncep-air,tsvdmi,10,dct,0123,16,run3,tsvdmi,dct,10,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.765062035061419,1.6580801457166672e-05,4.822018348623853,52.41893783537671,14.044350251089782,,,,0.4989497768692672,51.914415335748345,35735.190801221834,0.0029364059846654334,12169703.708492275,12169651.241873719
 ncep-air_tsvdmi_10_dct_0123_1_run1,False,ncep-air,tsvdmi,10,dct,0123,1,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_10_dct_0123_1_run2,False,ncep-air,tsvdmi,10,dct,0123,1,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_10_dct_0123_1_run3,False,ncep-air,tsvdmi,10,dct,0123,1,run3,,,,,,,,,,,,,,,,,,,,,,
@@ -590,9 +590,9 @@ ncep-air_tsvdmi_10_dct_0123_8_run3,False,ncep-air,tsvdmi,10,dct,0123,8,run3,,,,,
 ncep-air_tsvdmi_1_dct_0123_16_run1,True,ncep-air,tsvdmi,1,dct,0123,16,run1,tsvdmi,dct,1,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.473695159889758,1.688394695520401e-05,48.22018348623853,52.54113850090653,6.09716045903042,,,,0.38045329600572586,51.638002765364945,180229.36676381924,0.014809675821281613,12169703.708492275,12168369.066068636
 ncep-air_tsvdmi_1_dct_0123_16_run2,True,ncep-air,tsvdmi,1,dct,0123,16,run2,tsvdmi,dct,1,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.793853600975126,1.86283141374588e-05,48.22018348623853,51.97452573897317,6.095542079769075,,,,0.37937252363190055,52.01549674384296,180229.36676381924,0.014809675821281613,12169703.708492275,12168369.066068636
 ncep-air_tsvdmi_1_dct_0123_16_run3,True,ncep-air,tsvdmi,1,dct,0123,16,run3,tsvdmi,dct,1,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.480841754935682,1.4734920114278793e-05,48.22018348623853,51.61261954437941,6.071219806093723,,,,0.37946795718744397,51.53414776409045,180229.36676381924,0.014809675821281613,12169703.708492275,12168369.066068636
-ncep-air_tsvdmi_1_dct_0123_1_run1,True,ncep-air,tsvdmi,1,dct,0123,1,run1,tsvdmi,dct,1,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.380953783998848,1.6990001313388348e-05,48.22018348623853,832.7118684140078,96.42068161199859,,,,5.7765409919957165,832.545154321997,180229.3667638209,0.014809675821489648,12169703.708321437,12168369.066068666
-ncep-air_tsvdmi_1_dct_0123_1_run2,True,ncep-air,tsvdmi,1,dct,0123,1,run2,tsvdmi,dct,1,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.400486806996923,1.563700061524287e-05,48.22018348623853,831.8877282169997,97.24151300500671,,,,5.775001355999848,831.8226687769929,180229.3667638209,0.014809675821489648,12169703.708321437,12168369.066068666
-ncep-air_tsvdmi_1_dct_0123_1_run3,False,ncep-air,tsvdmi,1,dct,0123,1,run3,tsvdmi,dct,1,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)",,,,,,,,,,,,,,,
+ncep-air_tsvdmi_1_dct_0123_1_run1,True,ncep-air,tsvdmi,1,dct,0123,1,run1,tsvdmi,dct,1,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.703357831996982,1.3466000382322818e-05,48.22018348623853,838.725163440009,96.33131739200326,,,,5.772749770003429,837.2828118160032,180229.3667638209,0.014809675821489648,12169703.708321437,12168369.066068666
+ncep-air_tsvdmi_1_dct_0123_1_run2,True,ncep-air,tsvdmi,1,dct,0123,1,run2,tsvdmi,dct,1,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.441268852002395,1.2966003851033747e-05,48.22018348623853,837.2710108759929,96.43024395000248,,,,5.774524167005438,835.6886383050005,180229.3667638209,0.014809675821489648,12169703.708321437,12168369.066068666
+ncep-air_tsvdmi_1_dct_0123_1_run3,True,ncep-air,tsvdmi,1,dct,0123,1,run3,tsvdmi,dct,1,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.437951843996416,1.282599987462163e-05,48.22018348623853,838.1447916919933,95.93169039300119,,,,5.8952752409968525,836.8320332840012,180229.3667638209,0.014809675821489648,12169703.708321437,12168369.066068666
 ncep-air_tsvdmi_1_dct_0123_2_run1,False,ncep-air,tsvdmi,1,dct,0123,2,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_1_dct_0123_2_run2,False,ncep-air,tsvdmi,1,dct,0123,2,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_1_dct_0123_2_run3,False,ncep-air,tsvdmi,1,dct,0123,2,run3,,,,,,,,,,,,,,,,,,,,,,
@@ -608,9 +608,9 @@ ncep-air_tsvdmi_1_dct_0123_64_run3,True,ncep-air,tsvdmi,1,dct,0123,64,run3,tsvdm
 ncep-air_tsvdmi_1_dct_0123_8_run1,False,ncep-air,tsvdmi,1,dct,0123,8,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_1_dct_0123_8_run2,False,ncep-air,tsvdmi,1,dct,0123,8,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_1_dct_0123_8_run3,False,ncep-air,tsvdmi,1,dct,0123,8,run3,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_20_dct_0123_16_run1,False,ncep-air,tsvdmi,20,dct,0123,16,run1,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_20_dct_0123_16_run2,False,ncep-air,tsvdmi,20,dct,0123,16,run2,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_20_dct_0123_16_run3,False,ncep-air,tsvdmi,20,dct,0123,16,run3,,,,,,,,,,,,,,,,,,,,,,
+ncep-air_tsvdmi_20_dct_0123_16_run1,True,ncep-air,tsvdmi,20,dct,0123,16,run1,tsvdmi,dct,20,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.487910873256624,1.654587686061859e-05,2.4110091743119266,51.67421780992299,21.66492360783741,,,,0.590543198864907,52.05067324405536,11045.647877513999,0.0009076349056720348,12169703.708492275,12169698.695792064
+ncep-air_tsvdmi_20_dct_0123_16_run2,True,ncep-air,tsvdmi,20,dct,0123,16,run2,tsvdmi,dct,20,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.776768731884658,1.6133300960063934e-05,2.4110091743119266,51.7420888277702,21.622197730932385,,,,0.5908197606913745,51.53830369282514,11045.647877513999,0.0009076349056720348,12169703.708492275,12169698.695792064
+ncep-air_tsvdmi_20_dct_0123_16_run3,True,ncep-air,tsvdmi,20,dct,0123,16,run3,tsvdmi,dct,20,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.481520251836628,1.743622124195099e-05,2.4110091743119266,51.70751598663628,21.692489359993488,,,,0.5911110891029239,51.571847699116915,11045.647877513999,0.0009076349056720348,12169703.708492275,12169698.695792064
 ncep-air_tsvdmi_20_dct_0123_1_run1,False,ncep-air,tsvdmi,20,dct,0123,1,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_20_dct_0123_1_run2,False,ncep-air,tsvdmi,20,dct,0123,1,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_20_dct_0123_1_run3,False,ncep-air,tsvdmi,20,dct,0123,1,run3,,,,,,,,,,,,,,,,,,,,,,
@@ -632,9 +632,9 @@ ncep-air_tsvdmi_20_dct_0123_8_run3,False,ncep-air,tsvdmi,20,dct,0123,8,run3,,,,,
 ncep-air_tsvdmi_2_dct_0123_16_run1,True,ncep-air,tsvdmi,2,dct,0123,16,run1,tsvdmi,dct,2,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.48663947219029,1.771003007888794e-05,24.110091743119266,51.80696610221639,7.747676400933415,,,,0.3912983681075275,51.5875009004958,133495.3718366907,0.010969484141469674,12169703.708492275,12168971.498791441
 ncep-air_tsvdmi_2_dct_0123_16_run2,True,ncep-air,tsvdmi,2,dct,0123,16,run2,tsvdmi,dct,2,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.482048640958965,1.7034821212291718e-05,24.110091743119266,51.64922981802374,7.778484644833952,,,,0.39138014474883676,52.09453309653327,133495.3718366907,0.010969484141469674,12169703.708492275,12168971.498791441
 ncep-air_tsvdmi_2_dct_0123_16_run3,True,ncep-air,tsvdmi,2,dct,0123,16,run3,tsvdmi,dct,2,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.763205179013312,1.677870750427246e-05,24.110091743119266,51.59904260188341,7.781562258023769,,,,0.39196285093203187,51.5022303792648,133495.3718366907,0.010969484141469674,12169703.708492275,12168971.498791441
-ncep-air_tsvdmi_2_dct_0123_1_run1,False,ncep-air,tsvdmi,2,dct,0123,1,run1,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_2_dct_0123_1_run2,False,ncep-air,tsvdmi,2,dct,0123,1,run2,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_2_dct_0123_1_run3,False,ncep-air,tsvdmi,2,dct,0123,1,run3,,,,,,,,,,,,,,,,,,,,,,
+ncep-air_tsvdmi_2_dct_0123_1_run1,True,ncep-air,tsvdmi,2,dct,0123,1,run1,tsvdmi,dct,2,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.727122338001209,1.5347999578807503e-05,24.110091743119266,838.8205031209945,122.75519411300047,,,,5.942620779002027,837.3803659019977,133495.37183669079,0.010969484141623671,12169703.708321437,12168971.498791516
+ncep-air_tsvdmi_2_dct_0123_1_run2,True,ncep-air,tsvdmi,2,dct,0123,1,run2,tsvdmi,dct,2,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.435135382998851,1.540100493002683e-05,24.110091743119266,838.4707671330034,122.73991583099996,,,,5.938562999006535,837.1222621619963,133495.37183669079,0.010969484141623671,12169703.708321437,12168971.498791516
+ncep-air_tsvdmi_2_dct_0123_1_run3,True,ncep-air,tsvdmi,2,dct,0123,1,run3,tsvdmi,dct,2,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.437200649997976,1.4531004126183689e-05,24.110091743119266,838.3579692279964,122.78611221999745,,,,5.942504323997127,836.8935081380041,133495.37183669079,0.010969484141623671,12169703.708321437,12168971.498791516
 ncep-air_tsvdmi_2_dct_0123_2_run1,False,ncep-air,tsvdmi,2,dct,0123,2,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_2_dct_0123_2_run2,False,ncep-air,tsvdmi,2,dct,0123,2,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_2_dct_0123_2_run3,False,ncep-air,tsvdmi,2,dct,0123,2,run3,,,,,,,,,,,,,,,,,,,,,,
@@ -653,9 +653,9 @@ ncep-air_tsvdmi_2_dct_0123_8_run3,False,ncep-air,tsvdmi,2,dct,0123,8,run3,,,,,,,
 ncep-air_tsvdmi_3_dct_0123_16_run1,True,ncep-air,tsvdmi,3,dct,0123,16,run1,tsvdmi,dct,3,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.767489501740783,1.7224811017513275e-05,16.073394495412845,51.70560442097485,8.564918666146696,,,,0.404265106189996,51.54980576224625,104152.22295146345,0.008558320354075987,12169703.708492275,12169258.016294766
 ncep-air_tsvdmi_3_dct_0123_16_run2,True,ncep-air,tsvdmi,3,dct,0123,16,run2,tsvdmi,dct,3,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.446004886180162,1.5816185623407364e-05,16.073394495412845,52.77060753386468,8.550809687934816,,,,0.4045862420462072,51.64201623713598,104152.22295146345,0.008558320354075987,12169703.708492275,12169258.016294766
 ncep-air_tsvdmi_3_dct_0123_16_run3,True,ncep-air,tsvdmi,3,dct,0123,16,run3,tsvdmi,dct,3,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.368155265692621,1.5398021787405014e-05,16.073394495412845,51.76770892320201,8.548593522049487,,,,0.4036653903312981,51.53530760342255,104152.22295146345,0.008558320354075987,12169703.708492275,12169258.016294766
-ncep-air_tsvdmi_3_dct_0123_1_run1,False,ncep-air,tsvdmi,3,dct,0123,1,run1,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_3_dct_0123_1_run2,False,ncep-air,tsvdmi,3,dct,0123,1,run2,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_3_dct_0123_1_run3,False,ncep-air,tsvdmi,3,dct,0123,1,run3,,,,,,,,,,,,,,,,,,,,,,
+ncep-air_tsvdmi_3_dct_0123_1_run1,True,ncep-air,tsvdmi,3,dct,0123,1,run1,tsvdmi,dct,3,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.726588685000024,1.7482998373452574e-05,16.073394495412845,837.8450849630026,135.20093589899625,,,,6.168029483000282,836.3308886090017,104152.22295146195,0.008558320354196005,12169703.708321437,12169258.016294934
+ncep-air_tsvdmi_3_dct_0123_1_run2,True,ncep-air,tsvdmi,3,dct,0123,1,run2,tsvdmi,dct,3,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.71352026999375,1.5798999811522663e-05,16.073394495412845,836.9017109199922,135.12456852300238,,,,6.169312853002339,835.4543671659994,104152.22295146195,0.008558320354196005,12169703.708321437,12169258.016294934
+ncep-air_tsvdmi_3_dct_0123_1_run3,False,ncep-air,tsvdmi,3,dct,0123,1,run3,tsvdmi,dct,3,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)",,,,,,,,,,,,,,,
 ncep-air_tsvdmi_3_dct_0123_2_run1,False,ncep-air,tsvdmi,3,dct,0123,2,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_3_dct_0123_2_run2,False,ncep-air,tsvdmi,3,dct,0123,2,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_3_dct_0123_2_run3,False,ncep-air,tsvdmi,3,dct,0123,2,run3,,,,,,,,,,,,,,,,,,,,,,
@@ -671,9 +671,9 @@ ncep-air_tsvdmi_3_dct_0123_64_run3,True,ncep-air,tsvdmi,3,dct,0123,64,run3,tsvdm
 ncep-air_tsvdmi_3_dct_0123_8_run1,False,ncep-air,tsvdmi,3,dct,0123,8,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_3_dct_0123_8_run2,False,ncep-air,tsvdmi,3,dct,0123,8,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_3_dct_0123_8_run3,False,ncep-air,tsvdmi,3,dct,0123,8,run3,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_40_dct_0123_16_run1,False,ncep-air,tsvdmi,40,dct,0123,16,run1,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_40_dct_0123_16_run2,False,ncep-air,tsvdmi,40,dct,0123,16,run2,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_40_dct_0123_16_run3,False,ncep-air,tsvdmi,40,dct,0123,16,run3,,,,,,,,,,,,,,,,,,,,,,
+ncep-air_tsvdmi_40_dct_0123_16_run1,True,ncep-air,tsvdmi,40,dct,0123,16,run1,tsvdmi,dct,40,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.696043921168894,1.8206890672445297e-05,1.2055045871559633,52.191040544305,37.66222481522709,,,,0.7715481147170067,51.542675065808,781.0451515216159,6.417947143418013e-05,12169703.708492275,12169703.683437346
+ncep-air_tsvdmi_40_dct_0123_16_run2,True,ncep-air,tsvdmi,40,dct,0123,16,run2,tsvdmi,dct,40,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.687489974778146,1.6585923731327057e-05,1.2055045871559633,51.556405341718346,37.67851117905229,,,,0.7744191288948059,52.5263685840182,781.0451515216159,6.417947143418013e-05,12169703.708492275,12169703.683437346
+ncep-air_tsvdmi_40_dct_0123_16_run3,True,ncep-air,tsvdmi,40,dct,0123,16,run3,tsvdmi,dct,40,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.747300514020026,1.6582664102315903e-05,1.2055045871559633,51.7515212027356,37.70044761104509,,,,0.7718041148036718,51.4932977380231,781.0451515216159,6.417947143418013e-05,12169703.708492275,12169703.683437346
 ncep-air_tsvdmi_40_dct_0123_1_run1,False,ncep-air,tsvdmi,40,dct,0123,1,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_40_dct_0123_1_run2,False,ncep-air,tsvdmi,40,dct,0123,1,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_40_dct_0123_1_run3,False,ncep-air,tsvdmi,40,dct,0123,1,run3,,,,,,,,,,,,,,,,,,,,,,
@@ -694,7 +694,7 @@ ncep-air_tsvdmi_40_dct_0123_8_run2,False,ncep-air,tsvdmi,40,dct,0123,8,run2,,,,,
 ncep-air_tsvdmi_40_dct_0123_8_run3,False,ncep-air,tsvdmi,40,dct,0123,8,run3,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_4_dct_0123_16_run1,True,ncep-air,tsvdmi,4,dct,0123,16,run1,tsvdmi,dct,4,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.425682798959315,1.653982326388359e-05,12.055045871559633,51.717100591398776,9.362105092965066,,,,0.41741820238530636,51.495732865761966,86399.06190762708,0.007099520578084082,12169703.708492275,12169397.008677205
 ncep-air_tsvdmi_4_dct_0123_16_run2,True,ncep-air,tsvdmi,4,dct,0123,16,run2,tsvdmi,dct,4,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.483729028142989,1.566484570503235e-05,12.055045871559633,52.316484415438026,9.36318581784144,,,,0.4175926339812577,51.620871969498694,86399.06190762708,0.007099520578084082,12169703.708492275,12169397.008677205
-ncep-air_tsvdmi_4_dct_0123_16_run3,False,ncep-air,tsvdmi,4,dct,0123,16,run3,tsvdmi,dct,4,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)",,,,,,,,,,,,,,,
+ncep-air_tsvdmi_4_dct_0123_16_run3,True,ncep-air,tsvdmi,4,dct,0123,16,run3,tsvdmi,dct,4,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.441967570222914,1.646997407078743e-05,12.055045871559633,51.69983993191272,9.354642894119024,,,,0.417785984929651,51.75381156522781,86399.06190762708,0.007099520578084082,12169703.708492275,12169397.008677205
 ncep-air_tsvdmi_4_dct_0123_1_run1,False,ncep-air,tsvdmi,4,dct,0123,1,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_4_dct_0123_1_run2,False,ncep-air,tsvdmi,4,dct,0123,1,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_4_dct_0123_1_run3,False,ncep-air,tsvdmi,4,dct,0123,1,run3,,,,,,,,,,,,,,,,,,,,,,
@@ -713,9 +713,9 @@ ncep-air_tsvdmi_4_dct_0123_64_run3,True,ncep-air,tsvdmi,4,dct,0123,64,run3,tsvdm
 ncep-air_tsvdmi_4_dct_0123_8_run1,False,ncep-air,tsvdmi,4,dct,0123,8,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_4_dct_0123_8_run2,False,ncep-air,tsvdmi,4,dct,0123,8,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_4_dct_0123_8_run3,False,ncep-air,tsvdmi,4,dct,0123,8,run3,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_5_dct_0123_16_run1,False,ncep-air,tsvdmi,5,dct,0123,16,run1,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_5_dct_0123_16_run2,False,ncep-air,tsvdmi,5,dct,0123,16,run2,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmi_5_dct_0123_16_run3,False,ncep-air,tsvdmi,5,dct,0123,16,run3,,,,,,,,,,,,,,,,,,,,,,
+ncep-air_tsvdmi_5_dct_0123_16_run1,True,ncep-air,tsvdmi,5,dct,0123,16,run1,tsvdmi,dct,5,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.471165076829493,1.6375910490751266e-05,9.644036697247707,51.97156695788726,10.101039175875485,,,,0.43109558103606105,51.83896611072123,73154.31424649314,0.006011182852006867,12169703.708492275,12169483.834534947
+ncep-air_tsvdmi_5_dct_0123_16_run2,True,ncep-air,tsvdmi,5,dct,0123,16,run2,tsvdmi,dct,5,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.463386717718095,1.6361940652132034e-05,9.644036697247707,51.50375661440194,10.132746174000204,,,,0.43351178988814354,51.39992942940444,73154.31424649314,0.006011182852006867,12169703.708492275,12169483.834534947
+ncep-air_tsvdmi_5_dct_0123_16_run3,True,ncep-air,tsvdmi,5,dct,0123,16,run3,tsvdmi,dct,5,None,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.41001793788746,1.74548476934433e-05,9.644036697247707,52.01023486396298,10.120296842884272,,,,0.4309976538643241,52.6183795039542,73154.31424649314,0.006011182852006867,12169703.708492275,12169483.834534947
 ncep-air_tsvdmi_5_dct_0123_1_run1,False,ncep-air,tsvdmi,5,dct,0123,1,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_5_dct_0123_1_run2,False,ncep-air,tsvdmi,5,dct,0123,1,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_5_dct_0123_1_run3,False,ncep-air,tsvdmi,5,dct,0123,1,run3,,,,,,,,,,,,,,,,,,,,,,
@@ -734,9 +734,9 @@ ncep-air_tsvdmi_5_dct_0123_64_run3,True,ncep-air,tsvdmi,5,dct,0123,64,run3,tsvdm
 ncep-air_tsvdmi_5_dct_0123_8_run1,False,ncep-air,tsvdmi,5,dct,0123,8,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_5_dct_0123_8_run2,False,ncep-air,tsvdmi,5,dct,0123,8,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmi_5_dct_0123_8_run3,False,ncep-air,tsvdmi,5,dct,0123,8,run3,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmii_0.0001_dct_0123_16_run1,False,ncep-air,tsvdmii,0.0001,dct,0123,16,run1,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmii_0.0001_dct_0123_16_run2,False,ncep-air,tsvdmii,0.0001,dct,0123,16,run2,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmii_0.0001_dct_0123_16_run3,False,ncep-air,tsvdmii,0.0001,dct,0123,16,run3,,,,,,,,,,,,,,,,,,,,,,
+ncep-air_tsvdmii_0.0001_dct_0123_16_run1,True,ncep-air,tsvdmii,0.0001,dct,0123,16,run1,tsvdmii,dct,None,0.0001,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.65644058585167,1.577194780111313e-05,1.4877307759215899,51.6837863731198,,4.50025389669463,1.740830389317125,33.84658385394141,13.944751181639731,51.80548336170614,1216.9689838290938,9.999988602679515e-05,12169703.708492275,12169703.647652501
+ncep-air_tsvdmii_0.0001_dct_0123_16_run2,True,ncep-air,tsvdmii,0.0001,dct,0123,16,run2,tsvdmii,dct,None,0.0001,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.773549856152385,1.7300713807344437e-05,1.4877307759215899,51.58591031096876,,4.5234235459938645,1.7373044458217919,33.855563757009804,10.947255985345691,51.69169778097421,1216.9689838290938,9.999988602679515e-05,12169703.708492275,12169703.647652501
+ncep-air_tsvdmii_0.0001_dct_0123_16_run3,True,ncep-air,tsvdmii,0.0001,dct,0123,16,run3,tsvdmii,dct,None,0.0001,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.786425502970815,1.7328187823295593e-05,1.4877307759215899,52.674709799233824,,4.497934507206082,1.7167889988049865,33.86233393102884,10.947000361047685,51.72237184504047,1216.9689838290938,9.999988602679515e-05,12169703.708492275,12169703.647652501
 ncep-air_tsvdmii_0.0001_dct_0123_1_run1,False,ncep-air,tsvdmii,0.0001,dct,0123,1,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.0001_dct_0123_1_run2,False,ncep-air,tsvdmii,0.0001,dct,0123,1,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.0001_dct_0123_1_run3,False,ncep-air,tsvdmii,0.0001,dct,0123,1,run3,,,,,,,,,,,,,,,,,,,,,,
@@ -755,9 +755,9 @@ ncep-air_tsvdmii_0.0001_dct_0123_64_run3,True,ncep-air,tsvdmii,0.0001,dct,0123,6
 ncep-air_tsvdmii_0.0001_dct_0123_8_run1,False,ncep-air,tsvdmii,0.0001,dct,0123,8,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.0001_dct_0123_8_run2,False,ncep-air,tsvdmii,0.0001,dct,0123,8,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.0001_dct_0123_8_run3,False,ncep-air,tsvdmii,0.0001,dct,0123,8,run3,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmii_0.001_dct_0123_16_run1,False,ncep-air,tsvdmii,0.001,dct,0123,16,run1,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmii_0.001_dct_0123_16_run2,False,ncep-air,tsvdmii,0.001,dct,0123,16,run2,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmii_0.001_dct_0123_16_run3,False,ncep-air,tsvdmii,0.001,dct,0123,16,run3,,,,,,,,,,,,,,,,,,,,,,
+ncep-air_tsvdmii_0.001_dct_0123_16_run1,True,ncep-air,tsvdmii,0.001,dct,0123,16,run1,tsvdmii,dct,None,0.001,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.75607577804476,1.7807818949222565e-05,3.4247214206560264,51.60184307023883,,4.507925332989544,1.7486721980385482,25.74208577303216,10.647412971127778,51.72801690874621,12169.69775204409,0.0009999995105510924,12169703.708492275,12169697.623653475
+ncep-air_tsvdmii_0.001_dct_0123_16_run2,True,ncep-air,tsvdmii,0.001,dct,0123,16,run2,tsvdmii,dct,None,0.001,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.394667052198201,1.7765909433364868e-05,3.4247214206560264,51.60608675936237,,4.511663734912872,1.7469136696308851,25.777250681072474,10.706920980010182,52.32364858640358,12169.69775204409,0.0009999995105510924,12169703.708492275,12169697.623653475
+ncep-air_tsvdmii_0.001_dct_0123_16_run3,True,ncep-air,tsvdmii,0.001,dct,0123,16,run3,tsvdmii,dct,None,0.001,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.467190029099584,1.892074942588806e-05,3.4247214206560264,51.67173409461975,,4.491849367041141,1.71690863231197,25.795614967122674,10.869630382861942,51.808371122926474,12169.69775204409,0.0009999995105510924,12169703.708492275,12169697.623653475
 ncep-air_tsvdmii_0.001_dct_0123_1_run1,False,ncep-air,tsvdmii,0.001,dct,0123,1,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.001_dct_0123_1_run2,False,ncep-air,tsvdmii,0.001,dct,0123,1,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.001_dct_0123_1_run3,False,ncep-air,tsvdmii,0.001,dct,0123,1,run3,,,,,,,,,,,,,,,,,,,,,,
@@ -776,9 +776,9 @@ ncep-air_tsvdmii_0.001_dct_0123_64_run3,True,ncep-air,tsvdmii,0.001,dct,0123,64,
 ncep-air_tsvdmii_0.001_dct_0123_8_run1,False,ncep-air,tsvdmii,0.001,dct,0123,8,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.001_dct_0123_8_run2,False,ncep-air,tsvdmii,0.001,dct,0123,8,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.001_dct_0123_8_run3,False,ncep-air,tsvdmii,0.001,dct,0123,8,run3,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmii_0.01_dct_0123_16_run1,False,ncep-air,tsvdmii,0.01,dct,0123,16,run1,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmii_0.01_dct_0123_16_run2,False,ncep-air,tsvdmii,0.01,dct,0123,16,run2,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmii_0.01_dct_0123_16_run3,False,ncep-air,tsvdmii,0.01,dct,0123,16,run3,,,,,,,,,,,,,,,,,,,,,,
+ncep-air_tsvdmii_0.01_dct_0123_16_run1,True,ncep-air,tsvdmii,0.01,dct,0123,16,run1,tsvdmii,dct,None,0.01,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.48421938996762,1.8386635929346085e-05,1023.4181868348937,51.94907359825447,,4.503367777913809,1.7138620861805975,2.2413425859995186,1.888273085001856,52.0622537182644,121695.07105660322,0.009999838448957623,12169703.708492275,12169095.227763684
+ncep-air_tsvdmii_0.01_dct_0123_16_run2,True,ncep-air,tsvdmii,0.01,dct,0123,16,run2,tsvdmii,dct,None,0.01,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.75694830995053,1.7466023564338684e-05,1023.4181868348937,52.60562062030658,,4.502864548936486,1.7175177978351712,2.227869790047407,1.820028527174145,51.77588889468461,121695.07105660322,0.009999838448957623,12169703.708492275,12169095.227763684
+ncep-air_tsvdmii_0.01_dct_0123_16_run3,True,ncep-air,tsvdmii,0.01,dct,0123,16,run3,tsvdmii,dct,None,0.01,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.465317432768643,1.6837380826473236e-05,1023.4181868348937,51.65847457014024,,4.494283739011735,1.7332466030493379,2.2499233591370285,3.1043984456919134,52.203799644485116,121695.07105660322,0.009999838448957623,12169703.708492275,12169095.227763684
 ncep-air_tsvdmii_0.01_dct_0123_1_run1,False,ncep-air,tsvdmii,0.01,dct,0123,1,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.01_dct_0123_1_run2,False,ncep-air,tsvdmii,0.01,dct,0123,1,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.01_dct_0123_1_run3,False,ncep-air,tsvdmii,0.01,dct,0123,1,run3,,,,,,,,,,,,,,,,,,,,,,
@@ -797,9 +797,9 @@ ncep-air_tsvdmii_0.01_dct_0123_64_run3,True,ncep-air,tsvdmii,0.01,dct,0123,64,ru
 ncep-air_tsvdmii_0.01_dct_0123_8_run1,False,ncep-air,tsvdmii,0.01,dct,0123,8,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.01_dct_0123_8_run2,False,ncep-air,tsvdmii,0.01,dct,0123,8,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.01_dct_0123_8_run3,False,ncep-air,tsvdmii,0.01,dct,0123,8,run3,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmii_0.025_dct_0123_16_run1,False,ncep-air,tsvdmii,0.025,dct,0123,16,run1,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmii_0.025_dct_0123_16_run2,False,ncep-air,tsvdmii,0.025,dct,0123,16,run2,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmii_0.025_dct_0123_16_run3,False,ncep-air,tsvdmii,0.025,dct,0123,16,run3,,,,,,,,,,,,,,,,,,,,,,
+ncep-air_tsvdmii_0.025_dct_0123_16_run1,True,ncep-air,tsvdmii,0.025,dct,0123,16,run1,tsvdmii,dct,None,0.025,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.402307786047459,1.7687678337097168e-05,1497260.8073394496,51.800127460155636,,4.510208689142019,1.7380361543036997,0.011923879850655794,2.5117037538439035,51.366233826149255,285406.06606753415,0.023452178697528338,12169703.708492275,12166356.551168147
+ncep-air_tsvdmii_0.025_dct_0123_16_run2,True,ncep-air,tsvdmii,0.025,dct,0123,16,run2,tsvdmii,dct,None,0.025,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.488088076002896,1.5506986528635025e-05,1497260.8073394496,51.68659401405603,,4.498031221795827,1.7343302741646767,0.010260486975312233,2.4917669352144003,51.65186001826078,285406.06606753415,0.023452178697528338,12169703.708492275,12166356.551168147
+ncep-air_tsvdmii_0.025_dct_0123_16_run3,True,ncep-air,tsvdmii,0.025,dct,0123,16,run3,tsvdmii,dct,None,0.025,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)","(73, 144, 17, 14612)",8.468250245787203,1.5445053577423096e-05,1497260.8073394496,51.51247958559543,,4.4913946548476815,1.7412076089531183,0.01242106081917882,2.5846414379775524,52.18273742077872,285406.06606753415,0.023452178697528338,12169703.708492275,12166356.551168147
 ncep-air_tsvdmii_0.025_dct_0123_1_run1,False,ncep-air,tsvdmii,0.025,dct,0123,1,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.025_dct_0123_1_run2,False,ncep-air,tsvdmii,0.025,dct,0123,1,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.025_dct_0123_1_run3,False,ncep-air,tsvdmii,0.025,dct,0123,1,run3,,,,,,,,,,,,,,,,,,,,,,
@@ -818,7 +818,7 @@ ncep-air_tsvdmii_0.025_dct_0123_64_run3,True,ncep-air,tsvdmii,0.025,dct,0123,64,
 ncep-air_tsvdmii_0.025_dct_0123_8_run1,False,ncep-air,tsvdmii,0.025,dct,0123,8,run1,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.025_dct_0123_8_run2,False,ncep-air,tsvdmii,0.025,dct,0123,8,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.025_dct_0123_8_run3,False,ncep-air,tsvdmii,0.025,dct,0123,8,run3,,,,,,,,,,,,,,,,,,,,,,
-ncep-air_tsvdmii_0.050_dct_0123_16_run1,False,ncep-air,tsvdmii,0.050,dct,0123,16,run1,,,,,,,,,,,,,,,,,,,,,,
+ncep-air_tsvdmii_0.050_dct_0123_16_run1,False,ncep-air,tsvdmii,0.050,dct,0123,16,run1,tsvdmii,dct,None,0.05,ncep-air,/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure,"(0, 1, 2, 3)",,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.050_dct_0123_16_run2,False,ncep-air,tsvdmii,0.050,dct,0123,16,run2,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.050_dct_0123_16_run3,False,ncep-air,tsvdmii,0.050,dct,0123,16,run3,,,,,,,,,,,,,,,,,,,,,,
 ncep-air_tsvdmii_0.050_dct_0123_1_run1,False,ncep-air,tsvdmii,0.050,dct,0123,1,run1,,,,,,,,,,,,,,,,,,,,,,
