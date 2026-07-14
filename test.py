@@ -5,7 +5,9 @@ import os
 import itertools
 import gc
 import time
+from alg import starM_product, starM_product_ttb
 import pystarm
+
 
 def np_slicewise_matmulks(U_jagged, S_jagged, Vt_jagged):
     T_slices = []
@@ -942,6 +944,91 @@ class JaggedMatrixTestCase(unittest.TestCase):
         jagged_mat_vals = np.frombuffer(jagged_mat, dtype=np.float64)
         flag = np.allclose(vals, jagged_mat_vals)
         self.assertEqual(flag, True)
+
+
+class StarMProductTestCase(unittest.TestCase):
+    '''
+    This tests the functionality of the starM product algorithm outlined by the
+    `starM_product` function in `alg.py`
+    '''
+    def test_third_order_product(self):
+       '''Test a third order starM product'''
+       # We will say that A has dimensions m x p x n_slices
+       # B will have dimensions p x l x n_slices
+       # M will be an identity matrix with dimensions n_slices x n_slices
+       
+       # Keep all dimensions between 2 and 10 to make sure it doesn't run too long.
+       n_slices = np.random.randint(2, 10)
+       m = np.random.randint(2,10)
+       p = np.random.randint(2,10)
+       l = np.random.randint(2,10)
+
+       A_nelm = m * p * n_slices
+       A_dims = (m, p, n_slices)
+
+       B_nelm = p * l * n_slices
+       B_dims = (p, l, n_slices)
+       
+       A = np.random.rand(A_nelm).reshape(A_dims, order='F')
+       B = np.random.rand(B_nelm).reshape(B_dims, order='F')
+       M = np.identity(n_slices)
+
+       C_pystarm = starM_product(A,B,M)
+       C_ttb = starM_product_ttb(A,B,M)
+
+       self.assertTrue(np.allclose(C_pystarm, C_ttb))
+    
+    def test_fourth_order_product(self):
+        '''Test a fourth-order starM product.'''
+        n = np.random.randint(2,10)
+        m = np.random.randint(2,10)
+        p = np.random.randint(2,10)
+        l = np.random.randint(2,10)
+        q = np.random.randint(2,10)
+
+        A_nelm = m * p * n * q
+        A_dims = (m, p, n, q)
+
+        B_nelm = p * l * n * q
+        B_dims = (p, l, n, q)
+        
+        A = np.random.rand(A_nelm).reshape(A_dims, order='F')
+        B = np.random.rand(B_nelm).reshape(B_dims, order='F')
+        M = [np.identity(n) for n in A_dims[2:]]
+
+        C_pystarm = starM_product(A,B,M)
+        C_ttb = starM_product_ttb(A,B,M)
+
+        self.assertTrue(np.allclose(C_pystarm, C_ttb))
+
+    def test_third_order_product_transpose(self):
+       '''Test a third order starM product while transposing both slices'''
+       # We will say that A has dimensions m x p x n_slices
+       # B will have dimensions p x l x n_slices
+       # M will be an identity matrix with dimensions n_slices x n_slices
+       
+       # Keep all dimensions between 2 and 10 to make sure it doesn't run too long.
+       n_slices = np.random.randint(2, 10)
+       m = np.random.randint(2,10)
+       p = np.random.randint(2,10)
+       l = np.random.randint(2,10)
+
+       A_nelm = m * p * n_slices
+       A_dims = (m, p, n_slices)
+
+       B_nelm = p * l * n_slices
+       B_dims = (p, l, n_slices)
+       
+       A = np.random.rand(A_nelm).reshape(A_dims, order='F')
+       B = np.random.rand(B_nelm).reshape(B_dims, order='F')
+       M = np.identity(n_slices)
+
+       C_w_transpose = starM_product(A,B,M, A_transpose=True, B_transpose=True)
+       C_wo_transpose = starM_product(A,B,M, A_transpose=False, B_transpose=False)
+
+       self.assertFalse(np.allclose(C_w_transpose, C_wo_transpose))
+
+# ADD A PYTTB TEST CASE FOR CONTRACTION, LOOK AT TTT FUNCTION AND CONTRACT ALL MODES BUT K.
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

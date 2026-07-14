@@ -1,0 +1,34 @@
+#!/bin/bash
+set -e
+
+echo "Loading modules..."
+module load miniforge
+module load gcc
+module load intel-oneapi-mkl
+
+echo "Initializing conda..."
+conda init bash || true
+
+# Make conda available in this shell
+if [ -f "$(conda info --base)/etc/profile.d/conda.sh" ]; then
+    source "$(conda info --base)/etc/profile.d/conda.sh"
+else
+    echo "Could not find conda.sh"
+    exit 1
+fi
+
+ENV_NAME="starm-env"
+
+echo "Creating conda environment if it does not already exist..."
+if ! conda env list | awk '{print $1}' | grep -qx "$ENV_NAME"; then
+    conda create -y -n "$ENV_NAME" python
+fi
+
+echo "Activating conda environment..."
+conda activate "$ENV_NAME"
+
+echo "Installing Python dependencies..."
+conda install -y pip
+pip install numpy pybind11 pyttb mkl
+
+CC=g++

@@ -165,7 +165,10 @@ PYBIND11_MODULE(pystarm, m) {
         py::arg("A"), py::arg("k"), py::arg("verbose") = false);
 	m.def("slicewise_svdks", &slicewise_svdks, "Compute the truncated slice-wise SVD of a tensor with different ranks per frontal slice",
         py::arg("A"), py::arg("ks"), py::arg("verbose") = false);
-	m.def("slicewise_matmul", &slicewise_matmul, "Compute the slice-wise multiplication of the output of slicewise_svd - U, VT and S");
+    // Bind the overloaded functions using static_cast 
+	m.def("slicewise_matmul", static_cast<Tensor (*)(const Tensor&, const Tensor&, bool, bool)>(&slicewise_matmul), "Compute the slice-wise multiplication of two tensors, A and B",
+        py::arg("A"), py::arg("B"), py::arg("transpose_A") = false, py::arg("transpose_B") = false);
+    m.def("slicewise_matmul", static_cast<Tensor (*)(const Tensor&, const Matrix&, const Tensor&)>(&slicewise_matmul), "Compute the slice-wise multiplication of the output of slicewise_svd - U, VT and S");
 	m.def("slicewise_svd_thr", &slicewise_svd_thr, "Compute the slice-wise SVD of a tensor given an error tolerance.",
         py::arg("A"), py::arg("tol"), py::arg("verbose") = false);
 	m.def("slicewise_svd_thr2", &slicewise_svd_thr2, "Compute the slice-wise SVD of a tensor given an error tolerance.",

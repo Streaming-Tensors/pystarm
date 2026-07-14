@@ -504,6 +504,71 @@ Tensor slicewise_matmul(const Tensor& U, const Matrix& S, const Tensor& VT){
     US.clear();
     return TO;
 }
+// Overloaded operator, this one is slicewise matmul just for two tensors.
+Tensor slicewise_matmul(const Tensor& A, const Tensor& B, bool transpose_A=false, bool transpose_B=false){
+    // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch.html
+    // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
+    assert(A.nslices == B.nslices);
+
+    // Get resulting tensor dimensions.
+    std::vector<size_t> TOdims(A.dims);
+    TOdims[0] = A.dims[0];
+    TOdims[1] = B.dims[1];
+    // printf("TOdims[1]: %lld\n", TOdims[1]);
+    size_t TObuflen = std::accumulate(TOdims.begin(), TOdims.end(), (size_t)1, std::multiplies<size_t>());
+    // printf("TO buflen: %lld\n", TObuflen);
+    Tensor TO(TObuflen, A.ndim, TOdims);
+
+    {
+        // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-0/cblas-gemm-batch-strided.html
+        CBLAS_LAYOUT cblas_layout = CblasColMajor;
+        CBLAS_TRANSPOSE cblas_transa = CblasNoTrans;
+        if (transpose_A){
+          cblas_transa = CblasTrans;
+        }
+        CBLAS_TRANSPOSE cblas_transb = CblasNoTrans;
+        if(transpose_B){
+          cblas_transb = CblasTrans;
+        }
+        MKL_INT cblas_m = (MKL_INT) A.dims[0];
+        MKL_INT cblas_k = (MKL_INT) A.dims[1]; 
+        MKL_INT cblas_n = (MKL_INT) B.dims[1];
+        double cblas_alpha = 1.0;
+        double cblas_beta = 0.0;
+        double* cblas_a = A.data_ptr;
+        MKL_INT cblas_lda = (MKL_INT) A.dims[0];
+        MKL_INT cblas_stridea = (MKL_INT)(A.dims[0] * A.dims[1]);
+        double* cblas_b = B.data_ptr;
+        MKL_INT cblas_ldb = (MKL_INT) B.dims[0];
+        MKL_INT cblas_strideb = (MKL_INT)(B.dims[0] * B.dims[1]);
+        double* cblas_c = TO.data_ptr; 
+        MKL_INT cblas_ldc = (MKL_INT) TO.dims[0];
+        MKL_INT cblas_stridec = (MKL_INT)(TO.dims[0] * TO.dims[1]);
+        MKL_INT cblas_batch_size = (MKL_INT)  TO.nslices;
+
+        cblas_dgemm_batch_strided(
+            cblas_layout, // Column major order. `Layout` parameter of MKL cblas call.
+            cblas_transa, // A matrix is not transpose. `transa` param of MKL cblas call.
+            cblas_transb, // B matrix is transpose. `transb` param of MKL cblas call.
+            cblas_m, // Number of rows of A or C. `m` param of MKL cblas call.
+            cblas_n, // Number of cols of B or C. `n` param of MKL cblas call.
+            cblas_k, // Inner dimension - number of columns of A or number of rows of B. `k` param of MKL cblas call.
+            cblas_alpha, // Scalar `alpha` param of MKL cblas call.
+            cblas_a, // Data buffer of A. `a` param of MKL cblas call.
+            cblas_lda, // Leading dimension of A. `lda` param of MKL cblas call.
+            cblas_stridea,
+            cblas_b, // Data buffer of B. `b` param of MKL cblas call.
+            cblas_ldb, // Leading dimension of B. `ldb` param of MKL cblas call.
+            cblas_strideb,
+            cblas_beta, // Scalar `beta` param of MKL cblas call.
+            cblas_c, // Data buffer of C. `c` param of MKL cblas call.
+            cblas_ldc, // Leading dimension of C. `ldc` param of MKL cblas call.
+            cblas_stridec,
+            cblas_batch_size
+        );
+    }
+    return TO;
+}
 
 Tensor slicewise_matmulks(const JaggedTensor& U, const JaggedMatrix& S, const JaggedTensor& VT){
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch.html
@@ -5324,6 +5389,59 @@ Tensor tsvdmi_reconstruct(const Tensor& U, const Matrix& S, const Tensor& VT, st
     Tensor A_tilde = transform(A_hat, M, order);
     A_hat.clear();
     return A_tilde;
+}
+
+Matrix tensor_contract_all_but_one(const Tensor& A, const Tensor& B, int mode, bool A_transpose=false, bool B_transpose=false){
+    /*
+    Naive implementation of matrix product of mode-k unfolding of two tensors.
+    */
+    int i = 0; // Our iterator. Declare+initialize here.
+    // Take into account the mode which both are unfolding for. Remember this is B(k) A(k)^T
+    // The dimensions of the final tensor will be p X n_k. 
+
+    // Get necessary dimensions
+    std::tuple A_dims = A.getdims();
+    std::tuple B_dims = B.getdims();
+    int p = B_dims[mode];
+    int n_k = A_dims[mode];
+
+    // Determine the number of columns for each block and set dimensions accordingly. 
+    int num_cols = 1;
+    for (i = 0; i < mode; i+=1) { num_cols *= A_dims[i];}
+    std::tuple A_block_dims = (n_k, num_cols);
+    std::tuple B_block_dims = (p, num_cols);
+
+    // This will be a cumulative matrix, write a function that makes the buffer all zeros to start.
+    Matrix C(p*n_k, p, n_k);
+
+    // Get the number of "blocks" we are multiplying.
+    int num_blocks = 1;
+    for (i = mode; i < A.ndim(); i+=1){ num_blocks *= A_dims[i];}
+
+    // Do we need transpose? Find out here.
+    const CBLAS_TRANSPOSE transa = (A_transpose) : CblasTrans ? CblasNoTrans;
+    const CBLAS_TRANSPOSE transb = (B_transpose) : CblasTrans ? CblasNoTrans;
+
+    // Calculate first block product. 
+    cblas_dgemm(
+        CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
+        transa, // A matrix is not transpose. `transa` param of MKL cblas call.
+        transb, // B matrix is not transpose. `transb` param of MKL cblas call.
+        C.nrow, // Number of rows of A or C. `m` param of MKL cblas call.
+        C.ncol, // Number of cols of B or C. `n` param of MKL cblas call.
+        num_cols, // Inner dimension - number of columns of A or number of rows of B. `k` param of MKL cblas call.
+        1.0, // Scalar `alpha` param of MKL cblas call.
+        A.data_ptr, // Data buffer of A. `a` param of MKL cblas call.
+        A.nrow, // Leading dimension of A. `lda` param of MKL cblas call.
+        B.data_ptr, // Data buffer of B. `b` param of MKL cblas call.
+        B.nrow, // Leading dimension of B. `ldb` param of MKL cblas call.
+        0.0, // Scalar `beta` param of MKL cblas call.
+        C.data_ptr, // Data buffer of C. `c` param of MKL cblas call.
+        C.nrow // Leading dimension of C. `ldc` param of MKL cblas call.
+    );
+    
+
+    return C;
 }
 
 #endif
