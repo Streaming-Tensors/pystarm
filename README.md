@@ -156,11 +156,6 @@ VT.clear()
 A_reconst.clear()
 ```
 
-The example above uses `tsvdm_II_compress` (tolerance-based) and
-`tsvdm_II_reconstruct`. A fixed-rank variant, `tsvdm_I_compress` and
-`tsvdm_I_reconstruct`, is also available — it takes a rank `k` instead of a
-tolerance.
-
 ## Citation
 
 If you use pystarm in your research, please cite our paper:
