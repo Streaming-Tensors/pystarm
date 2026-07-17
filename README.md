@@ -87,6 +87,27 @@ export MKL_DYNAMIC=FALSE
 
 where `<N>` is the number of cores you want to use.
 
+### API reference
+
+Data structures (wrap contiguous Fortran-order float64 numpy arrays):
+
+- `pystarm.Tensor(arr, ndim, shape)` — wrap an n-D numpy array as a pystarm tensor
+- `pystarm.Matrix(arr, nrow, ncol)` — wrap a 2-D numpy array as a pystarm matrix
+
+Main algorithms:
+
+- `pystarm.tsvdm_I_compress(A, Ms, ttm_modes, k)` — fixed-rank compression. Returns `(U, S, VT)`.
+- `pystarm.tsvdm_I_reconstruct(U, S, VT, Minvs, ttm_modes, orig_shape)` — reconstruct from fixed-rank factors.
+- `pystarm.tsvdm_II_compress(A, Ms, ttm_modes, tol)` — tolerance-based compression. Returns `(U, S, VT)`.
+- `pystarm.tsvdm_II_reconstruct(U, S, VT, Minvs, ttm_modes, orig_shape)` — reconstruct from tolerance-based factors.
+
+Where:
+- `A` is a `pystarm.Tensor`
+- `Ms` / `Minvs` are lists of `pystarm.Matrix` — forward and inverse transforms for each mode
+- `ttm_modes` is a list of ints — which modes the transforms apply to
+- `k` is the fixed slice rank; `tol` is the relative error tolerance
+- Returned `U`, `S`, `VT` are pystarm objects — call `.clear()` to release their memory when no longer needed
+
 ### Example
 
 The following example compresses a random 4D tensor using tsvdmii and
