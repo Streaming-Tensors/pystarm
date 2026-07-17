@@ -156,8 +156,12 @@ PYBIND11_MODULE(pystarm, m) {
 	m.def("ttm_parfor", &ttm_parfor, "Tensor times matrix multiply on a specific mode by parallel loop with sequential BLAS per block");
 	m.def("slicewise_svdvals", &slicewise_svdvals, "Compute the slice-wise singular values of a tensor",
         py::arg("A"), py::arg("verbose") = false);
+	//m.def("slicewise_svdvals_mkl", &slicewise_svdvals_mkl, "Compute the slice-wise singular values of a tensor using batched LAPACK",
+  //      py::arg("A"), py::arg("verbose") = false);
 	m.def("slicewise_svd", &slicewise_svd, "Compute the slice-wise thin SVD of a tensor",
         py::arg("A"), py::arg("verbose") = false);
+	//m.def("slicewise_svd_mkl", &slicewise_svd_mkl, "Compute the slice-wise thin SVD of a tensor using batched LAPACK",
+  //      py::arg("A"), py::arg("verbose") = false);
 	m.def("slicewise_svd_seq", &slicewise_svd_seq,
         "Compute slice-wise thin SVD sequentially — one MKL-threaded dgesvd per slice (benchmark variant)",
         py::arg("A"), py::arg("verbose") = false);
@@ -166,8 +170,14 @@ PYBIND11_MODULE(pystarm, m) {
 	m.def("slicewise_svdks", &slicewise_svdks, "Compute the truncated slice-wise SVD of a tensor with different ranks per frontal slice",
         py::arg("A"), py::arg("ks"), py::arg("verbose") = false);
 	m.def("slicewise_matmul", &slicewise_matmul, "Compute the slice-wise multiplication of the output of slicewise_svd - U, VT and S");
+	m.def("slicewise_svd_thr", &slicewise_svd_thr, "Compute the slice-wise SVD of a tensor given an error tolerance.",
+        py::arg("A"), py::arg("tol"), py::arg("verbose") = false);
+	m.def("slicewise_svd_thr2", &slicewise_svd_thr2, "Compute the slice-wise SVD of a tensor given an error tolerance.",
+        py::arg("A"), py::arg("tol"), py::arg("verbose") = false);
 	m.def("slicewise_matmulks", &slicewise_matmulks, "Compute the slice-wise multiplication of the output of slicewise_svdks - U, VT and S");
 	m.def("transform", &transform, "Transform tensor with (multi)ttm in a specified order");
+	m.def("truncate_factors", &truncate_factors, "Truncate a complete TSVDM set of factors given slicewise ranks.",
+        py::arg("U"), py::arg("S"), py::arg("Vt"), py::arg("ks"));
 	m.def("tsvdmi_compress", &tsvdmi_compress, "Compress using TSVDM-I algorithm");
 	m.def("tsvdmi_reconstruct", &tsvdmi_reconstruct, "Reconstruct output of TSVDM-I algorithm");
 	m.def("tsvdmii_compress", &tsvdmii_compress, "Compress using TSVDM-II algorithm");
