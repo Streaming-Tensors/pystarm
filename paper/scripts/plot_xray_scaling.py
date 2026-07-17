@@ -48,8 +48,8 @@ TOL = 0.0001  # tolerance parameter for tsvdmii
 # Thread counts to include on x-axis (must exist in the CSV)
 THREADS = [1, 2, 4, 8, 16, 32, 64]
 
-CSV_FILE = "scripts/experiments_alcf-aurora.csv"   # path relative to project root
-OUTFILE  = "plots/xray_scaling.pdf"                # path relative to project root
+CSV_FILE = "scripts/experiments_alcf-aurora.csv"
+OUTFILE  = "plots/xray_scaling.pdf"
 TITLE    = "X-ray — Strong Scaling"
 
 FIG_SIZE = (3.33, 3.0)

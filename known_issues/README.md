@@ -1,5 +1,8 @@
 # Known Issues
 
+> **Note:** All commands below assume you are running from the `paper/`
+> directory (i.e., `cd paper` first).
+
 ## 1. Crash with tsvdmi, soccer data, identity transformation, and multiple threads
 
 ### Description
@@ -49,52 +52,32 @@ system includes support for building with ASan.
 
 ### Building the ASan Target
 
-The `Makefile` contains an `asan` target that compiles pystarm with ASan instrumentation and
-produces a separately named `.so` file (e.g., `pystarm_asan.cpython-311-x86_64-linux-gnu.so`)
-so it does not conflict with the normal build:
+Build pystarm with ASan instrumentation. This overwrites the production `.so` — running
+`make clean` first is required if switching from a production build:
 
 ```bash
-make asan
+make clean
+make BUILD_TYPE=asan
 ```
 
 ### System Setup
+
+> **Note:** The commands in the ASan section below are run from the repo root
+> (not from `paper/` like the section above).
 
 Before running with ASan, the system environment must be configured correctly. A helper script
 is provided:
 
 ```bash
-source scripts/asan-run-prep.sh
+source asan-run-prep.sh
 ```
-
-### Loading the ASan Build in Python
-
-Because the ASan build has a different filename, pystarm cannot be loaded with a plain
-`import pystarm`. Instead, load it manually using `importlib`. The top of `soccer.py` contains
-the necessary code — **uncomment** those lines and **comment out** the regular `import pystarm`
-line:
-
-```python
-import importlib.util, sys
-_spec = importlib.util.spec_from_file_location(
-        "pystarm",
-        "/path/to/pystarm_asan.cpython-311-x86_64-linux-gnu.so"
-)
-pystarm = importlib.util.module_from_spec(_spec)
-sys.modules["pystarm"] = pystarm
-_spec.loader.exec_module(pystarm)
-
-# import pystarm   <-- comment this out
-```
-
-This also ensures that `alg.py` (which does `import pystarm`) picks up the ASan build
-automatically, since the module is registered in `sys.modules` before `alg.py` is imported.
 
 ### Running and Capturing ASan Output
 
 Redirect both stdout and stderr to capture the full ASan report:
 
 ```bash
-python soccer.py -alg tsvdmi -k 50 -mtype eye > asan_soccer_eye.txt 2>&1
+python paper/soccer.py -alg tsvdmi -k 50 -mtype eye > asan_soccer_eye.txt 2>&1
 ```
 
 ASan output is written to stderr. The report will contain the error type, the full stack trace

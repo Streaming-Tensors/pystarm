@@ -2,7 +2,7 @@
 # asan-run-prep.sh
 # Sets up the environment for running Python scripts that use the ASAN build of pystarm.
 # Must be sourced (not executed) so the variables are set in the current shell:
-#   source scripts/asan-run-prep.sh
+#   source asan-run-prep.sh
 
 # Selects 64-bit integer interface for dynamic MKL (matches -DMKL_ILP64 used at compile time)
 export MKL_INTERFACE_LAYER=ILP64
@@ -11,7 +11,7 @@ export MKL_INTERFACE_LAYER=ILP64
 export MKL_THREADING_LAYER=GNU
 
 # Adds MKL's dynamic library directory to the runtime library search path
-# so the OS dynamic loader can find libmkl_rt.so.2 when pystarm_asan is imported
+# so the OS dynamic loader can find libmkl_rt.so.2 when the ASan-built pystarm is imported
 export LD_LIBRARY_PATH=$MKLROOT/lib/intel64:$LD_LIBRARY_PATH
 
 # Ensures the ASAN runtime is loaded before Python, MKL, and OpenMP

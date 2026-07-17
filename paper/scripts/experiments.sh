@@ -29,7 +29,6 @@ if [ "$MACHINE" == "nersc-perlmutter-cpu" ]; then
     DFILE_CFD="/global/cfs/cdirs/m4293/starMData/"
     DFILE_NCEP_AIR="/global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure"
     DFILE_NCEP_AIR_6="/global/cfs/cdirs/m4293/taufique/NCEP-NCAR/pressure"
-    DFILE_NCEP_SLP="/global/cfs/cdirs/m4293/taufique/NCEP-NCAR/surface"
     DFILE_XRAY="/global/cfs/cdirs/m4293/xray/z3d_movo.npy"
 elif [ "$MACHINE" == "alcf-aurora" ]; then
     DFILE_SOCCER="data/iniesta.mp4"
@@ -38,7 +37,6 @@ elif [ "$MACHINE" == "alcf-aurora" ]; then
     DFILE_CFD="/lus/flare/projects/DFTCalc2/starM-HPC/starMData/cfd"
     DFILE_NCEP_AIR="/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure"
     DFILE_NCEP_AIR_6="/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/pressure"
-    DFILE_NCEP_SLP="/lus/flare/projects/DFTCalc2/starM-HPC/starMData/ncep/surface"
     DFILE_XRAY="/lus/flare/projects/DFTCalc2/starM-HPC/starMData/xray/z3d_movo.npy"
 fi
 
@@ -57,7 +55,7 @@ for NTHREADS in "${THREADS[@]}"; do
     export OMP_NUM_THREADS=$NTHREADS
     export MKL_NUM_THREADS=$NTHREADS
 
-    #for DNAME in "soccer" "traffic-color" "traffic-gray" "dcmall" "cfd" "ncep-air" "ncep-air-6" "ncep-slp" "xray"; do
+    #for DNAME in "soccer" "traffic-color" "traffic-gray" "dcmall" "cfd" "ncep-air" "ncep-air-6" "xray"; do
     for DNAME in "ncep-air" "ncep-air-6" "cfd" "xray"; do
 
         # --- Dataset definitions (shared by Python and MATLAB) ---
@@ -77,7 +75,7 @@ for NTHREADS in "${THREADS[@]}"; do
         elif [ "$DNAME" == "cfd" ]; then
             DFILE="$DFILE_CFD"
             PERM_MODES=("01234")
-            K_VALUES=(5 10 20 40 80)
+            K_VALUES=(1 2 3 4 5 10 20 40 80 160)
         elif [ "$DNAME" == "dcmall" ]; then
             DFILE="$DFILE_DCMALL"
             PERM_MODES=("021")
@@ -91,11 +89,6 @@ for NTHREADS in "${THREADS[@]}"; do
             DFILE="$DFILE_NCEP_AIR_6"
             PERM_MODES=("012345")
             K_VALUES=(1 2 3 4 5 10 20 40)
-        elif [ "$DNAME" == "ncep-slp" ]; then
-            DFILE="$DFILE_NCEP_SLP"
-            PERM_MODES=("012")
-            K_VALUES=(5 10 20 40)
-            K_MAX=1000
         elif [ "$DNAME" == "xray" ]; then
             DFILE="$DFILE_XRAY"
             PERM_MODES=("012")

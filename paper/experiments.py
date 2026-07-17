@@ -9,8 +9,8 @@ from scipy.fft import dct
 from sklearn.utils.extmath import randomized_svd
 import pystarm
 import pyttb as ttb
-from alg import tsvdm_I_compress, tsvdm_I_reconstruct
-from alg import tsvdm_II_compress, tsvdm_II_reconstruct
+from pystarm.alg import tsvdm_I_compress, tsvdm_I_reconstruct
+from pystarm.alg import tsvdm_II_compress, tsvdm_II_reconstruct
 
 
 def read_soccer_data(filepath):
@@ -161,40 +161,6 @@ def read_ncep_air(data_dir, variable, year_start, year_end):
     return x
 
 
-def read_ncep_slp(data_dir, year_start, year_end):
-    """Read NCEP Reanalysis surface SLP files for a range of years and return
-    a single Fortran-order float64 tensor with shape (lat, lon, time).
-
-    Each annual file is opened with xarray, the data variable is extracted as
-    a NumPy array, converted to float64, and transposed from (time, lat, lon)
-    -> (lat, lon, time).  All years are then concatenated along the time axis
-    and copied slice-by-slice into a contiguous Fortran-order buffer.
-    """
-    years = range(year_start, year_end + 1)
-    per_year = []
-
-    for year in years:
-        filepath = os.path.join(data_dir, f"slp.{year}.nc")
-        print(f"  Reading {os.path.basename(filepath)} ...", end=" ", flush=True)
-
-        with xr.open_dataset(filepath) as ds:
-            raw = ds["slp"].values
-
-        raw = raw.astype(np.float64)
-        # Transpose (time, lat, lon) -> (lat, lon, time)
-        arr = np.transpose(raw, (1, 2, 0))
-        print(f"shape={arr.shape}  dtype={arr.dtype}")
-        per_year.append(arr)
-
-    full = np.concatenate(per_year, axis=-1)
-    print(f"\nConcatenated shape (before Fortran copy): {full.shape}")
-
-    x = np.zeros(full.shape, dtype=np.float64, order='F')
-    for i in range(full.shape[-1]):
-        x[..., i] = full[..., i]
-    return x
-
-
 def read_ncep_air_6(data_dir, variable, year_start, year_end):
     """Read NCEP Reanalysis pressure-level files for a range of years and return
     a 6-way Fortran-order float64 tensor with shape (lat, lon, level, tod, doy, year).
@@ -302,8 +268,6 @@ if __name__ == "__main__":
         arr = read_ncep_air(dfile, "air", 1948, 1957)
     elif dname == "ncep-air-6":
         arr = read_ncep_air_6(dfile, "air", 1948, 1957)
-    elif dname == "ncep-slp":
-        arr = read_ncep_slp(dfile, 1985, 2015)
     elif dname == "xray":
         arr = read_xray_data(dfile)
     else:

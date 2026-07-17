@@ -15,10 +15,10 @@ from scipy.fft import dct
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-from alg import tsvdm_I_compress
-from alg import tsvdm_I_reconstruct
-from alg import tsvdm_II_compress
-from alg import tsvdm_II_reconstruct
+from pystarm.alg import tsvdm_I_compress
+from pystarm.alg import tsvdm_I_reconstruct
+from pystarm.alg import tsvdm_II_compress
+from pystarm.alg import tsvdm_II_reconstruct
 import argparse
 import pystarm
 import pyttb as ttb
