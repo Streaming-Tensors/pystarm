@@ -1,5 +1,7 @@
-blah.txt
 build/
-__pycache__
-pystarm.cpython-*
+__pycache__/
+*.so
 .vscode/
+.DS_Store
+*.egg-info/
+.pytest_cache/
