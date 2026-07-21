@@ -174,6 +174,8 @@ PYBIND11_MODULE(pystarm, m) {
 	m.def("slicewise_svd_thr2", &slicewise_svd_thr2, "Compute the slice-wise SVD of a tensor given an error tolerance.",
         py::arg("A"), py::arg("tol"), py::arg("verbose") = false);
 	m.def("slicewise_matmulks", &slicewise_matmulks, "Compute the slice-wise multiplication of the output of slicewise_svdks - U, VT and S");
+    m.def("tensor_contract_all_but_one", &tensor_contract_all_but_one, "Contract two tensors in mode k with the formula A_(k) (B_(k))^T",
+        py::arg("A"), py::arg("B"), py::arg("k"), py::arg("naive"));
 	m.def("transform", &transform, "Transform tensor with (multi)ttm in a specified order");
 	m.def("truncate_factors", &truncate_factors, "Truncate a complete TSVDM set of factors given slicewise ranks.",
         py::arg("U"), py::arg("S"), py::arg("Vt"), py::arg("ks"));

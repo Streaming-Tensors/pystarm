@@ -53,6 +53,7 @@ def load_yuv_as_tensor(filename: str, width: int, height: int, num_frames: int) 
 
 if __name__ == "__main__":
     # Example usage with a standard CIF (352x288) test sequence
+    # SOURCE OF VIDEO: https://media.xiph.org/video/derf/
     filename = "data/akiyo_cif.y4m"
     width = 352 # This is our n1
     height = 288 # n2

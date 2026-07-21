@@ -6,6 +6,7 @@
 
 #include <numeric>
 #include <tuple>
+#include <iomanip>
 #include "utils.hpp"
 #include "matrix.hpp"
 #include "tensor.hpp"
@@ -5391,55 +5392,88 @@ Tensor tsvdmi_reconstruct(const Tensor& U, const Matrix& S, const Tensor& VT, st
     return A_tilde;
 }
 
-Matrix tensor_contract_all_but_one(const Tensor& A, const Tensor& B, int mode, bool A_transpose=false, bool B_transpose=false){
+Matrix tensor_contract_all_but_one(Tensor& A, Tensor& B, size_t mode, bool naive=false){
     /*
     Naive implementation of matrix product of mode-k unfolding of two tensors.
     */
-    int i = 0; // Our iterator. Declare+initialize here.
-    // Take into account the mode which both are unfolding for. Remember this is B(k) A(k)^T
-    // The dimensions of the final tensor will be p X n_k. 
+    
+    size_t i = 0; // Our iterator. Declare+initialize here.
+    // Take into account the mode which both are unfolding for. Remember this is A(k) (B(k))^T
+    // The dimensions of the final tensor will be n_k x p. 
 
     // Get necessary dimensions
-    std::tuple A_dims = A.getdims();
-    std::tuple B_dims = B.getdims();
-    int p = B_dims[mode];
-    int n_k = A_dims[mode];
+    std::vector<size_t> A_dims = A.getdims();
+    std::vector<size_t> B_dims = B.getdims();
+
+    size_t n_k = A_dims[mode];
+    size_t p = B_dims[mode];
 
     // Determine the number of columns for each block and set dimensions accordingly. 
-    int num_cols = 1;
-    for (i = 0; i < mode; i+=1) { num_cols *= A_dims[i];}
-    std::tuple A_block_dims = (n_k, num_cols);
-    std::tuple B_block_dims = (p, num_cols);
+    size_t num_cols = 1;
+    for (i = 0; i < mode; ++i) { 
+      assert(A_dims[i] == B_dims[i] && "Dimensions of A and B must be equal except at n_k.");
+      num_cols *= A_dims[i];
+    }
 
-    // This will be a cumulative matrix, write a function that makes the buffer all zeros to start.
-    Matrix C(p*n_k, p, n_k);
+    // This will be a cumulative matrix, makes the buffer all zeros to start.
+    Matrix C(p*n_k, n_k, p);
+    std::memset(C.data_ptr, 0, C.buflen * sizeof(double));
 
     // Get the number of "blocks" we are multiplying.
-    int num_blocks = 1;
-    for (i = mode; i < A.ndim(); i+=1){ num_blocks *= A_dims[i];}
+    size_t num_blocks = 1;
+    for (i = mode + 1; i < A.ndim; ++i){ 
+      assert(A_dims[i] == B_dims[i] && "Dimensions of A and B must be equal except at n_k.");
+      num_blocks *= A_dims[i];
+    }
 
-    // Do we need transpose? Find out here.
-    const CBLAS_TRANSPOSE transa = (A_transpose) : CblasTrans ? CblasNoTrans;
-    const CBLAS_TRANSPOSE transb = (B_transpose) : CblasTrans ? CblasNoTrans;
+    // Matrix multiply each block and sum in C.
+    // A blocks have dimensions n_k X num_cols, B blocks have dimensions p X num_cols, hence why we transpose B by default.
+    // std::cout << "p = " << p << "\nn_k = " << n_k << "\nnum_blocks = " << num_blocks << "\nnum_cols = " << num_cols << std::endl;
 
-    // Calculate first block product. 
-    cblas_dgemm(
-        CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
-        transa, // A matrix is not transpose. `transa` param of MKL cblas call.
-        transb, // B matrix is not transpose. `transb` param of MKL cblas call.
-        C.nrow, // Number of rows of A or C. `m` param of MKL cblas call.
-        C.ncol, // Number of cols of B or C. `n` param of MKL cblas call.
-        num_cols, // Inner dimension - number of columns of A or number of rows of B. `k` param of MKL cblas call.
-        1.0, // Scalar `alpha` param of MKL cblas call.
-        A.data_ptr, // Data buffer of A. `a` param of MKL cblas call.
-        A.nrow, // Leading dimension of A. `lda` param of MKL cblas call.
-        B.data_ptr, // Data buffer of B. `b` param of MKL cblas call.
-        B.nrow, // Leading dimension of B. `ldb` param of MKL cblas call.
-        0.0, // Scalar `beta` param of MKL cblas call.
-        C.data_ptr, // Data buffer of C. `c` param of MKL cblas call.
-        C.nrow // Leading dimension of C. `ldc` param of MKL cblas call.
-    );
-    
+    if(naive){
+      for (i = 0; i < num_blocks; ++i) {
+        cblas_dgemm(
+            CblasRowMajor,                // The buffer itself is column major, but the individual blocks are row major.
+            CblasNoTrans,                      
+            CblasTrans,                         // B_block transposed
+            n_k,                                  // m = rows of C
+            p,                                // n = cols of C
+            num_cols,                           // k = inner dim
+            1.0,
+            A.data_ptr + i * (n_k * num_cols),  // Change the start of the data pointer based on which block we are on.
+            num_cols,                           // lda, since it's row-major, it's the number of columns.
+            B.data_ptr + i * (p   * num_cols),
+            num_cols,                            // ldb, since it's row-major, it's the number of columns.
+            1.0,                                // accumulate into C
+            C.data_ptr,
+            p                              // ldc,  columns of C.
+        );
+      }
+    } else {
+      // parallel version.
+      double* C_data_ptr = C.data_ptr;
+      size_t C_buflen = C.buflen;
+
+      #pragma omp parallel for reduction(+:C_data_ptr[:C_buflen])
+      for (int b = 0; b < num_blocks; ++b) {
+        cblas_dgemm(
+            CblasRowMajor,                // The buffer itself is column major, but the individual blocks are row major.
+            CblasNoTrans,                      
+            CblasTrans,                         // B_block transposed
+            n_k,                                  // m = rows of C
+            p,                                // n = cols of C
+            num_cols,                           // k = inner dim
+            1.0,
+            A.data_ptr + b * (n_k * num_cols),  // Change the start of the data pointer based on which block we are on.
+            num_cols,                           // lda, since it's row-major, it's the number of columns.
+            B.data_ptr + b * (p   * num_cols),
+            num_cols,                            // ldb, since it's row-major, it's the number of columns.
+            1.0,                                // accumulate into C
+            C_data_ptr,
+            p                              // ldc,  columns of C.
+        );
+      }
+    }
 
     return C;
 }

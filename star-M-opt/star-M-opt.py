@@ -10,9 +10,14 @@ This is a parallel implementation of the algorithm outlined in Newman and Keegan
 which also expands its capabilities to higher-order tensors. 
 '''
 
+# Since pystarm is in the parent directory, we need to do this to import it.
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import pystarm
+
 import numpy as np
 import math
-import pystarm
+
 import argparse 
 from objective_func import low_rank_obj_func_gradient
 
@@ -48,7 +53,6 @@ def optimize_transformation_matrix(A: np.array, M_0, max_iter=100, k=1):
     for m in range(2, mode):
         assert dims[m] == M_0[m-2].shape[0]
         assert np.allclose(np.dot(M_0[m-2], M_0[m-2].T), np.identity(len(M_0[m-2]))), f"All M's must be orthogonal matrices. M[{m-2}] violates this."
-    
     
     # Convert to pystarm for parallelization.
     A_starm = pystarm.Tensor(A, mode, dims)

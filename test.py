@@ -5,7 +5,7 @@ import os
 import itertools
 import gc
 import time
-from alg import starM_product, starM_product_ttb
+from alg import starM_product, starM_product_ttb, tensor_contraction_product_ttb, tensor_contract_multiply
 import pystarm
 
 
@@ -1027,6 +1027,39 @@ class StarMProductTestCase(unittest.TestCase):
        C_wo_transpose = starM_product(A,B,M, A_transpose=False, B_transpose=False)
 
        self.assertFalse(np.allclose(C_w_transpose, C_wo_transpose))
+
+class ContractionTestCase(unittest.TestCase):
+    def test_order_three_contraction(self):
+        '''
+        Test a tensor contraction with all modes of two mode-3 tensors.
+        '''
+        
+        
+        modes = [0, 1, 2]
+        flags = []
+        for mode in modes:
+            n_k = np.random.randint(2, 10)
+            p = np.random.randint(2,10)
+            m = np.random.randint(2,10)
+
+            # For testing integrity, make sure all dims except n_k and p are equal.
+            A_nelm = n_k * m * m
+            A_dims = [m, m, m]
+            A_dims[mode] = n_k
+
+            B_nelm =  p * m * m
+            B_dims = [m, m, m]
+            B_dims[mode] = p
+
+            A = np.random.rand(A_nelm).reshape(A_dims, order='F')
+            B = np.random.rand(B_nelm).reshape(B_dims, order='F')
+            
+            C_pystarm = tensor_contract_multiply(A, B, mode, naive=False)
+            C_ttb = tensor_contraction_product_ttb(A, B, mode)
+            flags.append(np.allclose(C_pystarm, C_ttb))
+
+        self.assertEqual(np.all(flags), True)
+       
 
 # ADD A PYTTB TEST CASE FOR CONTRACTION, LOOK AT TTT FUNCTION AND CONTRACT ALL MODES BUT K.
 
