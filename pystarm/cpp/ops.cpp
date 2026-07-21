@@ -504,6 +504,71 @@ Tensor slicewise_matmul(const Tensor& U, const Matrix& S, const Tensor& VT){
     US.clear();
     return TO;
 }
+Tensor slicewise_matmul(const Tensor& A, const Tensor& B, bool transpose_A=false, bool transpose_B=false){
+    // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch.html
+    // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
+    assert(A.nslices == B.nslices);
+
+    // Get resulting tensor dimensions.
+    std::vector<size_t> TOdims(A.dims);
+    TOdims[0] = A.dims[0];
+    TOdims[1] = B.dims[1];
+    // printf("TOdims[1]: %lld\n", TOdims[1]);
+    size_t TObuflen = std::accumulate(TOdims.begin(), TOdims.end(), (size_t)1, std::multiplies<size_t>());
+    // printf("TO buflen: %lld\n", TObuflen);
+    Tensor TO(TObuflen, A.ndim, TOdims);
+
+    {
+        // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-0/cblas-gemm-batch-strided.html
+        CBLAS_LAYOUT cblas_layout = CblasColMajor;
+        CBLAS_TRANSPOSE cblas_transa = CblasNoTrans;
+        if (transpose_A){
+          cblas_transa = CblasTrans;
+        }
+        CBLAS_TRANSPOSE cblas_transb = CblasNoTrans;
+        if(transpose_B){
+          cblas_transb = CblasTrans;
+        }
+        MKL_INT cblas_m = (MKL_INT) A.dims[0];
+        MKL_INT cblas_k = (MKL_INT) A.dims[1]; 
+        MKL_INT cblas_n = (MKL_INT) B.dims[1];
+        double cblas_alpha = 1.0;
+        double cblas_beta = 0.0;
+        double* cblas_a = A.data_ptr;
+        MKL_INT cblas_lda = (MKL_INT) A.dims[0];
+        MKL_INT cblas_stridea = (MKL_INT)(A.dims[0] * A.dims[1]);
+        double* cblas_b = B.data_ptr;
+        MKL_INT cblas_ldb = (MKL_INT) B.dims[0];
+        MKL_INT cblas_strideb = (MKL_INT)(B.dims[0] * B.dims[1]);
+        double* cblas_c = TO.data_ptr; 
+        MKL_INT cblas_ldc = (MKL_INT) TO.dims[0];
+        MKL_INT cblas_stridec = (MKL_INT)(TO.dims[0] * TO.dims[1]);
+        MKL_INT cblas_batch_size = (MKL_INT)  TO.nslices;
+
+        cblas_dgemm_batch_strided(
+            cblas_layout, // Column major order. `Layout` parameter of MKL cblas call.
+            cblas_transa, // A matrix is not transpose. `transa` param of MKL cblas call.
+            cblas_transb, // B matrix is transpose. `transb` param of MKL cblas call.
+            cblas_m, // Number of rows of A or C. `m` param of MKL cblas call.
+            cblas_n, // Number of cols of B or C. `n` param of MKL cblas call.
+            cblas_k, // Inner dimension - number of columns of A or number of rows of B. `k` param of MKL cblas call.
+            cblas_alpha, // Scalar `alpha` param of MKL cblas call.
+            cblas_a, // Data buffer of A. `a` param of MKL cblas call.
+            cblas_lda, // Leading dimension of A. `lda` param of MKL cblas call.
+            cblas_stridea,
+            cblas_b, // Data buffer of B. `b` param of MKL cblas call.
+            cblas_ldb, // Leading dimension of B. `ldb` param of MKL cblas call.
+            cblas_strideb,
+            cblas_beta, // Scalar `beta` param of MKL cblas call.
+            cblas_c, // Data buffer of C. `c` param of MKL cblas call.
+            cblas_ldc, // Leading dimension of C. `ldc` param of MKL cblas call.
+            cblas_stridec,
+            cblas_batch_size
+        );
+    }
+    return TO;
+}
+
 
 Tensor slicewise_matmulks(const JaggedTensor& U, const JaggedMatrix& S, const JaggedTensor& VT){
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch.html
@@ -5477,6 +5542,92 @@ Tensor tsvdmi_reconstruct(const Tensor& U, const Matrix& S, const Tensor& VT, st
     Tensor A_tilde = transform(A_hat, M, order);
     A_hat.clear();
     return A_tilde;
+}
+
+Matrix tensor_contract_all_but_one(Tensor& A, Tensor& B, size_t mode, bool naive=false){
+    /*
+    Naive implementation of matrix product of mode-k unfolding of two tensors.
+    */
+    
+    size_t i = 0; // Our iterator. Declare+initialize here.
+    // Take into account the mode which both are unfolding for. Remember this is A(k) (B(k))^T
+    // The dimensions of the final tensor will be n_k x p. 
+
+    // Get necessary dimensions
+    std::vector<size_t> A_dims = A.getdims();
+    std::vector<size_t> B_dims = B.getdims();
+
+    size_t n_k = A_dims[mode];
+    size_t p = B_dims[mode];
+
+    // Determine the number of columns for each block and set dimensions accordingly. 
+    size_t num_cols = 1;
+    for (i = 0; i < mode; ++i) { 
+      assert(A_dims[i] == B_dims[i] && "Dimensions of A and B must be equal except at n_k.");
+      num_cols *= A_dims[i];
+    }
+
+    // This will be a cumulative matrix, makes the buffer all zeros to start.
+    Matrix C(p*n_k, n_k, p);
+    std::memset(C.data_ptr, 0, C.buflen * sizeof(double));
+
+    // Get the number of "blocks" we are multiplying.
+    size_t num_blocks = 1;
+    for (i = mode + 1; i < A.ndim; ++i){ 
+      assert(A_dims[i] == B_dims[i] && "Dimensions of A and B must be equal except at n_k.");
+      num_blocks *= A_dims[i];
+    }
+
+    // Matrix multiply each block and sum in C.
+    // A blocks have dimensions n_k X num_cols, B blocks have dimensions p X num_cols, hence why we transpose B by default.
+    // std::cout << "p = " << p << "\nn_k = " << n_k << "\nnum_blocks = " << num_blocks << "\nnum_cols = " << num_cols << std::endl;
+
+    if(naive){
+      for (i = 0; i < num_blocks; ++i) {
+        cblas_dgemm(
+            CblasRowMajor,                // The buffer itself is column major, but the individual blocks are row major.
+            CblasNoTrans,                      
+            CblasTrans,                         // B_block transposed
+            n_k,                                  // m = rows of C
+            p,                                // n = cols of C
+            num_cols,                           // k = inner dim
+            1.0,
+            A.data_ptr + i * (n_k * num_cols),  // Change the start of the data pointer based on which block we are on.
+            num_cols,                           // lda, since it's row-major, it's the number of columns.
+            B.data_ptr + i * (p   * num_cols),
+            num_cols,                            // ldb, since it's row-major, it's the number of columns.
+            1.0,                                // accumulate into C
+            C.data_ptr,
+            p                              // ldc,  columns of C.
+        );
+      }
+    } else {
+      // parallel version.
+      double* C_data_ptr = C.data_ptr;
+      size_t C_buflen = C.buflen;
+
+      #pragma omp parallel for reduction(+:C_data_ptr[:C_buflen])
+      for (int b = 0; b < num_blocks; ++b) {
+        cblas_dgemm(
+            CblasColMajor,                
+            CblasTrans,                      
+            CblasNoTrans,                         // B_block transposed
+            n_k,                                  // m = rows of C
+            p,                                // n = cols of C
+            num_cols,                           // k = inner dim
+            1.0,
+            A.data_ptr + b * (n_k * num_cols),  // Change the start of the data pointer based on which block we are on.
+            num_cols,                           // lda, since it's row-major, it's the number of columns.
+            B.data_ptr + b * (p   * num_cols),
+            num_cols,                            // ldb, since it's row-major, it's the number of columns.
+            1.0,                                // accumulate into C
+            C_data_ptr,
+            n_k                              // ldc,  columns of C.
+        );
+      }
+    }
+
+    return C;
 }
 
 #endif

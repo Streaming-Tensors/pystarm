@@ -1,6 +1,3 @@
-import sys, os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 import pystarm
 import numpy as np
 import pyttb as ttb
@@ -210,4 +207,22 @@ def plot_runtimes_naive_reduction():
     plt.legend(["Naive parallel contraction", "OpenMP reduction contraction"])
     plt.savefig("figures/naive-vs-reduction-contraction-runtimes.svg", dpi=1200)
 
-plot_runtimes_naive_reduction()
+n = 3
+A_dims = (n,n,n,n)
+A_nelm = math.prod(A_dims)
+A_ndim = len(A_dims)
+
+B_dims = (n,n,n,n)
+B_nelm = math.prod(B_dims)
+B_ndim = len(B_dims)
+
+# Create numpy tensors
+A_np = np.asfortranarray(np.random.rand(A_nelm).reshape(A_dims, order='F'))
+B_np = np.asfortranarray(np.random.rand(B_nelm).reshape(B_dims, order='F'))
+
+# Compare results for ALL modes to check for an indexing offset
+k = 2
+C_cpp, cpp_time = tensor_contract_multiply(A_np, B_np, k, naive=False)
+C_ttb, ttb_time = tensor_contraction_product_ttb(A_np, B_np, mode=k)
+
+print(f"C_cpp = {C_cpp} \n\nC_ttb = {C_ttb}\n\n")

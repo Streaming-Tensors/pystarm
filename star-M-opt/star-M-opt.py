@@ -35,12 +35,18 @@ def riemannian_gradient_descent(A_np, M_0, max_iter=100, k=1):
     - M_opt: Optimal transformation matrices for A. Python list of pystarm matrices.
     '''
 
+
     return low_rank_obj_func_gradient(A_np, M_0, k), [1]
     
 
 def optimize_transformation_matrix(A: np.array, M_0, max_iter=100, k=1):
     '''
     Runs a full optimization of M. Also does sanity checks on all of the inputs to make sure nothing can go wrong. 
+    Inputs:
+    - A: numpy array/tensor. This is the data you want the transformation matrices to be optimized to.
+    - M_0: A python list of numpy matrices. These are your initial transformation matrices.
+    - max_iter: Default is 100. This is the number of gradient descent iterations you want to run.
+    - k: Default is 1. The rank you want to approximate at. 
     '''
 
     # ALL ASSERTIONS

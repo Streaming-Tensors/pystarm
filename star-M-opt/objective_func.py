@@ -10,8 +10,6 @@ def tensor_times_matrix(A, M, inv_flag=False):
 
     Returns:
     - A_hat: A moved into the transform domain.
-    - _Ahat_A: Jacobian of A_hat w.r.t A
-    - Jac_Ahat_M: Jacobian of A_hat w.r.t M
     '''
     # Move A and B into transform domain
     current_mode = 2 # start with mode 3-1=2
@@ -38,8 +36,13 @@ def low_rank_obj_func_gradient(A, M, k):
     # Forward pass
     A_hat = tensor_times_matrix(A, M)
     Uk_hat, Sk_hat, Vkt_hat = pystarm.slicewise_svdx(A_hat, k)
-    A_k_hat = pystarm.slicewise_matmul(Uk_hat, Sk_hat, Vkt_hat)
-    A_k = tensor_times_matrix(A, M, inv_flag=True)
+    Ak_hat = pystarm.slicewise_matmul(Uk_hat, Sk_hat, Vkt_hat)
+    Ak = tensor_times_matrix(Ak_hat, M, inv_flag=True) # inv_flag still needs to be implemented.
+
+    # Backwards pass
+    R = -(A - Ak) # This needs an actual implementation of a subtraction operator. Or just a parallel subtract function.
+    grd_Ak_wrt_M = pystarm.tensor_contract_all_but_one(R, Ak_hat, k, naive=False)
+
 
 
 

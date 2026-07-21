@@ -6,7 +6,7 @@ Note I load a collection of M-opt values, these were determined by a different p
 
 import numpy as np
 import pystarm
-from alg import tsvdm_I_compress, tsvdm_I_reconstruct
+from tests.alg import tsvdm_I_compress, tsvdm_I_reconstruct
 
 
 def load_yuv_as_tensor(filename: str, width: int, height: int, num_frames: int) -> np.ndarray:
