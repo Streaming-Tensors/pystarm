@@ -1,5 +1,16 @@
 ## Following: https://pybind11.readthedocs.io/en/stable/compiling.html#building-manually
 ## Comments generated with claude-code
+##
+## Set MKLROOT before building:
+##   NERSC Perlmutter: export MKLROOT=/global/common/software/nersc9/intel/oneapi/mkl/2024.1
+##   ALCF Aurora:      export MKLROOT=/opt/aurora/26.26.0/oneapi/mkl/latest
+##
+## Build types:
+##   make                       — production build (default)
+##   make BUILD_TYPE=asan       — AddressSanitizer instrumented build
+## Both produce the same output file. Switching between builds requires
+## `make clean` first. Before running the ASan build, source the setup
+## script:  source asan-run-prep.sh
 
 ## Base compiler flags shared between production and ASAN builds
 # -Wall      : enable all compiler warnings
@@ -11,7 +22,7 @@ CFLAGS_BASE = -Wall -shared -std=c++11 -fPIC -fopenmp
 
 ## Production compiler flags
 # -O3 : maximum optimization level for best runtime performance
-CFLAGS = $(CFLAGS_BASE) -O3
+CFLAGS_PROD = $(CFLAGS_BASE) -O3
 
 ## ASAN compiler flags
 # -O0                    : disable optimizations so ASAN reports map exactly to source lines
@@ -30,7 +41,7 @@ CFLAGS_ASAN = $(CFLAGS_BASE) -O0 -fsanitize=address -g -fno-omit-frame-pointer
 # -lpthread                 : POSIX threads, required by OpenMP and MKL
 # -lm                       : standard math library
 # -ldl                      : dynamic loading library, required by MKL at runtime
-LIB = -m64 -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a \
+LIB_PROD = -m64 -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a \
 	  ${MKLROOT}/lib/intel64/libmkl_gnu_thread.a \
 	  ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -lgomp \
 	  -lpthread -lm -ldl
@@ -49,51 +60,43 @@ LIB = -m64 -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a \
 LIB_ASAN = -m64 -L${MKLROOT}/lib/intel64 -lmkl_rt -lgomp -lpthread -lm -ldl \
            -fsanitize=address
 
+## Select flags based on BUILD_TYPE. Default is production.
+ifeq ($(BUILD_TYPE),asan)
+    CFLAGS_USE = $(CFLAGS_ASAN)
+    LIB_USE = $(LIB_ASAN)
+else
+    CFLAGS_USE = $(CFLAGS_PROD)
+    LIB_USE = $(LIB_PROD)
+endif
+
 ## Source files
-SRC = cpp/starm.cpp
+SRCS = pystarm/cpp/starm.cpp
+HDRS = pystarm/cpp/ops.cpp pystarm/cpp/matrix.hpp pystarm/cpp/tensor.hpp pystarm/cpp/utils.hpp
 
-## Output filename for the production shared library
+## Output filename for the shared library
 # python3-config --extension-suffix appends the platform-specific suffix automatically
-TARGET = pystarm$(shell python3-config --extension-suffix)
+TARGET = pystarm/pystarm$(shell python3-config --extension-suffix)
 
-## Output filename for the ASAN shared library — separate from production so both can coexist
-TARGET_ASAN = pystarm_asan$(shell python3-config --extension-suffix)
-
-## Default target — builds the production shared library
-# Running plain "make" only builds TARGET, nothing changes for other developers
+## Default target — builds the shared library
 all: $(TARGET)
 
-## Production build rule
-# $(CC)                                   : the C compiler
+## Build rule
+# $(CXX)                                  : the C++ compiler
 # $(shell python3 -m pybind11 --includes) : adds pybind11 and Python header include paths
 # -DMKL_ILP64                             : tells MKL to use 64-bit integers for array indices,
 #                                           required for large problem sizes
 # -m64                                    : targets 64-bit architecture, must match MKL_ILP64
 # -I${MKLROOT}/include                    : adds MKL header files needed by the C++ source
-# $<                                      : the first dependency (SRC)
+# $(SRCS)                                 : the source files
 # -o $@                                   : output to the target filename
-$(TARGET): $(SRC)
-	$(CC) $(CFLAGS) $(shell python3 -m pybind11 --includes) -DMKL_ILP64 -m64 -I${MKLROOT}/include $< -o $@ $(LIB)
+$(TARGET): $(SRCS) $(HDRS)
+	$(CXX) $(CFLAGS_USE) $(shell python3 -m pybind11 --includes) -DMKL_ILP64 -m64 -I${MKLROOT}/include $(SRCS) -o $@ $(LIB_USE)
 
-## ASAN target — builds the ASAN instrumented shared library
-# Run with: make asan
-# Before running any Python script with the ASAN build, set the following environment variables:
-#   export MKL_INTERFACE_LAYER=ILP64   (selects 64-bit integer interface for dynamic MKL)
-#   export MKL_THREADING_LAYER=GNU     (selects GNU OpenMP threading backend for dynamic MKL)
-#   export LD_PRELOAD=<path to libasan.so>  (ensures ASAN runtime is loaded before everything else;
-#                                            find the path with: gcc -print-file-name=libasan.so)
-asan: $(TARGET_ASAN)
-
-## ASAN build rule — identical to production except uses CFLAGS_ASAN and LIB_ASAN
-$(TARGET_ASAN): $(SRC)
-	$(CC) $(CFLAGS_ASAN) $(shell python3 -m pybind11 --includes) -DMKL_ILP64 -m64 -I${MKLROOT}/include $< -o $@ $(LIB_ASAN)
-
-## Removes all build outputs including both production and ASAN shared libraries
+## Removes build outputs
 clean:
 	rm -f $(TARGET)
-	rm -f *.so
 	rm -rf build
 
 ## .PHONY declares targets that are not real files so Make always runs them
 ## regardless of whether a file with the same name exists in the directory
-.PHONY: all asan clean
+.PHONY: all clean

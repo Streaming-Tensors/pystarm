@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools", "pybind11>=2.13.6"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pystarm"
+version = "1.0.0"
+description = "Tensor decomposition via Star-M transformation"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+]
+
+[project.optional-dependencies]
+tests = [
+    "pyttb>=1.8",
+]
+paper = [
+    "xarray>=2024.1",
+    "h5py>=3.10",
+    "opencv-python>=4.8",
+    "matplotlib>=3.7",
+    "cartopy>=0.22",
+    "scikit-learn>=1.3",
+    "pyttb>=1.8",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pystarm*"]
+
+[tool.setuptools.package-data]
+pystarm = ["*.so"]
