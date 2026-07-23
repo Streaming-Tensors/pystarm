@@ -208,21 +208,28 @@ def plot_runtimes_naive_reduction():
     plt.savefig("figures/naive-vs-reduction-contraction-runtimes.svg", dpi=1200)
 
 n = 3
-A_dims = (n,n,n,n)
+A_dims = (n,n,n)
 A_nelm = math.prod(A_dims)
 A_ndim = len(A_dims)
 
-B_dims = (n,n,n,n)
+B_dims = (n,n,n)
 B_nelm = math.prod(B_dims)
 B_ndim = len(B_dims)
 
 # Create numpy tensors
-A_np = np.asfortranarray(np.random.rand(A_nelm).reshape(A_dims, order='F'))
-B_np = np.asfortranarray(np.random.rand(B_nelm).reshape(B_dims, order='F'))
+A_np = np.asfortranarray(np.arange(A_nelm).reshape(A_dims, order='F'))
+B_np = np.asfortranarray(np.arange(B_nelm).reshape(B_dims, order='F'))
+
+A = pystarm.Tensor(A_np, A_ndim, A_dims)
+B = pystarm.Tensor(B_np, B_ndim, B_dims)
 
 # Compare results for ALL modes to check for an indexing offset
-k = 2
-C_cpp, cpp_time = tensor_contract_multiply(A_np, B_np, k, naive=False)
-C_ttb, ttb_time = tensor_contraction_product_ttb(A_np, B_np, mode=k)
+C = pystarm.tensor_minus_tensor(A, B)
+C_np = A_np + B_np
+C_pystarm = np.frombuffer(C, dtype=np.float64).reshape(C.getdims(), order='F', copy = False)
 
-print(f"C_cpp = {C_cpp} \n\nC_ttb = {C_ttb}\n\n")
+print(f"{C_pystarm}\n\n{C_np}")
+print(f"{np.allclose(C_np, C_pystarm)}")
+
+A.clear()
+B.clear()

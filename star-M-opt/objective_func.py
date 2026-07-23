@@ -1,4 +1,5 @@
 import numpy as np
+from svd_gradient_calculations import calc_U_gradient, calc_S_gradient, calc_VT_gradient
 import pystarm
 
 def tensor_times_matrix(A, M, inv_flag=False):
@@ -40,9 +41,27 @@ def low_rank_obj_func_gradient(A, M, k):
     Ak = tensor_times_matrix(Ak_hat, M, inv_flag=True) # inv_flag still needs to be implemented.
 
     # Backwards pass
-    R = -(A - Ak) # This needs an actual implementation of a subtraction operator. Or just a parallel subtract function.
-    grd_Ak_wrt_M = pystarm.tensor_contract_all_but_one(R, Ak_hat, k, naive=False)
+    # Step 4
+    R = -1 * pystarm.tensor_minus_tensor(Ak, A) # This needs an actual implementation of a subtraction operator. Or just a parallel subtract function.
+    grd_Ak_wrt_Minv = pystarm.tensor_contract_all_but_one(R, Ak_hat, k, naive=False)
+    grd_Ak_wrt_Akhat = tensor_times_matrix(R, M, inv_flag=True)
+    # Step 3
+    # Here, we need to represent Ak_hat as two different products: B = U * S, Ak_hat = B * VT
+    grd_Akhat_wrt_B = pystarm.slicewise_matmul(grd_Ak_wrt_Akhat, Vkt_hat, A_transpose=False, B_transpose=True)
+    grd_Akhat_wrt_VT = pystarm.slicewise_matmul(pystarm.slicewise_matmul(Uk_hat, Sk_hat), grd_Ak_wrt_Akhat, A_transpose=True, B_transpose=False)
+    grd_B_wrt_U = pystarm.slicewise_matmul(grd_Akhat_wrt_B, Sk_hat, A_transpose=False, B_transpose=True)
+    grd_B_wrt_S = pystarm.slicewise_matmul(Uk_hat, grd_Akhat_wrt_B, A_transpose=True, B_transpose=False)
 
+    # Step 2
+    grd_U = calc_U_gradient(grd_B_wrt_U)
+    grd_S = calc_S_gradient(grd_B_wrt_S)
+    grd_VT = calc_VT_gradient(grd_Akhat_wrt_VT)
+
+    grd_AkHat = grd_U + grd_S + grd_VT
+    # Step 1
+    grd_Ahat_wrt_M = pystarm.tensor_contract_all_but_one(grd_AkHat, A, k, naive=False)
+    
+    return grd_Ahat_wrt_M + grd_Ak_wrt_Minv
 
 
 

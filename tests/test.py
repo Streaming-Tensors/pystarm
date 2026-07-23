@@ -5,6 +5,7 @@ import os
 import itertools
 import gc
 import time
+import math
 from alg import starM_product, starM_product_ttb, tensor_contraction_product_ttb, tensor_contract_multiply
 import pystarm
 
@@ -1033,8 +1034,6 @@ class ContractionTestCase(unittest.TestCase):
         '''
         Test a tensor contraction with all modes of two mode-3 tensors.
         '''
-        
-        
         modes = [0, 1, 2]
         flags = []
         for mode in modes:
@@ -1057,8 +1056,85 @@ class ContractionTestCase(unittest.TestCase):
             C_pystarm = tensor_contract_multiply(A, B, mode, naive=False)
             C_ttb = tensor_contraction_product_ttb(A, B, mode)
             flags.append(np.allclose(C_pystarm, C_ttb))
+    def test_order_four_contractions(self):
+        '''
+        Test a tensor contractions with all modes of two mode-4 tensors.
+        '''
+        modes = [0, 1, 2, 3]
+        flags = []
+        for mode in modes:
+            n_k = np.random.randint(2, 10)
+            p = np.random.randint(2,10)
+            m = np.random.randint(2,10)
+
+            # For testing integrity, make sure all dims except n_k and p are equal.
+            A_nelm = n_k * (m ** (len(modes) - 1))
+            A_dims = [m for i in modes]
+            A_dims[mode] = n_k
+
+            B_nelm =  p *  (m ** (len(modes) - 1))
+            B_dims = [m for i in modes]
+            B_dims[mode] = p
+
+            A = np.random.rand(A_nelm).reshape(A_dims, order='F')
+            B = np.random.rand(B_nelm).reshape(B_dims, order='F')
+            
+            C_pystarm = tensor_contract_multiply(A, B, mode, naive=False)
+            C_ttb = tensor_contraction_product_ttb(A, B, mode)
+            flags.append(np.allclose(C_pystarm, C_ttb))
 
         self.assertEqual(np.all(flags), True)
+
+class TensorArithmeticTestCase(unittest.TestCase):
+    def test_tensor_subtraction(self):
+        n = 5
+        A_dims = (n,n,n,n)
+        A_nelm = math.prod(A_dims)
+        A_ndim = len(A_dims)
+
+        B_dims = (n,n,n,n)
+        B_nelm = math.prod(B_dims)
+        B_ndim = len(B_dims)
+
+        # Create numpy tensors
+        A_np = np.asfortranarray(np.random.rand(A_nelm).reshape(A_dims, order='F'))
+        B_np = np.asfortranarray(np.random.rand(B_nelm).reshape(B_dims, order='F'))
+
+        A = pystarm.Tensor(A_np, A_ndim, A_dims)
+        B = pystarm.Tensor(B_np, B_ndim, B_dims)
+
+        # Compare results for ALL modes to check for an indexing offset
+        C = pystarm.tensor_minus_tensor(A, B)
+        C_np = A_np - B_np
+        C_pystarm = np.frombuffer(C, dtype=np.float64).reshape(C.getdims(), order='F', copy = False)
+
+
+        self.assertTrue(np.allclose(C_np, C_pystarm))
+
+    def test_tensor_addition(self):
+        '''Test the tensor_plus_tensor function on order 4 tensors.'''
+        n=5
+        A_dims = (n,n,n,n)
+        A_nelm = math.prod(A_dims)
+        A_ndim = len(A_dims)
+
+        B_dims = (n,n,n,n)
+        B_nelm = math.prod(B_dims)
+        B_ndim = len(B_dims)
+
+        # Create numpy tensors
+        A_np = np.asfortranarray(np.random.rand(A_nelm).reshape(A_dims, order='F'))
+        B_np = np.asfortranarray(np.random.rand(B_nelm).reshape(B_dims, order='F'))
+
+        A = pystarm.Tensor(A_np, A_ndim, A_dims)
+        B = pystarm.Tensor(B_np, B_ndim, B_dims)
+
+        C = pystarm.tensor_plus_tensor(A,B)
+        C_np = A_np + B_np
+        C_pystarm = np.frombuffer(C, dtype=np.float64).reshape(C.getdims(), order='F', copy = False)
+
+        self.assertTrue(np.allclose(C_np, C_pystarm))
+      
        
 
 # ADD A PYTTB TEST CASE FOR CONTRACTION, LOOK AT TTT FUNCTION AND CONTRACT ALL MODES BUT K.

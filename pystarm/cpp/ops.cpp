@@ -504,7 +504,9 @@ Tensor slicewise_matmul(const Tensor& U, const Matrix& S, const Tensor& VT){
     US.clear();
     return TO;
 }
+
 Tensor slicewise_matmul(const Tensor& A, const Tensor& B, bool transpose_A=false, bool transpose_B=false){
+    // OVERLOADED OPERATOR!!! This one simply does slicewise matrix multiplication on two tensors.
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch.html
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
     assert(A.nslices == B.nslices);
@@ -568,6 +570,63 @@ Tensor slicewise_matmul(const Tensor& A, const Tensor& B, bool transpose_A=false
     }
     return TO;
 }
+
+Tensor slicewise_matmul(const Tensor& U, const Matrix& S){
+    // Another overloaded operator, this one just does slicewise matrix multiply on a tensor and a diagonal tensor stored as a matrix.
+    // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch.html
+    // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
+    assert(U.nslices == S.ncol);
+    assert(U.dims[1] == S.nrow);
+
+    // Scale U with S
+    std::vector<size_t> USdims(U.dims); // US is the scaled version of U
+                                        // where columns of the frontal slices of U is scaled by singular values of the corresponding slice in S
+                                        // Dimensions of US would be same as U
+    size_t USbuflen = std::accumulate(USdims.begin(), USdims.end(), (size_t)1, std::multiplies<size_t>());
+    //size_t USbuflen = 1;
+    //for (int i = 0; i < USdims.size(); i++){
+        //USbuflen = USbuflen * USdims[i];
+    //}
+    Tensor US(USbuflen, U.ndim, USdims);
+
+    {
+        // Multiplying each slice of U with the diagonal matrix corresponding to the corresponding column of matrix S (which is compact format of tensor S)
+        // Use MKL ddgmm_batch_strided: https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
+        CBLAS_LAYOUT cblas_layout = CblasColMajor;
+        CBLAS_SIDE cblas_left_right = CblasRight;
+        MKL_INT cblas_m = (MKL_INT) U.dims[0];
+        MKL_INT cblas_n = (MKL_INT) U.dims[1];
+        double* cblas_a = U.data_ptr;
+        MKL_INT cblas_lda = (MKL_INT) U.dims[0];
+        MKL_INT cblas_stridea = (MKL_INT) (U.dims[0] * U.dims[1]);
+        double* cblas_x = S.data_ptr;
+        MKL_INT cblas_incx = 1;
+        MKL_INT cblas_stridex = (MKL_INT) S.nrow; //Same as U.dims[1]
+        double* cblas_c = US.data_ptr;
+        MKL_INT cblas_ldc = (MKL_INT) US.dims[0];
+        MKL_INT cblas_stridec = (MKL_INT) (US.dims[0] * US.dims[1]);
+        MKL_INT cblas_batch_size = (MKL_INT) U.nslices;
+        
+        cblas_ddgmm_batch_strided(
+                cblas_layout,
+                cblas_left_right,
+                cblas_m,
+                cblas_n,
+                cblas_a,
+                cblas_lda,
+                cblas_stridea,
+                cblas_x,
+                cblas_incx,
+                cblas_stridex,
+                cblas_c,
+                cblas_ldc,
+                cblas_stridec,
+                cblas_batch_size
+                );
+
+    }
+    return US;
+  }
 
 
 Tensor slicewise_matmulks(const JaggedTensor& U, const JaggedMatrix& S, const JaggedTensor& VT){
@@ -5546,13 +5605,23 @@ Tensor tsvdmi_reconstruct(const Tensor& U, const Matrix& S, const Tensor& VT, st
 
 Matrix tensor_contract_all_but_one(Tensor& A, Tensor& B, size_t mode, bool naive=false){
     /*
-    Naive implementation of matrix product of mode-k unfolding of two tensors.
+    *
+    * Unfolds two tensors A and B in the same mode, and computes A_(k) B_(k)^T, storing the result C
+    * in column-major order.
+    *   - Instead of manually unfolding these two tensors, we can get "blocks" from each of the buffers, multiply them, 
+    *     and then sum the result.
+    *   - In CblasColMajor mode, treat A's memory as A^T (num_cols x n_k, lda = n_k)
+    *     and B's memory as B (p x n_k, ldb = n).
+    *   - We want C (n_k x p, col-major, ldc = m) = A * B^T = (A^T)^T * (B)^T
+    *   - So call: C(n_k x p) = Trans(A^T) * Trans(B)
+    *     i.e., cblas_dgemm(CblasColMajor, CblasTrans, CblasTrans, n_k, , k,
+    *                       1.0, A, k, B, n, 0.0, C, m)
     */
     
-    size_t i = 0; // Our iterator. Declare+initialize here.
+    size_t i = 0; 
+
     // Take into account the mode which both are unfolding for. Remember this is A(k) (B(k))^T
     // The dimensions of the final tensor will be n_k x p. 
-
     // Get necessary dimensions
     std::vector<size_t> A_dims = A.getdims();
     std::vector<size_t> B_dims = B.getdims();
@@ -5585,12 +5654,12 @@ Matrix tensor_contract_all_but_one(Tensor& A, Tensor& B, size_t mode, bool naive
     if(naive){
       for (i = 0; i < num_blocks; ++i) {
         cblas_dgemm(
-            CblasRowMajor,                // The buffer itself is column major, but the individual blocks are row major.
-            CblasNoTrans,                      
-            CblasTrans,                         // B_block transposed
-            n_k,                                  // m = rows of C
-            p,                                // n = cols of C
-            num_cols,                           // k = inner dim
+            CblasColMajor,                
+            CblasTrans,                      
+            CblasNoTrans,                         
+            n_k,                                  
+            p,                                
+            num_cols,                          
             1.0,
             A.data_ptr + i * (n_k * num_cols),  // Change the start of the data pointer based on which block we are on.
             num_cols,                           // lda, since it's row-major, it's the number of columns.
@@ -5598,7 +5667,7 @@ Matrix tensor_contract_all_but_one(Tensor& A, Tensor& B, size_t mode, bool naive
             num_cols,                            // ldb, since it's row-major, it's the number of columns.
             1.0,                                // accumulate into C
             C.data_ptr,
-            p                              // ldc,  columns of C.
+            n_k                              // ldc,  columns of C.
         );
       }
     } else {
@@ -5607,7 +5676,7 @@ Matrix tensor_contract_all_but_one(Tensor& A, Tensor& B, size_t mode, bool naive
       size_t C_buflen = C.buflen;
 
       #pragma omp parallel for reduction(+:C_data_ptr[:C_buflen])
-      for (int b = 0; b < num_blocks; ++b) {
+      for (size_t b = 0; b < num_blocks; ++b) {
         cblas_dgemm(
             CblasColMajor,                
             CblasTrans,                      
@@ -5628,6 +5697,44 @@ Matrix tensor_contract_all_but_one(Tensor& A, Tensor& B, size_t mode, bool naive
     }
 
     return C;
+}
+
+Tensor tensor_minus_tensor(Tensor &A, Tensor &B){
+  assert(A.getdims() == B.getdims() && "Tensors A and B must have the same dimensions.");
+  // Get resulting tensor dimensions.
+  std::vector<size_t> TOdims(A.dims);
+  
+  size_t TObuflen = A.buflen;
+  Tensor TO(TObuflen, A.ndim, TOdims);
+  std::memset(TO.data_ptr, 0, TObuflen * sizeof(double));
+
+  // Only use openMP fork/join for large tensors. Otherwise the cost isn't worth it.
+  #pragma omp parallel for simd schedule(static) if(TObuflen > 100000)
+  for(size_t i = 0; i < TObuflen; ++i){
+    TO.data_ptr[i] = A.data_ptr[i] - B.data_ptr[i];
+  }
+
+  return TO;
+
+}
+
+Tensor tensor_plus_tensor(Tensor &A, Tensor &B){
+  assert(A.getdims() == B.getdims() && "Tensors A and B must have the same dimensions.");
+  // Get resulting tensor dimensions.
+  std::vector<size_t> TOdims(A.dims);
+
+  size_t TObuflen = A.buflen;
+  Tensor TO(TObuflen, A.ndim, TOdims);
+  std::memset(TO.data_ptr, 0, TObuflen * sizeof(double));
+
+  // Only use openMP fork/join for large tensors. Otherwise the cost isn't worth it.
+  #pragma omp parallel for simd schedule(static) if(TObuflen > 100000)
+  for(size_t i = 0; i < TObuflen; ++i){
+    TO.data_ptr[i] = A.data_ptr[i] + B.data_ptr[i];
+  }
+
+  return TO;
+
 }
 
 #endif
