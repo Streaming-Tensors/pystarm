@@ -627,9 +627,15 @@ Tensor slicewise_matmul(const Tensor& U, const Matrix& S, bool inv_flag=false){
                 );
 
     } else {
-      #pragma omp parallel for simd schedule(static) if(TObuflen > 100000)
-      for(size_t i = 0; i < TObuflen; ++i){
-        TO.data_ptr[i] = A.data_ptr[i] * B.data_ptr[i];
+      /* 
+      TODO:
+      This is still incorrect. In order for it to work, we need to do elementwise division between U and S. 
+      S is a diagonal tensor represented as a matrix (i.e., entry (i,i,j) for a tensor A would correspond to 
+      index = ((i % A_num_cols) + (i * A_num_cols)) in the matrix buffer, with dims i x j.
+      */
+      #pragma omp parallel for simd schedule(static) if(USbuflen > 100000)
+      for(size_t i = 0; i < USbuflen; ++i){
+        US.data_ptr[i] = U.data_ptr[i] / S.data_ptr[i];
       }
     }
     return US;
