@@ -1024,10 +1024,10 @@ class StarMProductTestCase(unittest.TestCase):
        B = np.random.rand(B_nelm).reshape(B_dims, order='F')
        M = np.identity(n_slices)
 
-       C_w_transpose = starM_product(A,B,M, A_transpose=True, B_transpose=True)
-       C_wo_transpose = starM_product(A,B,M, A_transpose=False, B_transpose=False)
+       C_w_transpose = starM_product(B,A,M, A_transpose=True, B_transpose=True)
+       C_wo_transpose = starM_product(A,B,M,A_transpose=False, B_transpose=False)
 
-       self.assertFalse(np.allclose(C_w_transpose, C_wo_transpose))
+       self.assertFalse(np.allclose(C_w_transpose, C_wo_transpose.T))
 
 class ContractionTestCase(unittest.TestCase):
     def test_order_three_contraction(self):
@@ -1086,22 +1086,25 @@ class ContractionTestCase(unittest.TestCase):
         self.assertEqual(np.all(flags), True)
 
 class TensorArithmeticTestCase(unittest.TestCase):
-    def test_tensor_subtraction(self):
+    def create_rand_np_tensors(self):
         n = 5
         A_dims = (n,n,n,n)
         A_nelm = math.prod(A_dims)
-        A_ndim = len(A_dims)
 
         B_dims = (n,n,n,n)
         B_nelm = math.prod(B_dims)
-        B_ndim = len(B_dims)
 
         # Create numpy tensors
         A_np = np.asfortranarray(np.random.rand(A_nelm).reshape(A_dims, order='F'))
         B_np = np.asfortranarray(np.random.rand(B_nelm).reshape(B_dims, order='F'))
 
-        A = pystarm.Tensor(A_np, A_ndim, A_dims)
-        B = pystarm.Tensor(B_np, B_ndim, B_dims)
+        return A_np, B_np
+    
+    def test_tensor_subtraction(self):
+        A_np, B_np = self.create_rand_np_tensors()
+
+        A = pystarm.Tensor(A_np, A_np.ndim, A_np.shape)
+        B = pystarm.Tensor(B_np, B_np.ndim, B_np.shape)
 
         # Compare results for ALL modes to check for an indexing offset
         C = pystarm.tensor_minus_tensor(A, B)
@@ -1113,27 +1116,22 @@ class TensorArithmeticTestCase(unittest.TestCase):
 
     def test_tensor_addition(self):
         '''Test the tensor_plus_tensor function on order 4 tensors.'''
+        A_np, B_np = self.create_rand_np_tensors()
         n=5
-        A_dims = (n,n,n,n)
-        A_nelm = math.prod(A_dims)
-        A_ndim = len(A_dims)
+        C_dims = (n,n,n,n)
+        C_nelm = math.prod(B_np.shape)
+        C_ndim = len(B_np.shape)
+        C_np = np.asfortranarray(np.random.rand(C_nelm).reshape(C_dims, order='F'))
 
-        B_dims = (n,n,n,n)
-        B_nelm = math.prod(B_dims)
-        B_ndim = len(B_dims)
+        A = pystarm.Tensor(A_np, A_np.ndim, A_np.shape)
+        B = pystarm.Tensor(B_np, B_np.ndim, B_np.shape)
+        C = pystarm.Tensor(C_np, C_ndim, C_dims)
 
-        # Create numpy tensors
-        A_np = np.asfortranarray(np.random.rand(A_nelm).reshape(A_dims, order='F'))
-        B_np = np.asfortranarray(np.random.rand(B_nelm).reshape(B_dims, order='F'))
+        D = pystarm.tensor_plus_tensor(A,B,C)
+        D_np = A_np + B_np + C_np
+        D_pystarm = np.frombuffer(D, dtype=np.float64).reshape(D.getdims(), order='F', copy = False)
 
-        A = pystarm.Tensor(A_np, A_ndim, A_dims)
-        B = pystarm.Tensor(B_np, B_ndim, B_dims)
-
-        C = pystarm.tensor_plus_tensor(A,B)
-        C_np = A_np + B_np
-        C_pystarm = np.frombuffer(C, dtype=np.float64).reshape(C.getdims(), order='F', copy = False)
-
-        self.assertTrue(np.allclose(C_np, C_pystarm))
+        self.assertTrue(np.allclose(D_np, D_pystarm))
       
        
 

@@ -511,10 +511,18 @@ Tensor slicewise_matmul(const Tensor& A, const Tensor& B, bool transpose_A=false
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
     assert(A.nslices == B.nslices);
 
+    const size_t A_rows = transpose_A ? A.dims[1] : A.dims[0];  // m
+    const size_t A_cols = transpose_A ? A.dims[0] : A.dims[1];  // k
+    const size_t B_rows = transpose_B ? B.dims[1] : B.dims[0];  // k
+    const size_t B_cols = transpose_B ? B.dims[0] : B.dims[1];  // n
+
+    assert(A_cols == B_rows && "Inner dimensions must match for op(A) * op(B).");
     // Get resulting tensor dimensions.
     std::vector<size_t> TOdims(A.dims);
-    TOdims[0] = A.dims[0];
-    TOdims[1] = B.dims[1];
+    // Set output dimensions based on the transpose flags supplied by the user.
+    TOdims[0] = A_rows;
+    TOdims[1] = B_cols;
+
     // printf("TOdims[1]: %lld\n", TOdims[1]);
     size_t TObuflen = std::accumulate(TOdims.begin(), TOdims.end(), (size_t)1, std::multiplies<size_t>());
     // printf("TO buflen: %lld\n", TObuflen);
@@ -523,17 +531,11 @@ Tensor slicewise_matmul(const Tensor& A, const Tensor& B, bool transpose_A=false
     {
         // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-0/cblas-gemm-batch-strided.html
         CBLAS_LAYOUT cblas_layout = CblasColMajor;
-        CBLAS_TRANSPOSE cblas_transa = CblasNoTrans;
-        if (transpose_A){
-          cblas_transa = CblasTrans;
-        }
-        CBLAS_TRANSPOSE cblas_transb = CblasNoTrans;
-        if(transpose_B){
-          cblas_transb = CblasTrans;
-        }
-        MKL_INT cblas_m = (MKL_INT) A.dims[0];
-        MKL_INT cblas_k = (MKL_INT) A.dims[1]; 
-        MKL_INT cblas_n = (MKL_INT) B.dims[1];
+        CBLAS_TRANSPOSE cblas_transa = (transpose_A) ? CblasTrans: CblasNoTrans;
+        CBLAS_TRANSPOSE cblas_transb = (transpose_B) ? CblasTrans: CblasNoTrans;
+        MKL_INT cblas_m = (MKL_INT) A_rows;
+        MKL_INT cblas_k = (MKL_INT) A_cols; 
+        MKL_INT cblas_n = (MKL_INT) B_cols;
         double cblas_alpha = 1.0;
         double cblas_beta = 0.0;
         double* cblas_a = A.data_ptr;
@@ -571,7 +573,7 @@ Tensor slicewise_matmul(const Tensor& A, const Tensor& B, bool transpose_A=false
     return TO;
 }
 
-Tensor slicewise_matmul(const Tensor& U, const Matrix& S){
+Tensor slicewise_matmul(const Tensor& U, const Matrix& S, bool inv_flag=false){
     // Another overloaded operator, this one just does slicewise matrix multiply on a tensor and a diagonal tensor stored as a matrix.
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch.html
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
@@ -589,7 +591,7 @@ Tensor slicewise_matmul(const Tensor& U, const Matrix& S){
     //}
     Tensor US(USbuflen, U.ndim, USdims);
 
-    {
+    if(!inv_flag){
         // Multiplying each slice of U with the diagonal matrix corresponding to the corresponding column of matrix S (which is compact format of tensor S)
         // Use MKL ddgmm_batch_strided: https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
         CBLAS_LAYOUT cblas_layout = CblasColMajor;
@@ -624,6 +626,11 @@ Tensor slicewise_matmul(const Tensor& U, const Matrix& S){
                 cblas_batch_size
                 );
 
+    } else {
+      #pragma omp parallel for simd schedule(static) if(TObuflen > 100000)
+      for(size_t i = 0; i < TObuflen; ++i){
+        TO.data_ptr[i] = A.data_ptr[i] * B.data_ptr[i];
+      }
     }
     return US;
   }
@@ -5718,8 +5725,10 @@ Tensor tensor_minus_tensor(Tensor &A, Tensor &B){
 
 }
 
-Tensor tensor_plus_tensor(Tensor &A, Tensor &B){
+Tensor tensor_plus_tensor(Tensor &A, Tensor &B, Tensor &C){
   assert(A.getdims() == B.getdims() && "Tensors A and B must have the same dimensions.");
+  assert(C.getdims() == B.getdims() && "Tensors B and C must have the same dimensions.");
+  assert(C.getdims() == A.getdims() && "Tensors A and C must have the same dimensions.");
   // Get resulting tensor dimensions.
   std::vector<size_t> TOdims(A.dims);
 
@@ -5730,11 +5739,53 @@ Tensor tensor_plus_tensor(Tensor &A, Tensor &B){
   // Only use openMP fork/join for large tensors. Otherwise the cost isn't worth it.
   #pragma omp parallel for simd schedule(static) if(TObuflen > 100000)
   for(size_t i = 0; i < TObuflen; ++i){
-    TO.data_ptr[i] = A.data_ptr[i] + B.data_ptr[i];
+    TO.data_ptr[i] = A.data_ptr[i] + B.data_ptr[i] + C.data_ptr[i];
   }
 
   return TO;
 
 }
+Tensor hadamard_pointwise(Tensor &A, Tensor &B){
+  /*
+  Multiply two tensors elementwise.
+  */
+  assert(A.getdims() == B.getdims() && "Tensors A and B must have the same dimensions.");
+  // Get resulting tensor dimensions.
+  std::vector<size_t> TOdims(A.dims);
+  
+  size_t TObuflen = A.buflen;
+  Tensor TO(TObuflen, A.ndim, TOdims);
+  std::memset(TO.data_ptr, 0, TObuflen * sizeof(double));
+
+  // Only use openMP fork/join for large tensors. Otherwise the cost isn't worth it.
+  #pragma omp parallel for simd schedule(static) if(TObuflen > 100000)
+  for(size_t i = 0; i < TObuflen; ++i){
+    TO.data_ptr[i] = A.data_ptr[i] * B.data_ptr[i];
+  }
+
+  return TO;
+
+}
+Matrix get_slicewise_diagonals(Tensor &A){
+  /*
+  Return the diagonal values of a tensor as a matrix.
+  */
+  std::vector<size_t> A_dims = A.getdims();
+  size_t M_rows = A_dims[0]; // This will give us k.
+  size_t A_cols = A_dims[1];
+  Matrix M(M_rows * A.nslices, M_rows, A.nslices);
+  std::memset(M.data_ptr, 0, M.buflen * sizeof(double));
+
+  // Only use openMP fork/join for large tensors. Otherwise the cost isn't worth it.
+  #pragma omp parallel for simd schedule(static) if(M.buflen > 100000)
+  for(size_t i = 0; i < M.buflen; ++i){
+    int diag_index = (i % A_cols) + (i * A_cols);
+    M.data_ptr[i] = A.data_ptr[diag_index];
+  }
+
+  return M;
+
+}
+
 
 #endif

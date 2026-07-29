@@ -140,6 +140,8 @@ PYBIND11_MODULE(pystarm, m) {
         .def("getbuflen", &JaggedTensor::getbuflen, "Get buffer length")
         .def("clear", &JaggedTensor::clear, "Clear all slices in the jagged tensor");
 
+    m.def("get_slicewise_diagonals", &get_slicewise_diagonals, " Return the diagonal values of a tensor as a matrix.");
+    m.def("hadamard_pointwise", &hadamard_pointwise, "Compute elementwise multiplication of two tensors.");
 	m.def("matmul", &matmul, "Multiply two matrices and return a new result matrix");
 	m.def("svdvals", &svdvals, "Compute the singular values of a matrix.",
         py::arg("A"), py::arg("verbose") = false);
@@ -185,8 +187,8 @@ PYBIND11_MODULE(pystarm, m) {
         py::arg("A"), py::arg("B"), py::arg("k"), py::arg("naive"));
     m.def("tensor_minus_tensor", &tensor_minus_tensor, "Subtract two tensors elementwise.",
         py::arg("A"), py::arg("B"));
-    m.def("tensor_plus_tensor", &tensor_plus_tensor, "Add two tensors elementwise.",
-        py::arg("A"), py::arg("B"));
+    m.def("tensor_plus_tensor", &tensor_plus_tensor, "Add three tensors elementwise.",
+        py::arg("A"), py::arg("B"), py::arg("C"));
 	m.def("transform", &transform, "Transform tensor with (multi)ttm in a specified order");
 	m.def("truncate_factors", &truncate_factors, "Truncate a complete TSVDM set of factors given slicewise ranks.",
         py::arg("U"), py::arg("S"), py::arg("Vt"), py::arg("ks"));
