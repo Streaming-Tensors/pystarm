@@ -5684,6 +5684,11 @@ Matrix tensor_contract_all_but_one(Tensor& A, Tensor& B, size_t mode, bool naive
         );
       }
     } else {
+
+      // Pin MKL to 1 thread per outer-OpenMP thread to avoid nested libgomp/mkl_gnu_thread
+      // oversubscription.
+      mkl_set_num_threads_local(1);
+
       // parallel version.
       double* C_data_ptr = C.data_ptr;
       size_t C_buflen = C.buflen;
@@ -5708,6 +5713,7 @@ Matrix tensor_contract_all_but_one(Tensor& A, Tensor& B, size_t mode, bool naive
         );
       }
     }
+    mkl_set_num_threads_local(0);
 
     return C;
 }

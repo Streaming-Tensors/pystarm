@@ -18,10 +18,8 @@ def tensor_contract_multiply(A_np, B_np, k, naive: bool):
 
     # Ensure dimensions are correct.
     assert A_shape[A_ndim - 1] == B_shape[B_ndim - 1], "A and B must have the same number of slices."
-
     A = pystarm.Tensor(A_np, A_ndim, A_shape)
     B = pystarm.Tensor(B_np, B_ndim, B_shape)
-    
     # Slicewise multiply A and B
     start = time.perf_counter()
     C = pystarm.tensor_contract_all_but_one(A, B, k, naive)
@@ -103,12 +101,10 @@ def np_einsum_contract(A_np, B_np):
     print(f"Elapsed time numpy: {end - start} seconds")
     return C, end - start
 
-def plot_runtimes_naive_ttb_numpy():
+def plot_runtimes_naive_ttb_numpy(num_iter_per_n = 10, n_values = [50,75,100,125,150]):
     '''
     This is the code used to generate the plots used in my poster.
     '''
-    num_iter_per_n = 5 # Number of iterations per n. All tensors will be of dimensions n x n x n x n.
-    n_values = [50,75,100,125,150]
     i = 0
     j = 0
 
@@ -161,9 +157,7 @@ def plot_runtimes_naive_ttb_numpy():
     plt.legend(["C++ pystarm kernel", "pyttb contraction", "np.einsum"])
     plt.savefig("figures/contraction-runtimes.svg", dpi=1200)
 
-def plot_runtimes_naive_reduction():
-    num_iter_per_n = 5 # Number of iterations per n. All tensors will be of dimensions n x n x n x n.
-    n_values = [50,100,150,200,250]
+def plot_runtimes_naive_reduction(num_iter_per_n=10, n_values=[50,100,150,200,250]):
     i = 0
     j = 0
 
@@ -195,8 +189,6 @@ def plot_runtimes_naive_reduction():
         reduction_times[j] /= num_iter_per_n
         j +=1 
     
-    np.save("data/naive_times", naive_times)
-    np.save("data/reduction_times", reduction_times)
     plt.plot(n_values, naive_times, '-o')
     plt.plot(n_values, reduction_times, '-o')
     plt.xticks(n_values)
@@ -205,31 +197,6 @@ def plot_runtimes_naive_reduction():
     plt.yscale('log')
     plt.title(f"Comparing compute time of tensor contractions, {num_iter_per_n} iterations per n")
     plt.legend(["Naive parallel contraction", "OpenMP reduction contraction"])
-    plt.savefig("figures/naive-vs-reduction-contraction-runtimes.svg", dpi=1200)
+    plt.savefig("naive-vs-reduction-contraction-runtimes-10-per-n.svg", dpi=1200)
 
-n = 3
-A_dims = (n,n,n)
-A_nelm = math.prod(A_dims)
-A_ndim = len(A_dims)
-
-B_dims = (n,n,n)
-B_nelm = math.prod(B_dims)
-B_ndim = len(B_dims)
-
-# Create numpy tensors
-A_np = np.asfortranarray(np.arange(A_nelm).reshape(A_dims, order='F'))
-B_np = np.asfortranarray(np.arange(B_nelm).reshape(B_dims, order='F'))
-
-A = pystarm.Tensor(A_np, A_ndim, A_dims)
-B = pystarm.Tensor(B_np, B_ndim, B_dims)
-
-# Compare results for ALL modes to check for an indexing offset
-C = pystarm.tensor_minus_tensor(A, B)
-C_np = A_np + B_np
-C_pystarm = np.frombuffer(C, dtype=np.float64).reshape(C.getdims(), order='F', copy = False)
-
-print(f"{C_pystarm}\n\n{C_np}")
-print(f"{np.allclose(C_np, C_pystarm)}")
-
-A.clear()
-B.clear()
+plot_runtimes_naive_reduction()

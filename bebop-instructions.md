@@ -69,3 +69,20 @@ To make sure everything runs, simply run
 ```
 python3 test.py
 ```
+
+## FOR SYSTEMS WITHOUT MKL in MODULE
+
+You probably installed MKL via pip in a conda environment. To get this to compile you need to create a symlink, after activating your conda environment:
+
+```
+mkdir -p $CONDA_PREFIX/lib/intel64
+ln -s $CONDA_PREFIX/lib/libmkl*.a $CONDA_PREFIX/lib/intel64/
+```
+
+After that, you should be able to run this: `export MKLROOT=$CONDA_PREFIX`
+
+## Requesting an interactive node on bebop:
+
+```
+qsub -q bdwall -l select=1:ncpus=36:mpiprocs=36 -l walltime=30:00 -A StarM-HPC-Updated -I
+```
