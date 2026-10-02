@@ -10,6 +10,7 @@
 #include <cassert>
 #include <omp.h>
 #include <mkl.h>
+#include <thread>
 
 //// Debug printing (uncomment the following three lines for printing)
 //#ifndef _MEMPRINT

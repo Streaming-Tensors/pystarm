@@ -399,6 +399,36 @@ def tensor_contract_multiply(A_np, B_np, k, naive: bool=False):
     
     return C_np
 
+def tensor_contract_batched(A_np, B_np, k):
+    '''
+    Takes two numpy tensors, unfolds them along mode k, and computes A_(k) B_(k)^T.
+    Returns: 
+    Numpy matrix of size n_k X p, where n_k is the size of the kth dimension of A, and p is the kth dimension of B.
+
+    Inputs:
+    A_np: Numpy tensor of size n_1 x ... x n_k x ... x n_d
+    B_np: Numpy tensor of size n_1 x ... x p x ... x n_d
+    k: Mode to unfold tensors on.
+    naive: Boolean value which determines whether or not to use the naive tensor contraction algo. False will save time but add overhead, True will take more time with less overhead.
+    '''
+    A_ndim = A_np.ndim
+    B_ndim = B_np.ndim
+
+    assert A_ndim >= 3, "A must be a tensor with ndim >= 3"
+    assert B_ndim >= 3, "B must be a tensor with ndim >= 3"
+    
+    A_shape = A_np.shape
+    B_shape = B_np.shape
+
+    A = pystarm.Tensor(A_np, A_ndim, A_shape)
+    B = pystarm.Tensor(B_np, B_ndim, B_shape)
+    
+    # Slicewise multiply A and B
+    C = pystarm.tensor_contract_all_but_one_batched(A, B, k)
+    # Return to numpy
+    C_np = np.frombuffer(C, dtype=np.float64).reshape(C.getdims(), order='F', copy = False)
+    
+    return C_np
 
 def tensor_contraction_product_ttb(A, B, mode: int) -> np.ndarray:
     """

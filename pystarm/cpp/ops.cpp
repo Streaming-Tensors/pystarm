@@ -633,9 +633,14 @@ Tensor slicewise_matmul(const Tensor& U, const Matrix& S, bool inv_flag=false){
       S is a diagonal tensor represented as a matrix (i.e., entry (i,i,j) for a tensor A would correspond to 
       index = ((i % A_num_cols) + (i * A_num_cols)) in the matrix buffer, with dims i x j.
       */
+      std::memset(US.data_ptr, 0.0, USbuflen * sizeof(double));
+      size_t U_n_cols = USdims[1];
       #pragma omp parallel for simd schedule(static) if(USbuflen > 100000)
-      for(size_t i = 0; i < USbuflen; ++i){
-        US.data_ptr[i] = U.data_ptr[i] / S.data_ptr[i];
+      for(size_t j = 0; j < S.ncol; ++j){
+        for(size_t i = 0; i < S.nrow; ++i){
+          size_t U_index = ((i % U_n_cols) + (i * U_n_cols));
+          US.data_ptr[i] = U.data_ptr[U_index] / S.get(i, j);
+        }
       }
     }
     return US;
@@ -5713,9 +5718,220 @@ Matrix tensor_contract_all_but_one(Tensor& A, Tensor& B, size_t mode, bool naive
         );
       }
     }
+    
     mkl_set_num_threads_local(0);
 
     return C;
+}
+
+Matrix tensor_contract_all_but_one_old(Tensor& A, Tensor& B, size_t mode){
+    /*
+    * SAME AS TENSOR_CONTRACT_ALL_BUT_ONE, but instead, it's batched.
+    * Unfolds two tensors A and B in the same mode, and computes A_(k) B_(k)^T, storing the result C
+    * in column-major order.
+    *   - Instead of manually unfolding these two tensors, we can get "blocks" from each of the buffers, multiply them, 
+    *     and then sum the result.
+    *   - In CblasColMajor mode, treat A's memory as A^T (num_cols x n_k, lda = n_k)
+    *     and B's memory as B (p x n_k, ldb = n).
+    *   - We want C (n_k x p, col-major, ldc = m) = A * B^T = (A^T)^T * (B)^T
+    *   - So call: C(n_k x p) = Trans(A^T) * Trans(B)
+    *     i.e., cblas_dgemm(CblasColMajor, CblasTrans, CblasTrans, n_k, , k,
+    *                       1.0, A, k, B, n, 0.0, C, m)
+    */
+    
+    size_t i = 0; 
+
+    // Take into account the mode which both are unfolding for. Remember this is A(k) (B(k))^T
+    // The dimensions of the final tensor will be n_k x p. 
+    // Get necessary dimensions
+    std::vector<size_t> A_dims = A.getdims();
+    std::vector<size_t> B_dims = B.getdims();
+
+    size_t n_k = A_dims[mode];
+    size_t p = B_dims[mode];
+
+    // Determine the number of columns for each block and set dimensions accordingly. 
+    size_t num_cols = 1;
+    for (i = 0; i < mode; ++i) { 
+      assert(A_dims[i] == B_dims[i] && "Dimensions of A and B must be equal except at n_k.");
+      num_cols *= A_dims[i];
+    }
+
+    // This will be a cumulative matrix, makes the buffer all zeros to start.
+    Matrix C(p*n_k, n_k, p);
+    std::memset(C.data_ptr, 0, C.buflen * sizeof(double));
+
+    // Get the number of "blocks" we are multiplying.
+    size_t num_blocks = 1;
+    for (i = mode + 1; i < A.ndim; ++i){ 
+      assert(A_dims[i] == B_dims[i] && "Dimensions of A and B must be equal except at n_k.");
+      num_blocks *= A_dims[i];
+    }
+
+    // Matrix multiply each block and sum in C.
+    // A blocks have dimensions n_k X num_cols, B blocks have dimensions p X num_cols, hence why we transpose B by default.
+    // std::cout << "p = " << p << "\nn_k = " << n_k << "\nnum_blocks = " << num_blocks << "\nnum_cols = " << num_cols << std::endl;
+    // MKL Strided Batched BLAS documentation: 
+    // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-0/cblas-gemm-batch-strided.html
+    MKL_INT cblas_m = (MKL_INT) n_k;
+    MKL_INT cblas_k = (MKL_INT) num_cols;
+    MKL_INT cblas_n = (MKL_INT) p;
+    double cblas_alpha = 1.0;
+    double cblas_beta = 1.0;
+    double* cblas_a = A.data_ptr;
+    MKL_INT cblas_lda = (MKL_INT) num_cols;
+    MKL_INT cblas_stridea = (MKL_INT) (n_k * num_cols);
+    double* cblas_b = B.data_ptr;
+    MKL_INT cblas_ldb = (MKL_INT) num_cols;
+    MKL_INT cblas_strideb = (MKL_INT) (p * num_cols);
+    double* cblas_c = C.data_ptr; 
+    MKL_INT cblas_ldc = (MKL_INT) n_k;
+    MKL_INT cblas_stridec = (MKL_INT) 0;
+    MKL_INT cblas_batch_size = (MKL_INT) num_blocks;
+    
+   // Make a for loop here. The "num_threads" we need to test to see what the best value is here. 
+    cblas_dgemm_batch_strided(
+        CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
+        CblasNoTrans, // A matrix is not transpose. `transa` param of MKL cblas call.
+        CblasTrans, // B matrix is transpose. `transb` param of MKL cblas call.
+        cblas_m, // Number of rows of A or C. `m` param of MKL cblas call.
+        cblas_n, // Number of cols of B or C. `n` param of MKL cblas call.
+        cblas_k, // Inner dimension - number of columns of A or number of rows of B. `k` param of MKL cblas call.
+        cblas_alpha, // Scalar `alpha` param of MKL cblas call.
+        cblas_a, // Data buffer of A. `a` param of MKL cblas call.
+        cblas_lda, // Leading dimension of A. `lda` param of MKL cblas call.
+        cblas_stridea,
+        cblas_b, // Data buffer of B. `b` param of MKL cblas call.
+        cblas_ldb, // Leading dimension of B. `ldb` param of MKL cblas call.
+        cblas_strideb,
+        cblas_beta, // Scalar `beta` param of MKL cblas call.
+        cblas_c, // Data buffer of C. `c` param of MKL cblas call.
+        cblas_ldc, // Leading dimension of C. `ldc` param of MKL cblas call.
+        cblas_stridec,
+        cblas_batch_size
+    );
+
+    // TODO: SUM C MATRICES IN PARALLEL.
+    
+
+    return C;
+}
+
+Matrix tensor_contract_all_but_one_batched(const Tensor& A, const Tensor& B, size_t mode){
+    /*
+    * SAME AS TENSOR_CONTRACT_ALL_BUT_ONE, but instead, it's batched.
+    * Unfolds two tensors A and B in the same mode, and computes A_(k) B_(k)^T, storing the result C
+    * in column-major order.
+    *   - Instead of manually unfolding these two tensors, we can get "blocks" from each of the buffers, multiply them, 
+    *     and then sum the result.
+    *   - In CblasColMajor mode, treat A's memory as A^T (num_cols x n_k, lda = n_k)
+    *     and B's memory as B (p x n_k, ldb = n).
+    *   - We want C (n_k x p, col-major, ldc = m) = A * B^T = (A^T)^T * (B)^T
+    *   - So call: C(n_k x p) = Trans(A^T) * Trans(B)
+    *     i.e., cblas_dgemm(CblasColMajor, CblasTrans, CblasTrans, n_k, , k,
+    *                       1.0, A, k, B, n, 0.0, C, m)
+    */
+    
+    size_t i = 0; 
+    // Just making a temporary variable to store the number of "threads" we are using. 
+    const size_t num_threads = 1;
+
+    // Take into account the mode which both are unfolding for. Remember this is A(k) (B(k))^T
+    // The dimensions of the final tensor will be n_k x p. 
+    // Get necessary dimensions
+    std::vector<size_t> A_dims = A.dims;
+    std::vector<size_t> B_dims = B.dims;
+
+    size_t n_k = A_dims[mode];
+    size_t p = B_dims[mode];
+
+    // Determine the number of columns for each block and set dimensions accordingly. 
+    size_t num_cols = 1;
+    for (i = 0; i < mode; ++i) { 
+      assert(A_dims[i] == B_dims[i] && "Dimensions of A and B must be equal except at n_k.");
+      num_cols *= A_dims[i];
+    }
+
+    // Get the number of "blocks" we are multiplying.
+    size_t num_blocks = 1;
+    for (i = mode + 1; i < A.ndim; ++i){ 
+      assert(A_dims[i] == B_dims[i] && "Dimensions of A and B must be equal except at n_k.");
+      num_blocks *= A_dims[i];
+    }
+
+    // This will be a cumulative matrix, makes the buffer all zeros to start.
+    // Storing as one matrix with n_k rows and p*num_threads columns, because there are num_threads "blocks", which will be summed later.
+    Matrix C(p*n_k*num_threads, n_k, p*num_threads);
+    std::memset(C.data_ptr, 0, C.buflen * sizeof(double));
+
+    
+    // Matrix multiply each block and sum in C.
+    // A blocks have dimensions n_k X num_cols, B blocks have dimensions p X num_cols, hence why we transpose B by default.
+    // std::cout << "p = " << p << "\nn_k = " << n_k << "\nnum_blocks = " << num_blocks << "\nnum_cols = " << num_cols << std::endl;
+    // MKL Strided Batched BLAS documentation: 
+    // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-0/cblas-gemm-batch-strided.html
+    MKL_INT cblas_m = (MKL_INT) n_k;
+    MKL_INT cblas_k = (MKL_INT) num_cols;
+    MKL_INT cblas_n = (MKL_INT) p;
+    double cblas_alpha = 1.0;
+    double cblas_beta = 1.0;
+    double* cblas_a = A.data_ptr;
+    MKL_INT cblas_lda = (MKL_INT) n_k; 
+    MKL_INT cblas_stridea = (MKL_INT) (n_k * num_cols);
+    double* cblas_b = B.data_ptr;
+    MKL_INT cblas_ldb = (MKL_INT) p;
+    MKL_INT cblas_strideb = (MKL_INT) (p * num_cols);
+    double* cblas_c = C.data_ptr; 
+    MKL_INT cblas_ldc = (MKL_INT) n_k;
+    MKL_INT cblas_stridec = (MKL_INT) n_k * p;
+    MKL_INT cblas_batch_size = (MKL_INT) num_threads;
+
+    // TODO: CONSIDER CASES WHERE num_blocks % num_threads != 0.
+    for(i = 0; i < num_blocks; i += num_threads){
+
+      // Make a for loop here. The "num_threads" we need to test to see what the best value is here. 
+      cblas_dgemm_batch_strided(
+          CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
+          CblasNoTrans, // A matrix is not transpose. `transa` param of MKL cblas call.
+          CblasTrans, // B matrix is transpose. `transb` param of MKL cblas call.
+          cblas_m, // Number of rows of A or C. `m` param of MKL cblas call.
+          cblas_n, // Number of cols of B or C. `n` param of MKL cblas call.
+          cblas_k, // Inner dimension - number of columns of A or number of rows of B. `k` param of MKL cblas call.
+          cblas_alpha, // Scalar `alpha` param of MKL cblas call.
+          cblas_a, // Data buffer of A. `a` param of MKL cblas call.
+          cblas_lda, // Leading dimension of A. `lda` param of MKL cblas call.
+          cblas_stridea,
+          cblas_b, // Data buffer of B. `b` param of MKL cblas call.
+          cblas_ldb, // Leading dimension of B. `ldb` param of MKL cblas call.
+          cblas_strideb,
+          cblas_beta, // Scalar `beta` param of MKL cblas call.
+          cblas_c, // Data buffer of C. `c` param of MKL cblas call.
+          cblas_ldc, // Leading dimension of C. `ldc` param of MKL cblas call.
+          cblas_stridec,
+          cblas_batch_size
+      );
+      // Update beginning of buffer pointers. 
+      cblas_a += (n_k * num_cols * num_threads);
+      cblas_b += (p * num_cols * num_threads);
+    }
+
+    // TODO: SUM C MATRICES IN PARALLEL.
+    // Non-parallel implementation just to test the original, for now.
+    Matrix C_sum(p*n_k, n_k, p);
+    std::memset(C_sum.data_ptr, 0, C_sum.buflen * sizeof(double));
+
+    // #pragma omp parallel for
+    for(i = 0; i < C_sum.buflen; ++i){
+      size_t offset;
+      for(size_t t = 0; t < num_threads; ++t){
+        // find where in C this index is. 
+        offset = i + (t * p*n_k);
+        C_sum.data_ptr[i] += C.data_ptr[offset];
+      }
+    }
+    // C is no longer needed. 
+    C.clear();
+    return C_sum;
 }
 
 Tensor tensor_minus_tensor(Tensor &A, Tensor &B){
@@ -5757,6 +5973,7 @@ Tensor tensor_plus_tensor(Tensor &A, Tensor &B, Tensor &C){
   return TO;
 
 }
+
 Tensor hadamard_pointwise(Tensor &A, Tensor &B){
   /*
   Multiply two tensors elementwise.

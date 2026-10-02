@@ -185,6 +185,8 @@ PYBIND11_MODULE(pystarm, m) {
 	m.def("slicewise_matmulks", &slicewise_matmulks, "Compute the slice-wise multiplication of the output of slicewise_svdks - U, VT and S");
     m.def("tensor_contract_all_but_one", &tensor_contract_all_but_one, "Contract two tensors in mode k with the formula A_(k) (B_(k))^T",
         py::arg("A"), py::arg("B"), py::arg("k"), py::arg("naive"));
+    m.def("tensor_contract_all_but_one_batched", &tensor_contract_all_but_one_batched, "Contract two tensors in mode k with the formula A_(k) (B_(k))^T",
+        py::arg("A"), py::arg("B"), py::arg("k"));
     m.def("tensor_minus_tensor", &tensor_minus_tensor, "Subtract two tensors elementwise.",
         py::arg("A"), py::arg("B"));
     m.def("tensor_plus_tensor", &tensor_plus_tensor, "Add three tensors elementwise.",

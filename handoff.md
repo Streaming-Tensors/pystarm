@@ -44,8 +44,12 @@ This is an extensive list of what need to be done in order to get this algorithm
 
 ### Implementations
 
-- Finish the implementation of the `inv_flag` parameter in `pystarm/cpp/ops.cpp`. It should do elementwise division of a tensor and a diagonal tensor represented as a matrix, in parallel. 
+- Add additional contraction implementation where instead of the for loop in the non-naive (reduction), we have a batched GEMM call. 
+    - I think I'm a little confused what this might have meant. Perhaps discuss with srini. 
+- Finish the implementation of the `inv_flag` parameter for `slicewise_matmul(Tensor, Matrix)` `pystarm/cpp/ops.cpp`. It should do elementwise division of a tensor and a diagonal tensor represented as a matrix, in parallel.
+    - This is straightforward and should not take terribly long. 
 - Write the implementation of `calc_VT_gradient(dVT)`. Refer to Newman and Keegan's code, `tensorSVD/facewiseSVDJacobian.m`.
+    - Cool.
 - Write a matrix exponential retraction kernel. This will be needed before any linesearch is written.
 - Write an implementation of Armijo linesearch in `star-M-opt/linesearch.py`. See `optimizers/armijoLinesearch.m` in Newman and Keegan's code.
 - Finish writing the implementation of riemannian gradient descent in `star-M-opt.py`, `gradient_descent()`. We are following the same structure of Newman and Keegan's MATLAB code in `optimizers/gradientDescent.m`.

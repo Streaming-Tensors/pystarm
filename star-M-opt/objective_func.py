@@ -42,12 +42,12 @@ def low_rank_obj_func_gradient(A, Ms, k):
         A_hat = pystarm.ttm(A, M, mode)
         Uk_hat, Sk_hat, Vkt_hat = pystarm.slicewise_svdx(A_hat, k)
         Ak_hat = pystarm.slicewise_matmul(Uk_hat, Sk_hat, Vkt_hat)
-        # inv_flag still needs to be implemented. line below needs inv_flag=True
+        # inv_flag still needs to be implemented. line below needs inv_flag=True for M. Or M just needs to be transposed.
         Ak = pystarm.ttm(Ak_hat, M, mode) 
 
         # Backwards pass
         # Step 4
-        R = pystarm.tensor_minus_tensor(A, Ak) # This needs an actual implementation of a subtraction operator. Or just a parallel subtract function.
+        R = pystarm.tensor_minus_tensor(A, Ak)
         grd_Ak_wrt_Minv = pystarm.tensor_contract_all_but_one(R, Ak_hat, k, naive=False)
         # inv_flag needs to be on the line below.
         grd_Ak_wrt_Akhat = pystarm.ttm(R, M, mode)

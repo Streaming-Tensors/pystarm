@@ -77,7 +77,7 @@ def calc_U_gradient(U, S, VT, dU, k):
     tmp2 = slicewise_matmul(
         pystarm.tensor_minus_tensor(np.eye(U.getdims[0]), U_Utrans),
         # TODO: Add the appropriate flags into the kernel so this can be computed. 
-        slicewise_matmul(dU, S, inv_M=True)
+        slicewise_matmul(dU, S, inv_matrix=True)
     )
 
     dU = slicewise_matmul(
@@ -96,9 +96,35 @@ def calc_S_gradient(U, VT, dS):
     S = pystarm.get_slicewise_diagonals(dS)
 
     grad = pystarm.slicewise_matmul(U, S, VT)
-    S.clear()
     return(grad)
 
-def calc_VT_gradient(dVT):
-    print("Nothing here yet.")
+def calc_VT_gradient(U, S, VT, dVT, k):
+    '''
+    MATLAB CODE:
+    s      = facewiseDiag(S);
+    szS    = [1,k,szA(3:end)];
+    s2     = s.^2;
+    F      = -s2 + tran(s2);
+
+    tmp1 = @(y) facewise(
+                        facewise(
+                            S,
+                            (F .* (facewise(tran(V),y) - facewise(tran(y),V)))),
+                        tran(V)
+                );
+    tmp2 = @(y) facewise(
+                        tran(y ./ reshape(s,szS)),
+                        eye(n) - VVT
+                );
+    JacV.AT = @(y) facewise(U,tmp1(y) + tmp2(y));
+    '''
+    
+    n_slices = math.prod(VT.getdims()[2:])
+    F = get_F(S, k, n_slices)
+    VT_dVT = slicewise_matmul(VT, dVT, transpose_A=False, transpose_B=True)
+    dVtrans_V = slicewise_matmul(dVT, VT, transpose_A=False, transpose_B=True)
+    V_Vtrans = slicewise_matmul(VT, VT, transpose_A=True, transpose_B=False)
+
+
+    VT_grad = slicewise_matmul(U, pystarm.tensor_plus_tensor(tmp1, tmp2))
     return(dVT)
