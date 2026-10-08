@@ -1075,12 +1075,10 @@ class ContractionTestCase(unittest.TestCase):
             A_nelm = n_k * (m ** (len(modes) - 1))
             A_dims = [m for i in modes]
             A_dims[mode] = n_k
-            print(f"A_DIMS = {A_dims}")
 
             B_nelm =  p *  (m ** (len(modes) - 1))
             B_dims = [m for i in modes]
             B_dims[mode] = p
-            print(f"B_DIMS = {B_dims}")
 
             A = np.random.rand(A_nelm).reshape(A_dims, order='F')
             B = np.random.rand(B_nelm).reshape(B_dims, order='F')
