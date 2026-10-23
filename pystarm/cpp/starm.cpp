@@ -154,7 +154,8 @@ PYBIND11_MODULE(pystarm, m) {
 	m.def("thresholds", &thresholds, "Compute the column-wise ranks given a tolerance to meet.",
         py::arg("A"), py::arg("tol"), py::arg("verbose") = false);
 	m.def("ttm_loop", &ttm_loop, "Tensor times matrix multiply on a specific mode by looping");
-	m.def("ttm", &ttm, "Tensor times matrix multiply on a specific mode by batched BLAS");
+	m.def("ttm", &ttm, "Tensor times matrix multiply on a specific mode by batched BLAS",
+        py::arg("T"), py::arg("M"), py::arg("mode"), py::arg("M_transpose") = false);
 	m.def("ttm_parfor", &ttm_parfor, "Tensor times matrix multiply on a specific mode by parallel loop with sequential BLAS per block");
 	m.def("slicewise_svdvals", &slicewise_svdvals, "Compute the slice-wise singular values of a tensor",
         py::arg("A"), py::arg("verbose") = false);
@@ -177,7 +178,8 @@ PYBIND11_MODULE(pystarm, m) {
 	m.def("slicewise_matmul", static_cast<Tensor (*)(const Tensor&, const Tensor&, bool, bool)>(&slicewise_matmul), "Compute the slice-wise multiplication of two tensors, A and B",
         py::arg("A"), py::arg("B"), py::arg("transpose_A") = false, py::arg("transpose_B") = false);
     m.def("slicewise_matmul", static_cast<Tensor (*)(const Tensor&, const Matrix&, const Tensor&)>(&slicewise_matmul), "Compute the slice-wise multiplication of the output of slicewise_svd - U, VT and S");
-    m.def("slicewise_matmul", static_cast<Tensor (*)(const Tensor&, const Matrix&, bool)>(&slicewise_matmul), "Compute the slice-wise multiplication of a Tensor and a diagonal tensor represented as a matrix.");
+    m.def("slicewise_matmul", static_cast<Tensor (*)(const Tensor&, const Matrix&, bool, bool)>(&slicewise_matmul), "Compute the slice-wise multiplication of a Tensor and a diagonal tensor represented as a matrix.",
+        py::arg("U"), py::arg("S"), py::arg("inv_flag") = false, py::arg("ten_left") = true);
 	m.def("slicewise_svd_thr", &slicewise_svd_thr, "Compute the slice-wise SVD of a tensor given an error tolerance.",
         py::arg("A"), py::arg("tol"), py::arg("verbose") = false);
 	m.def("slicewise_svd_thr2", &slicewise_svd_thr2, "Compute the slice-wise SVD of a tensor given an error tolerance.",
@@ -186,7 +188,7 @@ PYBIND11_MODULE(pystarm, m) {
     m.def("tensor_contract_all_but_one", &tensor_contract_all_but_one, "Contract two tensors in mode k with the formula A_(k) (B_(k))^T",
         py::arg("A"), py::arg("B"), py::arg("k"), py::arg("naive"));
     m.def("tensor_contract_all_but_one_batched", &tensor_contract_all_but_one_batched, "Contract two tensors in mode k with the formula A_(k) (B_(k))^T",
-        py::arg("A"), py::arg("B"), py::arg("k"));
+        py::arg("A"), py::arg("B"), py::arg("k"), py::arg("num_threads"));
     m.def("tensor_minus_tensor", &tensor_minus_tensor, "Subtract two tensors elementwise.",
         py::arg("A"), py::arg("B"));
     m.def("tensor_plus_tensor", &tensor_plus_tensor, "Add three tensors elementwise.",

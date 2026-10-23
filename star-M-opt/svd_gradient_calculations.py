@@ -33,6 +33,12 @@ def get_F(S, k, n_slices):
     F = pystarm.Tensor(np.asfortranarray(F_np), len(dims), dims)
     return F
 
+def get_I(dims):
+    I_np = np.asfortranarray([np.eye(dims[0]) for i in range(dims[0])])
+    ndim = len(dims)
+    return pystarm.Tensor(I_np, ndim, [dims[0]])
+
+
 def calc_U_gradient(U, S, VT, dU, k):
     '''
     MATLAB CODE:
@@ -109,7 +115,8 @@ def calc_VT_gradient(U, S, VT, dVT, k):
     tmp1 = @(y) facewise(
                         facewise(
                             S,
-                            (F .* (facewise(tran(V),y) - facewise(tran(y),V)))),
+                            (F .* (facewise(tran(V),y) - facewise(tran(y),V)))
+                        ),
                         tran(V)
                 );
     tmp2 = @(y) facewise(
@@ -121,9 +128,23 @@ def calc_VT_gradient(U, S, VT, dVT, k):
     
     n_slices = math.prod(VT.getdims()[2:])
     F = get_F(S, k, n_slices)
-    VT_dVT = slicewise_matmul(VT, dVT, transpose_A=False, transpose_B=True)
-    dVtrans_V = slicewise_matmul(dVT, VT, transpose_A=False, transpose_B=True)
+    VT_dV = slicewise_matmul(VT, dVT, transpose_A=False, transpose_B=True)
+    dVTtrans_V = slicewise_matmul(dVT, VT, transpose_A=False, transpose_B=True)
     V_Vtrans = slicewise_matmul(VT, VT, transpose_A=True, transpose_B=False)
+
+    tmp1 = slicewise_matmul(
+                slicewise_matmul(
+                    S, 
+                    hadamard_pointwise(F, pystarm.tensor_minus_tensor(VT_dV, dVTtrans_V))
+                ),
+                VT
+            )
+    tmp2 = slicewise_matmul(
+                slicewise_matmul(
+                    slicewise_matmul(dVT, S, inv_matrix=True),
+                    
+                )
+            )
 
 
     VT_grad = slicewise_matmul(U, pystarm.tensor_plus_tensor(tmp1, tmp2))

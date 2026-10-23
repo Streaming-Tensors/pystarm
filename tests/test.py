@@ -6,7 +6,7 @@ import itertools
 import gc
 import time
 import math
-from alg import starM_product, starM_product_ttb, tensor_contraction_product_ttb, tensor_contract_multiply, tensor_contract_batched
+from alg import starM_product, starM_product_ttb, tensor_contraction_product_ttb, tensor_contract_multiply, tensor_contract_batched, contegra_tensor_contract_timed
 import pystarm
 
 
@@ -94,6 +94,70 @@ class TensorTestCase(unittest.TestCase):
         flag = np.allclose(ten3.data, arr3)
         self.assertEqual(flag, True)
 
+    def test_ttm_first_mode_transpose(self):
+        """Test ttm in the first mode with a transposed matrix."""
+        ten_nelm = 120
+        ten_dims = (5, 4, 3, 2)
+        ten_ndim = len(ten_dims)
+        arr1 = np.arange(ten_nelm, dtype=np.float64).reshape(ten_dims, order='F')
+        ten1 = pystarm.Tensor(arr1, ten_ndim, ten_dims)
+
+        mat_nelm = 3*5 # 15 elements
+        mat_dims = (5, 3) # Make dimensions such that when it's transposed, they line up.
+        mat_ndim = len(ten_dims)
+        arr2 = np.arange(mat_nelm, dtype=np.float64).reshape(mat_dims, order='F')
+        mat2 = pystarm.Matrix(arr2, mat_dims[0], mat_dims[1])
+
+        ten2 = pystarm.ttm(ten1, mat2, 0, M_transpose=True) # On the first mode (0+1th mode)
+
+        arr3 = np.frombuffer(ten2, dtype=np.float64).reshape(ten2.getdims(), order='F', copy = False)
+        ten3 = ttb.tensor(arr1, copy=True).ttm(arr2.T, 0)
+        flag = np.allclose(ten3.data, arr3)
+
+        self.assertEqual(flag, True)
+
+    def test_ttm_last_mode_transpose(self):
+        """Test ttm in the last mode with a transposed matrix."""
+        ten_nelm = 120
+        ten_dims = (5, 4, 3, 2)
+        ten_ndim = len(ten_dims)
+        arr1 = np.arange(ten_nelm, dtype=np.float64).reshape(ten_dims, order='F')
+        ten1 = pystarm.Tensor(arr1, ten_ndim, ten_dims)
+
+        mat_nelm = 3*2 # 6 elements
+        mat_dims = (2, 3)
+        mat_ndim = len(ten_dims)
+        arr2 = np.arange(mat_nelm, dtype=np.float64).reshape(mat_dims, order='F')
+        mat2 = pystarm.Matrix(arr2, mat_dims[0], mat_dims[1])
+
+        ten2 = pystarm.ttm(ten1, mat2, 3, M_transpose=True) # On the last(4th) mode (3+1th mode)
+
+        arr3 = np.frombuffer(ten2, dtype=np.float64).reshape(ten2.getdims(), order='F', copy = False)
+        ten3 = ttb.tensor(arr1, copy=True).ttm(arr2.T, 3)
+        flag = np.allclose(ten3.data, arr3)
+        self.assertEqual(flag, True)
+
+    def test_ttm_middle_mode_transpose(self):
+        """Test ttm in a middle mode with a transposed matrix."""
+        ten_nelm = 120
+        ten_dims = (5, 4, 3, 2)
+        ten_ndim = len(ten_dims)
+        arr1 = np.arange(ten_nelm, dtype=np.float64).reshape(ten_dims, order='F')
+        ten1 = pystarm.Tensor(arr1, ten_ndim, ten_dims)
+
+        mat_nelm = 2*3 # 6 elements
+        mat_dims = (3, 2)
+        mat_ndim = len(ten_dims)
+        arr2 = np.arange(mat_nelm, dtype=np.float64).reshape(mat_dims, order='F')
+        mat2 = pystarm.Matrix(arr2, mat_dims[0], mat_dims[1])
+
+        ten2 = pystarm.ttm(ten1, mat2, 2, M_transpose=True) # On the third mode (2+1th mode)
+
+        arr3 = np.frombuffer(ten2, dtype=np.float64).reshape(ten2.getdims(), order='F', copy = False)
+        ten3 = ttb.tensor(arr1, copy=True).ttm(arr2.T, 2)
+        flag = np.allclose(ten3.data, arr3)
+        self.assertEqual(flag, True)
+
     def test_slicewise_svd(self):
         """Test slicewise SVD"""
 
@@ -162,6 +226,49 @@ class TensorTestCase(unittest.TestCase):
               
             return flag1, flag2, flag3
 
+        def slicewise_checks_US_only(Apy, Aten):
+            # Compute the slicewise SVD
+            Uc, Sc, Vtc = pystarm.slicewise_svd(Aten)
+            Spy2        = np.frombuffer(Sc, dtype=np.float64).reshape(Sc.getdims(), order='F', copy = False)
+
+            # Compute in Python
+            [Upy, Spy, Vtpy] = slicewise_svd(Apy)
+
+            # Singular values should match exactly
+            flag1 = np.allclose(Spy, Spy2)
+
+            # Product of slices should be the same
+            nslices = Spy.shape[1]
+            sflags  = np.zeros(nslices, dtype=np.bool)
+
+            Atilde_c = pystarm.slicewise_matmul(Uc, Sc)
+            Atilde_np = np.frombuffer(Atilde_c, dtype=np.float64).reshape(Atilde_c.getdims(), order='F', copy = False)
+            # Atilde_py = np.zeros((Upy.shape[0], Vtpy.shape[1], nslices))
+            Atilde_py = np.zeros(Atilde_np.shape)
+
+            for ii in range(nslices):
+                Us   = Uc.getfrontalslice(ii)
+                Usp  = np.frombuffer(Us, dtype=np.float64).reshape(Us.getdims(), order='F', copy=False)
+                Vts  = Vtc.getfrontalslice(ii)
+                Vtsp = np.frombuffer(Vts, dtype=np.float64).reshape(Vts.getdims(), order='F', copy=False)
+                Ssp  = Spy2[:, ii]
+                Bsp  = Usp @ np.diag(Ssp)
+                Bpy = Upy[:, :, ii] @ np.diag(Spy[:, ii])
+                Atilde_py[:, :, ii] = Bpy
+
+                # Check if the reconstructions are close
+                sflags[ii] = np.allclose(Bsp, Bpy)
+
+            flag2 = np.all(sflags)
+
+            Atilde_py = Atilde_py.reshape(Atilde_np.shape)
+            flag3 = np.allclose(Atilde_np, Atilde_py)
+            print("Atilde_py", Atilde_py)
+            print("Atilde_np", Atilde_np)
+            print("Error", np.linalg.norm(np.abs(Atilde_py - Atilde_np)))
+                
+            return flag1, flag2, flag3
+
         # Try two examples
         ## 3-dimensional example
         ten_nelm = 24
@@ -174,7 +281,13 @@ class TensorTestCase(unittest.TestCase):
         self.assertEqual(flag1, True)
         self.assertEqual(flag2, True)
         self.assertEqual(flag3, True)
-      
+
+        # Check for just U @ S
+        # [flag1, flag2, flag3] = slicewise_checks_US_only(arr1, ten1)
+        # self.assertEqual(flag1, True)
+        # self.assertEqual(flag2, True)
+        # self.assertEqual(flag3, True)
+
         # ## 4-dimensional example
         # ten_nelm = 120
         # ten_dims = (5, 4, 3, 2)
@@ -1034,7 +1147,7 @@ class ContractionTestCase(unittest.TestCase):
     # TODO: Free the tensors and ensure no memory leaks. 
     def test_order_three_contraction(self):
         '''
-        Test a tensor contraction with all modes of two mode-3 tensors. Testing batched implementation and OMP reduction.
+        Test a tensor contraction with all modes of two mode-3 tensors. Testing batched implementation, OMP reduction, and cotengra implementation.
         '''
         modes = [0, 1, 2]
         flags = []
@@ -1056,13 +1169,14 @@ class ContractionTestCase(unittest.TestCase):
             B = np.random.rand(B_nelm).reshape(B_dims, order='F')
             
             C_pystarm = tensor_contract_multiply(A, B, mode, naive=False)
-            C_pystarm_batched = tensor_contract_batched(A, B, mode)
+            C_pystarm_batched, _ = tensor_contract_batched(A, B, mode)
             C_ttb = tensor_contraction_product_ttb(A, B, mode)
-            flags.append(np.allclose(C_pystarm, C_ttb, C_pystarm_batched))
+            C_cotengra, _ = contegra_tensor_contract_timed(A, B, mode)
+            flags.append(np.allclose(C_pystarm, C_ttb, C_pystarm_batched, C_cotengra))
 
     def test_order_four_contractions(self):
         '''
-        Test a tensor contractions with all modes of two mode-4 tensors. Testing both the batched and OMP reduction cases.
+        Test a tensor contractions with all modes of two mode-4 tensors. Testing both the batched, OMP, and cotengra reduction cases.
         '''
         modes = [0, 1, 2, 3]
         flags = []
@@ -1084,11 +1198,11 @@ class ContractionTestCase(unittest.TestCase):
             B = np.random.rand(B_nelm).reshape(B_dims, order='F')
             
             C_pystarm = tensor_contract_multiply(A, B, mode, naive=False)
-            C_pystarm_batched = tensor_contract_batched(A, B, mode)
+            C_pystarm_batched, _ = tensor_contract_batched(A, B, mode)
             C_ttb = tensor_contraction_product_ttb(A, B, mode)
-            flags.append(np.allclose(C_pystarm, C_ttb, C_pystarm_batched))
+            C_cotengra, _ = contegra_tensor_contract_timed(A, B, mode)
+            flags.append(np.allclose(C_pystarm, C_ttb, C_pystarm_batched, C_cotengra))
 
-        print(f"FLAGS = {flags}")
         self.assertEqual(np.all(flags), True)
 
 class TensorArithmeticTestCase(unittest.TestCase):

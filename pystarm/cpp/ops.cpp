@@ -572,13 +572,25 @@ Tensor slicewise_matmul(const Tensor& A, const Tensor& B, bool transpose_A=false
     }
     return TO;
 }
-
-Tensor slicewise_matmul(const Tensor& U, const Matrix& S, bool inv_flag=false){
-    // Another overloaded operator, this one just does slicewise matrix multiply on a tensor and a diagonal tensor stored as a matrix.
+/* TODO: finish implementing the ten_left parameter. */
+Tensor slicewise_matmul(const Tensor& U, const Matrix& S, bool inv_flag=false, bool ten_left=true){
+    /* 
+    Another overloaded operator, this one just does slicewise matrix multiply on a tensor and a diagonal tensor stored as a matrix.
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch.html
     // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
+
+    PARAMS:
+    U: Tensor of size (m x n x n_slices)
+    S: Diagonal tensor stored as matrix of size (n x n_slices)
+    inv_flag: Whether or not you want matrix S to be inverse. 
+    ten_left: True if doing U * S, False if doing S * U
+    */
     assert(U.nslices == S.ncol);
     assert(U.dims[1] == S.nrow);
+    // assert(!(inv_flag == true && ten_left == true));
+    if(!ten_left){
+      assert(U.dims[0] == S.nrow);
+    }
 
     // Scale U with S
     std::vector<size_t> USdims(U.dims); // US is the scaled version of U
@@ -590,59 +602,55 @@ Tensor slicewise_matmul(const Tensor& U, const Matrix& S, bool inv_flag=false){
         //USbuflen = USbuflen * USdims[i];
     //}
     Tensor US(USbuflen, U.ndim, USdims);
-
-    if(!inv_flag){
-        // Multiplying each slice of U with the diagonal matrix corresponding to the corresponding column of matrix S (which is compact format of tensor S)
-        // Use MKL ddgmm_batch_strided: https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
-        CBLAS_LAYOUT cblas_layout = CblasColMajor;
-        CBLAS_SIDE cblas_left_right = CblasRight;
-        MKL_INT cblas_m = (MKL_INT) U.dims[0];
-        MKL_INT cblas_n = (MKL_INT) U.dims[1];
-        double* cblas_a = U.data_ptr;
-        MKL_INT cblas_lda = (MKL_INT) U.dims[0];
-        MKL_INT cblas_stridea = (MKL_INT) (U.dims[0] * U.dims[1]);
-        double* cblas_x = S.data_ptr;
-        MKL_INT cblas_incx = 1;
-        MKL_INT cblas_stridex = (MKL_INT) S.nrow; //Same as U.dims[1]
-        double* cblas_c = US.data_ptr;
-        MKL_INT cblas_ldc = (MKL_INT) US.dims[0];
-        MKL_INT cblas_stridec = (MKL_INT) (US.dims[0] * US.dims[1]);
-        MKL_INT cblas_batch_size = (MKL_INT) U.nslices;
-        
-        cblas_ddgmm_batch_strided(
-                cblas_layout,
-                cblas_left_right,
-                cblas_m,
-                cblas_n,
-                cblas_a,
-                cblas_lda,
-                cblas_stridea,
-                cblas_x,
-                cblas_incx,
-                cblas_stridex,
-                cblas_c,
-                cblas_ldc,
-                cblas_stridec,
-                cblas_batch_size
-                );
-
-    } else {
-      /* 
-      TODO:
-      This is still incorrect. In order for it to work, we need to do elementwise division between U and S. 
-      S is a diagonal tensor represented as a matrix (i.e., entry (i,i,j) for a tensor A would correspond to 
-      index = ((i % A_num_cols) + (i * A_num_cols)) in the matrix buffer, with dims i x j.
-      */
-      std::memset(US.data_ptr, 0.0, USbuflen * sizeof(double));
-      size_t U_n_cols = USdims[1];
-      #pragma omp parallel for simd schedule(static) if(USbuflen > 100000)
-      for(size_t j = 0; j < S.ncol; ++j){
-        for(size_t i = 0; i < S.nrow; ++i){
-          size_t U_index = ((i % U_n_cols) + (i * U_n_cols));
-          US.data_ptr[i] = U.data_ptr[U_index] / S.get(i, j);
+    Matrix S_inv(S.nrow * S.ncol, S.nrow, S.ncol);
+    if(inv_flag){
+      for (size_t i = 0; i < S_inv.buflen; ++i){
+        for(size_t j = 0; j < S_inv.buflen; ++j){
+          S_inv.set(i, j, 1 / S.get(i, j));
         }
       }
     }
+    // Multiplying each slice of U with the diagonal matrix corresponding to the corresponding column of matrix S (which is compact format of tensor S)
+    // Use MKL ddgmm_batch_strided: https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-dgmm-batch-strided.html
+    CBLAS_LAYOUT cblas_layout = CblasColMajor;
+    CBLAS_SIDE cblas_left_right = (ten_left) ? CblasRight: CblasLeft;
+    MKL_INT cblas_m = (MKL_INT) U.dims[0];
+    MKL_INT cblas_n = (MKL_INT) U.dims[1];
+    double* cblas_a = U.data_ptr;
+    MKL_INT cblas_lda = (MKL_INT) U.dims[0];
+    MKL_INT cblas_stridea = (MKL_INT) (U.dims[0] * U.dims[1]);
+    double* cblas_x = (inv_flag) ? S_inv.data_ptr : S.data_ptr;
+    MKL_INT cblas_incx = 1;
+    MKL_INT cblas_stridex = (MKL_INT) S.nrow; //Same as U.dims[1]
+    double* cblas_c = US.data_ptr;
+    MKL_INT cblas_ldc = (MKL_INT) US.dims[0];
+    MKL_INT cblas_stridec = (MKL_INT) (US.dims[0] * US.dims[1]);
+    MKL_INT cblas_batch_size = (MKL_INT) U.nslices;
+
+    cblas_ddgmm_batch_strided(
+            cblas_layout,
+            cblas_left_right,
+            cblas_m,
+            cblas_n,
+            cblas_a,
+            cblas_lda,
+            cblas_stridea,
+            cblas_x,
+            cblas_incx,
+            cblas_stridex,
+            cblas_c,
+            cblas_ldc,
+            cblas_stridec,
+            cblas_batch_size
+            );
+
+      // #pragma omp parallel for simd schedule(static) if(USbuflen > 100000)
+      // for(size_t j = 0; j < S.ncol; ++j){
+      //   for(size_t i = 0; i < S.nrow; ++i){
+      //     size_t U_index = ((i % U_n_cols) + (i * U_n_cols));
+      //     US.data_ptr[U_index] = U.data_ptr[U_index] / S.get(i, j);
+      //   }
+    S_inv.clear();
     return US;
   }
 
@@ -1084,14 +1092,21 @@ Tensor ttm_parfor(Tensor& T, Matrix& M, size_t mode){
 
     return TO;
 }
-
-Tensor ttm(Tensor& T, Matrix& M, size_t mode){
+/* TODO: modify to have an m_transpose flag here. Ensure correct dimension checking and whatnot. */
+Tensor ttm(Tensor& T, Matrix& M, size_t mode, bool M_transpose=false){
     std::vector<size_t> ten_dims = T.getdims();
     std::vector<size_t> mat_dims = M.getdims();
-    assert(mat_dims[1] == ten_dims[mode]);
+    if(M_transpose){
+      assert(mat_dims[0] == ten_dims[mode]);
+      // mat_dims = [mat_dims[1], mat_dims[0]];
+    }
+    else {
+      assert(mat_dims[1] == ten_dims[mode]);
+    }
+    
 
     std::vector<size_t> out_ten_dims(ten_dims);
-    out_ten_dims[mode] = mat_dims[0];
+    out_ten_dims[mode] = (M_transpose) ? mat_dims[1] : mat_dims[0];
     size_t buflen = 1;
     for (size_t i = 0; i<out_ten_dims.size(); i++) buflen = buflen * out_ten_dims[i];
 
@@ -1106,7 +1121,9 @@ Tensor ttm(Tensor& T, Matrix& M, size_t mode){
 
     if(mode == 0) {
         // TTM on first mode
-        MKL_INT cblas_m = (MKL_INT) mat_dims[0];
+        CBLAS_TRANSPOSE transa = (M_transpose) ? CblasTrans : CblasNoTrans;
+        CBLAS_TRANSPOSE transb = CblasNoTrans;
+        MKL_INT cblas_m = (MKL_INT) (M_transpose) ? mat_dims[1] : mat_dims[0];
         MKL_INT cblas_k = (MKL_INT) ten_dims[mode]; // Or mat_dims[1]
         MKL_INT cblas_n = 1;
         for (size_t i = mode+1; i<out_ten_dims.size(); i++){
@@ -1119,12 +1136,12 @@ Tensor ttm(Tensor& T, Matrix& M, size_t mode){
         double* cblas_b = T.data_ptr;
         MKL_INT cblas_ldb = (MKL_INT) ten_dims[0];
         double* cblas_c = TO.data_ptr; 
-        MKL_INT cblas_ldc = (MKL_INT) out_ten_dims[0]; // Number of rows of the matrix
+        MKL_INT cblas_ldc = (MKL_INT) (M_transpose) ? mat_dims[1]: mat_dims[0] ; // Number of rows of the matrix
                                          
         cblas_dgemm(
             CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
-            CblasNoTrans, // A matrix is not transpose. `transa` param of MKL cblas call.
-            CblasNoTrans, // B matrix is not transpose. `transb` param of MKL cblas call.
+            transa, // A matrix is not transpose. `transa` param of MKL cblas call.
+            transb, // B matrix is not transpose. `transb` param of MKL cblas call.
             cblas_m, // Number of rows of A or C. `m` param of MKL cblas call.
             cblas_n, // Number of cols of B or C. `n` param of MKL cblas call.
             cblas_k, // Inner dimension - number of columns of A or number of rows of B. `k` param of MKL cblas call.
@@ -1153,9 +1170,11 @@ Tensor ttm(Tensor& T, Matrix& M, size_t mode){
 
         // MKL Strided Batched BLAS documentation: 
         // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-0/cblas-gemm-batch-strided.html
+        CBLAS_TRANSPOSE transa = CblasNoTrans;
+        CBLAS_TRANSPOSE transb = (M_transpose) ? CblasNoTrans : CblasTrans; // Inverted because normally you multiply by M^T. See algorithm 3.1 of tensor textbook
         MKL_INT cblas_m = (MKL_INT) Mk;
         MKL_INT cblas_k = (MKL_INT) ten_dims[mode]; // Or mat_dims[1]
-        MKL_INT cblas_n = (MKL_INT) mat_dims[0];
+        MKL_INT cblas_n = (MKL_INT) (M_transpose) ? mat_dims[1] : mat_dims[0];
         double cblas_alpha = 1.0;
         double cblas_beta = 0.0;
         double* cblas_a = T.data_ptr;
@@ -1171,8 +1190,8 @@ Tensor ttm(Tensor& T, Matrix& M, size_t mode){
 
         cblas_dgemm_batch_strided(
             CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
-            CblasNoTrans, // A matrix is not transpose. `transa` param of MKL cblas call.
-            CblasTrans, // B matrix is transpose. `transb` param of MKL cblas call.
+            transa, // A matrix is not transpose. `transa` param of MKL cblas call.
+            transb, // B matrix is transpose. `transb` param of MKL cblas call.
             cblas_m, // Number of rows of A or C. `m` param of MKL cblas call.
             cblas_n, // Number of cols of B or C. `n` param of MKL cblas call.
             cblas_k, // Inner dimension - number of columns of A or number of rows of B. `k` param of MKL cblas call.
@@ -5724,7 +5743,7 @@ Matrix tensor_contract_all_but_one(Tensor& A, Tensor& B, size_t mode, bool naive
     return C;
 }
 
-Matrix tensor_contract_all_but_one_batched(const Tensor& A, const Tensor& B, size_t mode){
+Matrix tensor_contract_all_but_one_batched(const Tensor& A, const Tensor& B, size_t mode, size_t num_threads=3){
     /*
     * SAME AS TENSOR_CONTRACT_ALL_BUT_ONE, but instead, it's batched.
     * Unfolds two tensors A and B in the same mode, and computes A_(k) B_(k)^T, storing the result C
@@ -5741,7 +5760,6 @@ Matrix tensor_contract_all_but_one_batched(const Tensor& A, const Tensor& B, siz
     
     size_t i = 0; 
     // Just making a temporary variable to store the number of "threads" we are using. 
-    size_t num_threads = 3;
 
     // Take into account the mode which both are unfolding for. Remember this is A(k) (B(k))^T
     // The dimensions of the final tensor will be n_k x p. 
@@ -6030,6 +6048,10 @@ Matrix get_slicewise_diagonals(Tensor &A){
   return M;
 
 }
+// Matrix matrix_transpose(const Matrix &M){
+//   std::vector<size_t> out_dims = [M.dims[1], M.dims[0]]
+
+// }
 
 
 #endif

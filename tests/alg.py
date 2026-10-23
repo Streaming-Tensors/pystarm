@@ -6,6 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pystarm
 import pyttb as ttb
+import cotengra as ctg
+import string
 
 def tsvdm_I_compress(A, Ms, ttm_modes, k, verbose=False):
     '''
@@ -424,11 +426,14 @@ def tensor_contract_batched(A_np, B_np, k):
     B = pystarm.Tensor(B_np, B_ndim, B_shape)
     
     # Slicewise multiply A and B
-    C = pystarm.tensor_contract_all_but_one_batched(A, B, k)
+    start = time.perf_counter()
+    # Just use 12 "threads" by default
+    C = pystarm.tensor_contract_all_but_one_batched(A, B, k, 12)
+    end = time.perf_counter()
     # Return to numpy
     C_np = np.frombuffer(C, dtype=np.float64).reshape(C.getdims(), order='F', copy = False)
     
-    return C_np
+    return C_np, end - start
 
 def tensor_contraction_product_ttb(A, B, mode: int) -> np.ndarray:
     """
@@ -486,3 +491,74 @@ def tensor_contraction_product_ttb(A, B, mode: int) -> np.ndarray:
     C = A_unfolded * B_unfolded.ctranspose()
 
     return C.double()
+
+def contegra_tensor_contract_timed(A, B, k, optimize="auto-hq"):
+    """
+    Compute A_(k) @ B_(k)^T, the mode-k unfolding contraction of two
+    tensors, without explicitly unfolding either tensor.
+
+    Parameters
+    ----------
+    A, B : array_like
+        Tensors of the same number of dimensions. All dimensions must
+        match except possibly dimension `k`.
+    k : int
+        The mode to keep free (the unfolding mode). Can be negative
+        (numpy-style indexing).
+    optimize : str or cotengra.PathOptimizer, default "auto-hq"
+        Passed straight through to cotengra. Use "auto-hq" for cotengra's
+        high-quality hyper-optimized path (good default for most sizes),
+        or pass an explicit ctg.HyperOptimizer(...) instance for large
+        / performance-critical tensors where you want to tune the search.
+
+    Returns
+    -------
+    ndarray of shape (A.shape[k], B.shape[k])
+        Equal to `unfold(A, k) @ unfold(B, k).T`.
+    """
+    A = np.asarray(A) if not hasattr(A, "shape") else A
+    B = np.asarray(B) if not hasattr(B, "shape") else B
+
+    if A.ndim != B.ndim:
+        raise ValueError(
+            f"A and B must have the same number of dimensions "
+            f"(got {A.ndim} and {B.ndim})."
+        )
+
+    ndim = A.ndim
+    k = k % ndim  # normalize negative index
+
+    for ax in range(ndim):
+        if ax == k:
+            continue
+        if A.shape[ax] != B.shape[ax]:
+            raise ValueError(
+                f"A and B must match in every dimension except k={k}, "
+                f"but differ at dim {ax}: {A.shape[ax]} vs {B.shape[ax]}."
+            )
+
+    # Assign a distinct einsum letter to every shared (summed) mode,
+    # and separate letters for the two free mode-k axes.
+    letters = iter(string.ascii_lowercase + string.ascii_uppercase)
+    shared = [next(letters) for _ in range(ndim - 1)]
+
+    n_k = next(letters)
+    p = next(letters)
+
+    subs_A, subs_B = [], []
+    it = iter(shared)
+    for ax in range(ndim):
+        if ax == k:
+            subs_A.append(n_k)
+            subs_B.append(p)
+        else:
+            c = next(it)
+            subs_A.append(c)
+            subs_B.append(c)
+
+    eq = f"{''.join(subs_A)},{''.join(subs_B)}->{n_k}{p}"
+
+    t0 = time.perf_counter()
+    C = ctg.einsum(eq, A, B, optimize=optimize)
+    t1 = time.perf_counter()
+    return C,  t1-t0
