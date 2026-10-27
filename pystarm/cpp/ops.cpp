@@ -572,7 +572,7 @@ Tensor slicewise_matmul(const Tensor& A, const Tensor& B, bool transpose_A=false
     }
     return TO;
 }
-/* TODO: finish implementing the ten_left parameter. */
+
 Tensor slicewise_matmul(const Tensor& U, const Matrix& S, bool inv_flag=false, bool ten_left=true){
     /* 
     Another overloaded operator, this one just does slicewise matrix multiply on a tensor and a diagonal tensor stored as a matrix.
@@ -596,6 +596,7 @@ Tensor slicewise_matmul(const Tensor& U, const Matrix& S, bool inv_flag=false, b
     std::vector<size_t> USdims(U.dims); // US is the scaled version of U
                                         // where columns of the frontal slices of U is scaled by singular values of the corresponding slice in S
                                         // Dimensions of US would be same as U
+    USdims[1] = S.nrow; // Because we are not multiplying by VT in the end, we will not have the same dimensions as U.
     size_t USbuflen = std::accumulate(USdims.begin(), USdims.end(), (size_t)1, std::multiplies<size_t>());
     //size_t USbuflen = 1;
     //for (int i = 0; i < USdims.size(); i++){

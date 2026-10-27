@@ -227,47 +227,31 @@ class TensorTestCase(unittest.TestCase):
             return flag1, flag2, flag3
 
         def slicewise_checks_US_only(Apy, Aten):
-            # Compute the slicewise SVD
-            Uc, Sc, Vtc = pystarm.slicewise_svd(Aten)
-            Spy2        = np.frombuffer(Sc, dtype=np.float64).reshape(Sc.getdims(), order='F', copy = False)
+           # Checking on Tensor Tensor-Diagonal product with random tensors, as checking with U and S values
+           # Will produce different results as numpy and pystarm calculate U values differently. 
+            ten_nelm = 24
+            ten_dims = (4, 3, 2)
+            ten_ndim = len(ten_dims)
+            Apy = np.arange(ten_nelm, dtype=np.float64).reshape(ten_dims, order='F')
+            Aten = pystarm.Tensor(Apy, ten_ndim, ten_dims)
 
-            # Compute in Python
-            [Upy, Spy, Vtpy] = slicewise_svd(Apy)
+            n_slices = np.prod(ten_dims[2:])
+            M_dims = (ten_dims[1], n_slices)
+            M_nelm = np.prod(M_dims)
+            Mpy = np.arange(M_nelm, dtype=np.float64).reshape(M_dims, order='F')
+            M = pystarm.Matrix(Mpy, M_dims[0], M_dims[1])
 
-            # Singular values should match exactly
-            flag1 = np.allclose(Spy, Spy2)
-
-            # Product of slices should be the same
-            nslices = Spy.shape[1]
-            sflags  = np.zeros(nslices, dtype=np.bool)
-
-            Atilde_c = pystarm.slicewise_matmul(Uc, Sc)
+            Atilde_c = pystarm.slicewise_matmul(Aten, M)
             Atilde_np = np.frombuffer(Atilde_c, dtype=np.float64).reshape(Atilde_c.getdims(), order='F', copy = False)
-            # Atilde_py = np.zeros((Upy.shape[0], Vtpy.shape[1], nslices))
             Atilde_py = np.zeros(Atilde_np.shape)
 
-            for ii in range(nslices):
-                Us   = Uc.getfrontalslice(ii)
-                Usp  = np.frombuffer(Us, dtype=np.float64).reshape(Us.getdims(), order='F', copy=False)
-                Vts  = Vtc.getfrontalslice(ii)
-                Vtsp = np.frombuffer(Vts, dtype=np.float64).reshape(Vts.getdims(), order='F', copy=False)
-                Ssp  = Spy2[:, ii]
-                Bsp  = Usp @ np.diag(Ssp)
-                Bpy = Upy[:, :, ii] @ np.diag(Spy[:, ii])
+            for ii in range(n_slices):
+                Bpy = Apy[:, :, ii] @ np.diag(Mpy[:, ii])
                 Atilde_py[:, :, ii] = Bpy
 
-                # Check if the reconstructions are close
-                sflags[ii] = np.allclose(Bsp, Bpy)
-
-            flag2 = np.all(sflags)
 
             Atilde_py = Atilde_py.reshape(Atilde_np.shape)
-            flag3 = np.allclose(Atilde_np, Atilde_py)
-            print("Atilde_py", Atilde_py)
-            print("Atilde_np", Atilde_np)
-            print("Error", np.linalg.norm(np.abs(Atilde_py - Atilde_np)))
-                
-            return flag1, flag2, flag3
+            return np.allclose(Atilde_np, Atilde_py)
 
         # Try two examples
         ## 3-dimensional example
@@ -283,10 +267,8 @@ class TensorTestCase(unittest.TestCase):
         self.assertEqual(flag3, True)
 
         # Check for just U @ S
-        # [flag1, flag2, flag3] = slicewise_checks_US_only(arr1, ten1)
-        # self.assertEqual(flag1, True)
-        # self.assertEqual(flag2, True)
-        # self.assertEqual(flag3, True)
+        flag1 = slicewise_checks_US_only(arr1, ten1)
+        self.assertEqual(flag1, True)
 
         # ## 4-dimensional example
         # ten_nelm = 120
