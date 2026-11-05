@@ -8,6 +8,9 @@
 ## Build types:
 ##   make                       — production build (default)
 ##   make BUILD_TYPE=asan       — AddressSanitizer instrumented build
+##   make BUILD_TYPE=conda      — dynamic MKL from a conda environment
+##                                (set MKLROOT to the env prefix, e.g.
+##                                 export MKLROOT=$HOME/yes/envs/cenv)
 ## Both produce the same output file. Switching between builds requires
 ## `make clean` first. Before running the ASan build, source the setup
 ## script:  source asan-run-prep.sh
@@ -60,10 +63,25 @@ LIB_PROD = -m64 -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a \
 LIB_ASAN = -m64 -L${MKLROOT}/lib/intel64 -lmkl_rt -lgomp -lpthread -lm -ldl \
            -fsanitize=address
 
+## Conda MKL dynamic linking flags
+# A conda mkl package installs its shared libraries directly in $(MKLROOT)/lib,
+# not in lib/intel64, and ships no static archives. The three interface,
+# threading and core libraries are named explicitly rather than using -lmkl_rt:
+# mkl_rt resolves the integer interface at runtime and defaults to LP64, which
+# would silently disagree with the -DMKL_ILP64 the sources are compiled with.
+# -Wl,-rpath : bakes the library path in so the extension loads without
+#              LD_LIBRARY_PATH being set
+LIB_CONDA = -m64 -L${MKLROOT}/lib -Wl,-rpath,${MKLROOT}/lib \
+            -lmkl_intel_ilp64 -lmkl_gnu_thread -lmkl_core \
+            -lgomp -lpthread -lm -ldl
+
 ## Select flags based on BUILD_TYPE. Default is production.
 ifeq ($(BUILD_TYPE),asan)
     CFLAGS_USE = $(CFLAGS_ASAN)
     LIB_USE = $(LIB_ASAN)
+else ifeq ($(BUILD_TYPE),conda)
+    CFLAGS_USE = $(CFLAGS_PROD)
+    LIB_USE = $(LIB_CONDA)
 else
     CFLAGS_USE = $(CFLAGS_PROD)
     LIB_USE = $(LIB_PROD)

@@ -44,6 +44,15 @@ Build the C++ extension:
 make all
 ```
 
+If MKL comes from a conda environment, its shared libraries live directly in
+`$MKLROOT/lib` with no static archives, so use the conda build type with
+`MKLROOT` set to the environment prefix:
+
+```bash
+export MKLROOT=/path/to/conda/env
+make BUILD_TYPE=conda all
+```
+
 Install the package:
 
 ```bash
@@ -100,6 +109,17 @@ Main algorithms:
 - `pystarm.tsvdm_I_reconstruct(U, S, VT, Minvs, ttm_modes, orig_shape)` — reconstruct from fixed-rank factors.
 - `pystarm.tsvdm_II_compress(A, Ms, ttm_modes, tol)` — tolerance-based compression. Returns `(U, S, VT)`.
 - `pystarm.tsvdm_II_reconstruct(U, S, VT, Minvs, ttm_modes, orig_shape)` — reconstruct from tolerance-based factors.
+
+Matrix exponential and retractions (all take a `pystarm.Matrix`, read it
+without destroying it, and return a new `pystarm.Matrix` the caller must
+`.clear()`):
+
+- `pystarm.expm(A, t=1.0)` — `exp(t*A)` for any square `A`, by Padé scaling-and-squaring (Higham 2005, Algorithm 2.3). The default, and the right choice for a one-off evaluation.
+- `pystarm.cayley(A, t=1.0)` — the Cayley transform `(I - (t/2)A)^-1 (I + (t/2)A)`, a cheaper retraction that is also exactly orthogonal on skew input, but agrees with the exponential only to first order.
+- `pystarm.expm_multi(A, ts, retraction=pystarm.RETRACT_EXPM, reuse_min_steps=0)` — evaluate the chosen retraction at many step sizes. If `A` is skew-symmetric and `len(ts)` reaches the crossover threshold, one real Schur decomposition is computed and reused for every step; otherwise each step is evaluated directly. Returns a list of matrices. Pass `reuse_min_steps` to override the threshold (`1` forces reuse, a large value disables it).
+- `pystarm.skew_schur(S)` / `pystarm.expm_skew_apply(Q, theta, t)` / `pystarm.cayley_skew_apply(Q, theta, t)` — the reuse path, for callers that want to manage the decomposition themselves across a line search.
+- `pystarm.expm_skew(S, t=1.0)` — one-shot `exp(t*S)` through the Schur route; slower than `expm` for a single `t`.
+- `pystarm.is_skew_symmetric(A, tol=1e-12)` — the dispatch test.
 
 Where:
 - `A` is a `pystarm.Tensor`

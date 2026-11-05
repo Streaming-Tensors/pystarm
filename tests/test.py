@@ -1,5 +1,6 @@
 import unittest
 import numpy as np
+import scipy.linalg
 import pyttb as ttb
 import os
 import itertools
@@ -1238,6 +1239,217 @@ class TensorArithmeticTestCase(unittest.TestCase):
        
 
 # ADD A PYTTB TEST CASE FOR CONTRACTION, LOOK AT TTT FUNCTION AND CONTRACT ALL MODES BUT K.
+class MatrixExpTestCase(unittest.TestCase):
+    """Tests for the matrix exponential kernels.
+
+    The assertions below pass explicit tolerances rather than inheriting
+    np.allclose's defaults (rtol=1e-5, atol=1e-8), which are many decades
+    looser than anything these kernels should produce. The tolerances are
+    anchored on the measured behaviour: backward-stable Pade lands at
+    ~1e-15 relative, and the Schur reuse route at ~1e-13 because of the two
+    back-transformations through Q.
+    """
+
+    # Relative forward error tolerance for a direct (non-reused) evaluation.
+    RTOL_DIRECT = 1e-13
+    # Relative forward error tolerance for the Schur reuse route.
+    RTOL_REUSE = 1e-11
+    # Departure from the orthogonal group; this is the binding requirement.
+    ATOL_ORTH = 1e-12
+
+    @staticmethod
+    def _tomat(R):
+        """Copy a pystarm result buffer into a NumPy array and free it."""
+        X = np.frombuffer(R, dtype=np.float64).reshape(R.getdims(), order='F',
+                                                       copy=True)
+        R.clear()
+        return X
+
+    @staticmethod
+    def _rand_skew(n, seed):
+        rng = np.random.default_rng(seed)
+        B = rng.standard_normal((n, n))
+        return np.asfortranarray(B - B.T)
+
+    def _relerr(self, X, ref):
+        nrm = np.linalg.norm(ref)
+        if nrm == 0.0:
+            return np.linalg.norm(X)
+        return np.linalg.norm(X - ref) / nrm
+
+    def test_expm_general_matches_scipy(self):
+        """Pade path agrees with scipy.linalg.expm on general input"""
+        for n in (1, 2, 5, 17, 32):
+            rng = np.random.default_rng(100 + n)
+            Apy = np.asfortranarray(rng.standard_normal((n, n)))
+            Amat = pystarm.Matrix(Apy, n, n)
+            X = self._tomat(pystarm.expm(Amat))
+            err = self._relerr(X, scipy.linalg.expm(Apy))
+            self.assertLess(err, self.RTOL_DIRECT)
+
+    def test_expm_general_scaling_and_squaring(self):
+        """Pade path is accurate for a large-norm matrix (several squarings)"""
+        n = 24
+        rng = np.random.default_rng(7)
+        Apy = np.asfortranarray(20.0 * rng.standard_normal((n, n)))
+        Amat = pystarm.Matrix(Apy, n, n)
+        X = self._tomat(pystarm.expm(Amat))
+        err = self._relerr(X, scipy.linalg.expm(Apy))
+        self.assertLess(err, self.RTOL_DIRECT)
+
+    def test_expm_scalar_multiplier(self):
+        """exp(t*A) matches expm of the explicitly scaled matrix"""
+        n = 12
+        rng = np.random.default_rng(11)
+        Apy = np.asfortranarray(rng.standard_normal((n, n)))
+        Amat = pystarm.Matrix(Apy, n, n)
+        for t in (-1.7, 0.0, 0.25, 3.0):
+            X = self._tomat(pystarm.expm(Amat, t))
+            err = self._relerr(X, scipy.linalg.expm(t * Apy))
+            self.assertLess(err, self.RTOL_DIRECT)
+
+    def test_expm_skew_matches_scipy(self):
+        """Both paths agree with scipy.linalg.expm on skew input, odd and even n"""
+        for n in (1, 2, 3, 8, 9, 31, 64):
+            Spy = self._rand_skew(n, 200 + n)
+            Smat = pystarm.Matrix(Spy, n, n)
+            ref = scipy.linalg.expm(Spy)
+
+            Xp = self._tomat(pystarm.expm(Smat))
+            self.assertLess(self._relerr(Xp, ref), self.RTOL_DIRECT)
+
+            Xs = self._tomat(pystarm.expm_skew(Smat))
+            self.assertLess(self._relerr(Xs, ref), self.RTOL_REUSE)
+
+    def test_expm_skew_orthogonality(self):
+        """Both paths land on the orthogonal group for skew input"""
+        for n in (2, 9, 64):
+            Spy = self._rand_skew(n, 300 + n)
+            Smat = pystarm.Matrix(Spy, n, n)
+            for X in (self._tomat(pystarm.expm(Smat)),
+                      self._tomat(pystarm.expm_skew(Smat)),
+                      self._tomat(pystarm.cayley(Smat))):
+                dev = np.linalg.norm(X.T @ X - np.eye(n))
+                self.assertLess(dev, self.ATOL_ORTH)
+
+    def test_skew_schur_decomposition(self):
+        """skew_schur returns an orthogonal Q and angles reproducing S"""
+        for n in (7, 16):
+            Spy = self._rand_skew(n, 400 + n)
+            Smat = pystarm.Matrix(Spy, n, n)
+            Q, theta = pystarm.skew_schur(Smat)
+            Qpy = np.frombuffer(Q, dtype=np.float64).reshape(Q.getdims(),
+                                                             order='F', copy=True)
+            self.assertLess(np.linalg.norm(Qpy.T @ Qpy - np.eye(n)),
+                            self.ATOL_ORTH)
+
+            # Rebuild S = Q T Q^T from the reported block angles.
+            T = np.zeros((n, n), order='F')
+            i = 0
+            while i < n:
+                if i + 1 < n and theta[i] != 0.0:
+                    T[i, i + 1] = theta[i]
+                    T[i + 1, i] = -theta[i]
+                    i += 2
+                else:
+                    i += 1
+            self.assertLess(self._relerr(Qpy @ T @ Qpy.T, Spy), self.RTOL_REUSE)
+
+            # The input must not have been destroyed.
+            Spy2 = np.frombuffer(Smat, dtype=np.float64).reshape(Smat.getdims(),
+                                                                 order='F', copy=False)
+            self.assertEqual(np.allclose(Spy, Spy2, rtol=0, atol=0), True)
+            Q.clear()
+
+    def test_expm_reuse_across_halved_steps(self):
+        """One decomposition reproduces fresh evaluation at every halved step"""
+        n = 48
+        Spy = self._rand_skew(n, 500)
+        Smat = pystarm.Matrix(Spy, n, n)
+        Q, theta = pystarm.skew_schur(Smat)
+        for j in range(10):
+            t = 2.0 ** (-j)
+            X = self._tomat(pystarm.expm_skew_apply(Q, theta, t))
+            ref = scipy.linalg.expm(t * Spy)
+            self.assertLess(self._relerr(X, ref), self.RTOL_REUSE)
+            self.assertLess(np.linalg.norm(X.T @ X - np.eye(n)), self.ATOL_ORTH)
+        Q.clear()
+
+    def test_expm_multi_reuse_matches_direct(self):
+        """expm_multi gives the same answers with and without the reuse path"""
+        n = 33
+        Spy = self._rand_skew(n, 600)
+        Smat = pystarm.Matrix(Spy, n, n)
+        ts = [2.0 ** (-j) for j in range(12)]
+
+        reused = pystarm.expm_multi(Smat, ts, pystarm.RETRACT_EXPM, 1)
+        direct = pystarm.expm_multi(Smat, ts, pystarm.RETRACT_EXPM, len(ts) + 1)
+        for t, Ra, Rb in zip(ts, reused, direct):
+            Xa = self._tomat(Ra)
+            Xb = self._tomat(Rb)
+            ref = scipy.linalg.expm(t * Spy)
+            self.assertLess(self._relerr(Xa, ref), self.RTOL_REUSE)
+            self.assertLess(self._relerr(Xb, ref), self.RTOL_DIRECT)
+
+    def test_cayley_matches_reference(self):
+        """Cayley matches a direct solve, and reuses the decomposition"""
+        n = 20
+        Spy = self._rand_skew(n, 700)
+        Smat = pystarm.Matrix(Spy, n, n)
+        eye = np.eye(n)
+        ts = [1.0, 0.5, 0.25, 0.125]
+
+        for t in ts:
+            X = self._tomat(pystarm.cayley(Smat, t))
+            ref = np.linalg.solve(eye - 0.5 * t * Spy, eye + 0.5 * t * Spy)
+            self.assertLess(self._relerr(X, ref), self.RTOL_DIRECT)
+            self.assertLess(np.linalg.norm(X.T @ X - eye), self.ATOL_ORTH)
+
+        Q, theta = pystarm.skew_schur(Smat)
+        for t in ts:
+            X = self._tomat(pystarm.cayley_skew_apply(Q, theta, t))
+            ref = np.linalg.solve(eye - 0.5 * t * Spy, eye + 0.5 * t * Spy)
+            self.assertLess(self._relerr(X, ref), self.RTOL_REUSE)
+        Q.clear()
+
+    def test_is_skew_symmetric(self):
+        """The dispatch test accepts skew matrices and rejects general ones"""
+        n = 9
+        Spy = self._rand_skew(n, 800)
+        rng = np.random.default_rng(801)
+        Apy = np.asfortranarray(rng.standard_normal((n, n)))
+        Zpy = np.asfortranarray(np.zeros((n, n)))
+        self.assertEqual(pystarm.is_skew_symmetric(pystarm.Matrix(Spy, n, n)), True)
+        self.assertEqual(pystarm.is_skew_symmetric(pystarm.Matrix(Apy, n, n)), False)
+        self.assertEqual(pystarm.is_skew_symmetric(pystarm.Matrix(Zpy, n, n)), True)
+
+    def test_expm_edge_cases(self):
+        """n = 1 and n = 2, and the zero matrix"""
+        one = np.asfortranarray(np.array([[0.7]]))
+        X = self._tomat(pystarm.expm(pystarm.Matrix(one, 1, 1)))
+        self.assertLess(abs(X[0, 0] - np.exp(0.7)), 1e-15 * np.exp(0.7))
+
+        zero1 = np.asfortranarray(np.zeros((1, 1)))
+        X = self._tomat(pystarm.expm(pystarm.Matrix(zero1, 1, 1)))
+        self.assertEqual(X[0, 0], 1.0)
+
+        rot = np.asfortranarray(np.array([[0.0, 1.3], [-1.3, 0.0]]))
+        ref = np.array([[np.cos(1.3), np.sin(1.3)],
+                        [-np.sin(1.3), np.cos(1.3)]])
+        for f in (pystarm.expm, pystarm.expm_skew):
+            X = self._tomat(f(pystarm.Matrix(rot, 2, 2)))
+            self.assertLess(self._relerr(X, ref), self.RTOL_DIRECT)
+
+        zero2 = np.asfortranarray(np.zeros((2, 2)))
+        X = self._tomat(pystarm.expm(pystarm.Matrix(zero2, 2, 2)))
+        self.assertLess(self._relerr(X, np.eye(2)), self.RTOL_DIRECT)
+
+    def test_expm_rejects_non_square(self):
+        """A non-square input raises rather than returning silently"""
+        Apy = np.asfortranarray(np.random.rand(6).reshape((3, 2), order='F'))
+        Amat = pystarm.Matrix(Apy, 3, 2)
+        with self.assertRaises(RuntimeError):
+            pystarm.expm(Amat)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -6,6 +6,7 @@
 
 #include <numeric>
 #include <tuple>
+#include <stdexcept> // For std::runtime_error raised by the expm kernels
 #include "utils.hpp"
 #include "matrix.hpp"
 #include "tensor.hpp"
@@ -6054,5 +6055,692 @@ Matrix get_slicewise_diagonals(Tensor &A){
 
 // }
 
+// ===========================================================================
+// Matrix exponential
+// ===========================================================================
+//
+// Two evaluation paths and two retractions are provided.
+//
+//   Path B (general, and the DEFAULT):  Pade scaling-and-squaring
+//                    (`expm_pade`), Higham 2005 Algorithm 2.3.  Direct, no
+//                    decomposition, almost pure GEMM.  Also `cayley`, the
+//                    [1/1] diagonal Pade retraction, one factor-and-solve.
+//
+//   Path A (reuse, OPT-IN):  for a skew-symmetric S, one real Schur
+//                    decomposition S = Q T Q^T is computed once
+//                    (`skew_schur`).  T is exactly block diagonal with 2x2
+//                    blocks [[0, theta],[-theta, 0]] (plus one 1x1 zero block
+//                    when n is odd), so exp(t*S) = Q*blkdiag(rot(t*theta_j))*Q^T
+//                    can then be evaluated for any t (`expm_skew_apply`) at the
+//                    cost of an O(n^2) rotation assembly plus a single GEMM.
+//                    Cayley reuses the same decomposition through
+//                    `cayley_skew_apply`, since Cayley of a 2x2 skew block has
+//                    the closed form (1-(a/2)^2)/(1+(a/2)^2), a/(1+(a/2)^2).
+//
+// WHY PATH B IS THE DEFAULT.  An earlier survey note recommended always
+// decomposing.  The adversarial audit (VERIFICATION_audit.md, A6/A7) overturned
+// that: the Schur setup is expensive enough that reuse only wins past roughly
+// 4-9 trial steps against direct Pade (n-dependent: K = 8.7 at n=500, 6.6 at
+// n=1000, 4.3 at n=2000) and past roughly 17 against direct Cayley, while the
+// measured Armijo backtracking count is 1-4, averaging under 2.  So
+// `expm_multi` makes this a runtime decision against an explicit threshold
+// (EXPM_REUSE_MIN_STEPS_*) rather than always decomposing, and the single-shot
+// `expm` never decomposes.
+//
+// ACCURACY.  The audit (A8) also showed that the widely quoted 1e-15 forward
+// error gate was an artifact of injecting a random, orthogonality-destroying
+// perturbation.  With a structure-preserving error the optimizer is unaffected
+// out to ~1e-8.  The binding requirement is therefore that the result stay on
+// the orthogonal group; every path here does (diagonal Pade and Cayley are
+// exactly orthogonal on skew input in exact arithmetic, and the Schur route is
+// orthogonal up to the conditioning of Q).  Forward accuracy is nonetheless
+// kept at the natural backward-stable level -- nothing here is deliberately
+// loosened.
+//
+// ---------------------------------------------------------------------------
+// Backend split
+// ---------------------------------------------------------------------------
+// The heavy linear algebra is funnelled through the four thin `expm_be_*`
+// entry points below (GEMM, factor-and-solve, skew Schur decomposition, and a
+// handful of O(n^2)/O(n) vector helpers).  Everything above them -- the skew
+// check, the degree and scaling selection, the squaring loop bookkeeping and
+// the rotation assembly -- contains no direct MKL calls.  A GPU backend
+// attaches by providing alternative bodies for these functions (cuBLAS dgemm,
+// cuSOLVER getrf/getrs); note that cuSOLVER has no real Schur driver, so a
+// device build would either keep `expm_be_schur_skew` on the host or fall back
+// to Path B, which is almost pure GEMM and therefore the GPU-friendly route.
+// The decision logic does not need to change in either case.
+// ---------------------------------------------------------------------------
+
+// Backend: C <- alpha * op(A) * op(B) + beta * C, all n-by-n, column major.
+static void expm_be_gemm(size_t n, bool transA, bool transB, double alpha,
+                         const double* A, const double* B, double beta,
+                         double* C) {
+  cblas_dgemm(
+    CblasColMajor, // Column major order. `Layout` parameter of MKL cblas call.
+    transA ? CblasTrans : CblasNoTrans, // `transa` param of MKL cblas call.
+    transB ? CblasTrans : CblasNoTrans, // `transb` param of MKL cblas call.
+    (lapack_int) n, // Number of rows of A or C. `m` param of MKL cblas call.
+    (lapack_int) n, // Number of cols of B or C. `n` param of MKL cblas call.
+    (lapack_int) n, // Inner dimension. `k` param of MKL cblas call.
+    alpha, // Scalar `alpha` param of MKL cblas call.
+    A, // Data buffer of A. `a` param of MKL cblas call.
+    (lapack_int) n, // Leading dimension of A. `lda` param of MKL cblas call.
+    B, // Data buffer of B. `b` param of MKL cblas call.
+    (lapack_int) n, // Leading dimension of B. `ldb` param of MKL cblas call.
+    beta, // Scalar `beta` param of MKL cblas call.
+    C, // Data buffer of C. `c` param of MKL cblas call.
+    (lapack_int) n // Leading dimension of C. `ldc` param of MKL cblas call.
+  );
+}
+
+// Backend: solve D * X = R in place (D is n-by-n, R is n-by-n, column major).
+// D is overwritten by its LU factors and R by the solution.
+// Unlike the surrounding kernels in this file, `info` is checked and a failure
+// raises.  That is a deliberate departure from the house style: a singular
+// Pade denominator silently returning garbage would be indistinguishable from
+// a correct answer, and the accuracy gate this kernel exists for is 1e-15.
+static void expm_be_factor_and_solve(size_t n, double* D, double* R) {
+  lapack_int nn = (lapack_int) n;
+  lapack_int info = 0;
+  // Padded by 64 entries: at least one LAPACK routine in this build writes
+  // past its documented array bounds (see the DBDSVDX pad in svdx above), so
+  // every scratch array in this kernel is allocated defensively.
+  lapack_int* ipiv = (lapack_int*) malloc((n + 64) * sizeof(lapack_int));
+
+  dgetrf(
+    &nn, // M: No. of rows of the input matrix.
+    &nn, // N: No. of columns of the input matrix.
+    D, // A: Input matrix. Overwritten by the L and U factors.
+    &nn, // LDA: Leading dimension of A.
+    ipiv, // IPIV: Pivot indices; row i was interchanged with row IPIV(i).
+    &info // INFO: Exit code.
+  );
+  if (info != 0) {
+    free(ipiv);
+    throw std::runtime_error("expm: dgetrf failed (singular Pade denominator), info = "
+                             + std::to_string((long long) info));
+  }
+
+  dgetrs(
+    "N", // TRANS: 'N' solves D * X = R (no transpose); the data is column major.
+    &nn, // N: Order of the matrix D.
+    &nn, // NRHS: Number of right hand sides, one per column of R.
+    D, // A: The LU factors produced by DGETRF.
+    &nn, // LDA: Leading dimension of A.
+    ipiv, // IPIV: Pivot indices from DGETRF.
+    R, // B: Right hand sides on entry, solution on exit.
+    &nn, // LDB: Leading dimension of B.
+    &info // INFO: Exit code.
+  );
+  free(ipiv);
+  if (info != 0) {
+    throw std::runtime_error("expm: dgetrs failed, info = "
+                             + std::to_string((long long) info));
+  }
+}
+
+// Backend: real Schur decomposition S = Q T Q^T of a skew-symmetric S.
+// On exit Q holds the orthogonal factor and T the (block diagonal) Schur form;
+// both are caller-allocated n-by-n column major buffers.  S itself is read
+// only -- the destructive copy is made here.
+//
+// This is the one step a GPU backend cannot currently replace (no cuSOLVER
+// real Schur driver); it is isolated here for exactly that reason.
+static void expm_be_schur_skew(size_t n, const double* S, double* Q, double* T,
+                               bool verbose) {
+  lapack_int nn = (lapack_int) n;
+  lapack_int sdim = 0, info = 0, lwork = -1;
+  double wkopt = 0.0;
+  size_t pad = 64; // Defensive padding, as in expm_be_factor_and_solve.
+
+  std::copy(S, S + n * n, T); // DGEES overwrites its input with the Schur form.
+
+  std::vector<double> wr(n + pad, 0.0), wi(n + pad, 0.0);
+  std::vector<lapack_int> bwork(n + pad, 0); // Not referenced for SORT = 'N',
+                                             // allocated anyway.
+
+  // Workspace query
+  dgees(
+    "V", // JOBVS: 'V' computes the orthogonal Schur vectors Q.
+    "N", // SORT: 'N' leaves the eigenvalues unordered.
+    (MKL_D_SELECT_FUNCTION_2) NULL, // SELECT: not referenced for SORT = 'N'.
+    &nn, // N: Order of the input matrix.
+    T, // A: Input matrix, overwritten by the real Schur form.
+    &nn, // LDA: Leading dimension of A.
+    &sdim, // SDIM: Number of selected eigenvalues; 0 for SORT = 'N'.
+    wr.data(), // WR: Real parts of the eigenvalues.
+    wi.data(), // WI: Imaginary parts of the eigenvalues.
+    Q, // VS: Matrix holding the orthogonal Schur vectors.
+    &nn, // LDVS: Leading dimension of VS.
+    &wkopt, // WORK: On a query, receives the optimal workspace size.
+    &lwork, // LWORK: -1 requests the optimal workspace size.
+    bwork.data(), // BWORK: Not referenced for SORT = 'N'.
+    &info // INFO: Exit code.
+  );
+  if (info != 0) {
+    throw std::runtime_error("expm: dgees workspace query failed, info = "
+                             + std::to_string((long long) info));
+  }
+
+  lwork = (lapack_int) wkopt;
+  double* work = (double*) malloc((lwork + (lapack_int) pad) * sizeof(double));
+
+  if (verbose) {
+    printf("Size of the work array for DGEES: %lld\n", (long long) lwork);
+  }
+
+  // Compute the real Schur decomposition
+  dgees(
+    "V", // JOBVS: 'V' computes the orthogonal Schur vectors Q.
+    "N", // SORT: 'N' leaves the eigenvalues unordered.
+    (MKL_D_SELECT_FUNCTION_2) NULL, // SELECT: not referenced for SORT = 'N'.
+    &nn, // N: Order of the input matrix.
+    T, // A: Input matrix, overwritten by the real Schur form.
+    &nn, // LDA: Leading dimension of A.
+    &sdim, // SDIM: Number of selected eigenvalues; 0 for SORT = 'N'.
+    wr.data(), // WR: Real parts of the eigenvalues.
+    wi.data(), // WI: Imaginary parts of the eigenvalues.
+    Q, // VS: Matrix holding the orthogonal Schur vectors.
+    &nn, // LDVS: Leading dimension of VS.
+    work, // WORK: Workspace.
+    &lwork, // LWORK: Dimension of the array WORK.
+    bwork.data(), // BWORK: Not referenced for SORT = 'N'.
+    &info // INFO: Exit code.
+  );
+
+  free(work);
+  if (info != 0) {
+    throw std::runtime_error("expm: dgees failed to converge, info = "
+                             + std::to_string((long long) info));
+  }
+}
+
+// Backend: y <- alpha*x + y over N contiguous entries.
+static void expm_be_axpy(size_t N, double alpha, const double* x, double* y) {
+  cblas_daxpy((lapack_int) N, alpha, x, 1, y, 1);
+}
+
+// Backend: x <- alpha*x over N contiguous entries.
+static void expm_be_scal(size_t N, double alpha, double* x) {
+  cblas_dscal((lapack_int) N, alpha, x, 1);
+}
+
+// Backend: plane rotation of two length-n columns,
+// (x, y) <- (c*x + s*y, c*y - s*x).
+static void expm_be_rot(size_t n, double* x, double* y, double c, double s) {
+  cblas_drot((lapack_int) n, x, 1, y, 1, c, s);
+}
+
+// Backend: 1-norm (maximum absolute column sum) of an n-by-n column major A.
+static double expm_be_norm1(size_t n, const double* A) {
+  double nrm = 0.0;
+  for (size_t j = 0; j < n; j++) {
+    double colsum = cblas_dasum((lapack_int) n, A + j * n, 1);
+    if (colsum > nrm) nrm = colsum;
+  }
+  return nrm;
+}
+
+// ---------------------------------------------------------------------------
+// Pade constants.  Transcribed from Higham 2005 Table 2.3 and Algorithm 2.3
+// (see pade_scaling_squaring.md in the survey notes); all of the b_k below are
+// exactly representable as IEEE doubles.
+//
+// THRESHOLD CONVENTION: this kernel follows Higham 2005 Algorithm 2.3, i.e.
+// degree selection on the plain 1-norm ||A||_1 with theta_13 = 5.371920351148152.
+// That is the Eigen/Julia convention.  SciPy and MATLAB instead follow
+// Al-Mohy & Higham 2009 Algorithm 5.1, which selects on the sharper estimates
+// ||A^k||_1^(1/k) and lowers theta_13 to 4.25 (to cut kappa(q_13) from 2.2e2 to
+// 7.1e1).  Both satisfy the same backward error bound ||dA||/||A|| <= u = 2^-53;
+// AMH 2009 is never less accurate and is sometimes cheaper, at the cost of a
+// 1-norm power estimator.  Higham 2005 was chosen here for simplicity and
+// because its degree selection is exact rather than estimated.
+//
+// Two traps avoided here, both from VERIFICATION_audit.md:
+//  * No AMH `ell` correction is used (Algorithm 2.3 has none).  If one is ever
+//    added, do NOT copy the coeff[] literals out of SciPy's C kernel: three of
+//    the five (m = 7, 9, 13) are imprecise.  The exact value is
+//    1/|c_{2m+1}| = (2m)!(2m+1)!/(m!)^2, scaled by 2^-53 (audit A5).
+//  * The even powers are formed with plain GEMM, not DSYRK.  The symmetric
+//    rank-k trick is a ~1.9x win single-threaded but a pessimization at high
+//    thread counts (up to 11x slower at n = 2000 on 128 threads), and pystarm
+//    targets 192-core nodes (audit A3).
+// ---------------------------------------------------------------------------
+static const double EXPM_THETA[4] = { // theta_3, theta_5, theta_7, theta_9
+  1.495585217958292e-2, 2.539398330063230e-1,
+  9.504178996162932e-1, 2.097847961257068e0
+};
+static const double EXPM_THETA13 = 5.371920351148152e0;
+
+static const double EXPM_B3[4] = {120., 60., 12., 1.};
+static const double EXPM_B5[6] = {30240., 15120., 3360., 420., 30., 1.};
+static const double EXPM_B7[8] = {17297280., 8648640., 1995840., 277200.,
+                                  25200., 1512., 56., 1.};
+static const double EXPM_B9[10] = {17643225600., 8821612800., 2075673600.,
+                                   302702400., 30270240., 2162160., 110880.,
+                                   3960., 90., 1.};
+static const double EXPM_B13[14] = {64764752532480000., 32382376266240000.,
+                                    7771770303897600., 1187353796428800.,
+                                    129060195264000., 10559470521600.,
+                                    670442572800., 33522128640., 1323241920.,
+                                    40840800., 960960., 16380., 182., 1.};
+
+// C <- cI*I + sum_j c[j] * P[j], with P[j] the even powers A^2, A^4, ...
+static void expm_poly_terms(double* C, size_t n, double cI,
+                            double* const* P, const double* c, int k) {
+  size_t N = n * n;
+  std::fill(C, C + N, 0.0);
+  for (int j = 0; j < k; j++) expm_be_axpy(N, c[j], P[j], C);
+  for (size_t i = 0; i < n; i++) C[i + i * n] += cI;
+}
+
+// Returns true when A is skew-symmetric to a relative tolerance, i.e. when
+// max_ij |A_ij + A_ji| <= tol * max_ij |A_ij|.  The diagonal is included, so a
+// nonzero diagonal entry fails the test.  The all-zero matrix passes.
+bool is_skew_symmetric(const Matrix& A, double tol = 1e-12) {
+  if (A.nrow != A.ncol) return false;
+  size_t n = A.nrow;
+  double maxabs = 0.0, maxasym = 0.0;
+  for (size_t j = 0; j < n; j++) {
+    for (size_t i = j; i < n; i++) {
+      double aij = A.data_ptr[i + j * n];
+      double aji = A.data_ptr[j + i * n];
+      double m = std::max(std::fabs(aij), std::fabs(aji));
+      double a = std::fabs(aij + aji);
+      if (m > maxabs) maxabs = m;
+      if (a > maxasym) maxasym = a;
+    }
+  }
+  return maxasym <= tol * maxabs;
+}
+
+// Path A, step one.  Real Schur decomposition of a skew-symmetric S.
+//
+// Returns (Q, theta) with Q the n-by-n orthogonal Schur factor and theta a
+// length-n vector encoding the block angles:  theta[i] != 0 means rows/cols
+// (i, i+1) form a 2x2 block [[0, theta[i]], [-theta[i], 0]] of the Schur form,
+// and theta[i] == 0 means index i is a 1x1 (zero) block.  DGEES places the 1x1
+// zero block of an odd-sized skew matrix automatically, so odd n needs no
+// special handling.  A 2x2 block whose angle is exactly zero is indistinguishable
+// from two 1x1 zero blocks under this encoding, which is harmless because both
+// exponentiate to the identity.
+//
+// S is read only, by design: the whole point of this routine is that the caller
+// keeps S and reuses (Q, theta) across many step sizes.  The destructive copy
+// DGEES requires is made internally.
+std::tuple<Matrix, std::vector<double>> skew_schur(const Matrix& S,
+                                                   bool verbose = false) {
+  if (S.nrow != S.ncol) {
+    throw std::runtime_error("skew_schur: input matrix must be square");
+  }
+  size_t n = S.nrow;
+  Matrix Q(n * n, n, n);
+  std::vector<double> theta(n, 0.0);
+  if (n == 0) return std::make_tuple(std::move(Q), std::move(theta));
+
+  // Padded, see the note in expm_be_factor_and_solve.
+  double* T = (double*) malloc((n * n + 64) * sizeof(double));
+  expm_be_schur_skew(n, S.data_ptr, Q.data_ptr, T, verbose);
+
+  // Read the angles straight off the superdiagonal of the Schur form.  A 2x2
+  // block is exactly where the eigenvalue pair is complex, which for a skew
+  // matrix is where the block is a rotation generator.
+  double maxdiag = 0.0;
+  for (size_t i = 0; i < n; ) {
+    bool two_by_two = (i + 1 < n) && (T[(i + 1) + i * n] != 0.0);
+    if (two_by_two) {
+      theta[i] = T[i + (i + 1) * n];
+      i += 2;
+    } else {
+      i += 1;
+    }
+  }
+  for (size_t i = 0; i < n; i++) {
+    maxdiag = std::max(maxdiag, std::fabs(T[i + i * n]));
+  }
+
+  if (verbose) {
+    printf("skew_schur: n = %zu, max |diag(T)| = %e\n", n, maxdiag);
+  }
+
+  free(T);
+  return std::make_tuple(std::move(Q), std::move(theta));
+}
+
+// Path A, step two.  Build f(t*S) = Q * blkdiag(G(t*theta_j)) * Q^T from a
+// decomposition produced by skew_schur, where G(a) = [[c, s], [-s, c]] is the
+// 2x2 rotation supplied by the retraction:
+//   exponential: c = cos(a),                      s = sin(a)
+//   Cayley:      c = (1-(a/2)^2)/(1+(a/2)^2),     s = a/(1+(a/2)^2)
+// Cost is n/2 plane rotations (O(n^2) total) plus one GEMM, independent of t,
+// which is what makes a reused decomposition cheap per trial step.
+static Matrix skew_blockdiag_apply(const Matrix& Q,
+                                   const std::vector<double>& theta,
+                                   double t, bool use_cayley, bool verbose,
+                                   const char* who) {
+  if (Q.nrow != Q.ncol) {
+    throw std::runtime_error(std::string(who) + ": Q must be square");
+  }
+  if (theta.size() != Q.nrow) {
+    throw std::runtime_error(std::string(who) + ": theta must have length n");
+  }
+  size_t n = Q.nrow;
+  Matrix X(n * n, n, n);
+  if (n == 0) return X;
+
+  // W = Q * D(t).  Column pair (i, i+1) of Q is rotated by G(t*theta_i):
+  // D has [[c, s], [-s, c]] there, so W[:,i] = c*Q[:,i] - s*Q[:,i+1] and
+  // W[:,i+1] = s*Q[:,i] + c*Q[:,i+1], which is one DROT with (c, -s).
+  Matrix W(n * n, n, n);
+  std::copy(Q.data_ptr, Q.data_ptr + n * n, W.data_ptr);
+  size_t nblocks = 0;
+  for (size_t i = 0; i < n; ) {
+    if ((i + 1 < n) && (theta[i] != 0.0)) {
+      double a = t * theta[i];
+      double c, s;
+      if (use_cayley) {
+        double h = 0.5 * a;
+        double d = 1.0 + h * h;
+        c = (1.0 - h * h) / d;
+        s = a / d;
+      } else {
+        c = std::cos(a);
+        s = std::sin(a);
+      }
+      expm_be_rot(n, W.data_ptr + i * n, W.data_ptr + (i + 1) * n, c, -s);
+      nblocks++;
+      i += 2;
+    } else {
+      i += 1; // 1x1 zero block: the rotation is the identity, nothing to do.
+    }
+  }
+
+  // X = W * Q^T
+  expm_be_gemm(n, false, true, 1.0, W.data_ptr, Q.data_ptr, 0.0, X.data_ptr);
+  W.clear();
+
+  if (verbose) {
+    printf("%s: n = %zu, t = %e, %zu rotation blocks\n", who, n, t, nblocks);
+  }
+
+  return X;
+}
+
+// exp(t*S) from a skew_schur decomposition.
+Matrix expm_skew_apply(const Matrix& Q, const std::vector<double>& theta,
+                       double t = 1.0, bool verbose = false) {
+  return skew_blockdiag_apply(Q, theta, t, false, verbose, "expm_skew_apply");
+}
+
+// cayley(t*S) from a skew_schur decomposition.
+Matrix cayley_skew_apply(const Matrix& Q, const std::vector<double>& theta,
+                         double t = 1.0, bool verbose = false) {
+  return skew_blockdiag_apply(Q, theta, t, true, verbose, "cayley_skew_apply");
+}
+
+// Path A, one shot.  exp(t*A) for a skew-symmetric A, decomposing and applying
+// in one call.  Provided mainly as a correctness oracle and for callers who
+// know they want this route: for a single t it is several times slower than
+// expm_pade.  Use skew_schur plus expm_skew_apply when many t share one A.
+Matrix expm_skew(const Matrix& A, double t = 1.0, bool verbose = false) {
+  Matrix Q;
+  std::vector<double> theta;
+  std::tie(Q, theta) = skew_schur(A, verbose);
+  Matrix X = expm_skew_apply(Q, theta, t, verbose);
+  Q.clear();
+  return X;
+}
+
+// Path B.  exp(t*A) for a general square A by Pade scaling and squaring,
+// Higham 2005 Algorithm 2.3.  No Ward preprocessing (shift and balance) is
+// applied, matching Eigen's choice.
+//
+// A is read only; the scaled working copy is made internally.
+Matrix expm_pade(const Matrix& A, double t = 1.0, bool verbose = false) {
+  if (A.nrow != A.ncol) {
+    throw std::runtime_error("expm_pade: input matrix must be square");
+  }
+  size_t n = A.nrow;
+  size_t N = n * n;
+  size_t pad = 64; // Defensive padding, see expm_be_factor_and_solve.
+  Matrix X(N, n, n);
+  if (n == 0) return X;
+
+  // B = t*A, the working copy.
+  double* B = (double*) malloc((N + pad) * sizeof(double));
+  for (size_t i = 0; i < N; i++) B[i] = t * A.data_ptr[i];
+
+  double nrm = expm_be_norm1(n, B);
+  if (!(nrm > 0.0)) {
+    // Zero (or NaN-free zero) input: exp(0) = I.  Also catches n-by-n zeros,
+    // for which the degree selection below would be a waste.
+    std::fill(X.data_ptr, X.data_ptr + N, 0.0);
+    for (size_t i = 0; i < n; i++) X.data_ptr[i + i * n] = 1.0;
+    free(B);
+    return X;
+  }
+
+  // --- degree and scaling selection (no MKL here) ---
+  int m = 13;
+  int s = 0;
+  const double* b = EXPM_B13;
+  if (nrm <= EXPM_THETA[0])      { m = 3;  b = EXPM_B3; }
+  else if (nrm <= EXPM_THETA[1]) { m = 5;  b = EXPM_B5; }
+  else if (nrm <= EXPM_THETA[2]) { m = 7;  b = EXPM_B7; }
+  else if (nrm <= EXPM_THETA[3]) { m = 9;  b = EXPM_B9; }
+  else {
+    s = (int) std::ceil(std::log2(nrm / EXPM_THETA13));
+    if (s < 0) s = 0;
+    if (s > 0) expm_be_scal(N, std::ldexp(1.0, -s), B); // exact, power of two
+  }
+
+  if (verbose) {
+    printf("expm_pade: n = %zu, ||t*A||_1 = %e, degree m = %d, squarings s = %d\n",
+           n, nrm, m, s);
+  }
+
+  // --- even powers ---
+  // npow = number of even powers A^2, A^4, ... needed.
+  int npow = (m == 13) ? 3 : (m - 1) / 2;
+  double* P[4] = {NULL, NULL, NULL, NULL}; // A^2, A^4, A^6, A^8
+  for (int j = 0; j < npow; j++) P[j] = (double*) malloc((N + pad) * sizeof(double));
+  double* U   = (double*) malloc((N + pad) * sizeof(double));
+  double* V   = (double*) malloc((N + pad) * sizeof(double));
+  double* Wk  = (double*) malloc((N + pad) * sizeof(double));
+  double* tmp = (double*) malloc((N + pad) * sizeof(double));
+
+  if (npow >= 1) expm_be_gemm(n, false, false, 1.0, B,    B,    0.0, P[0]); // A^2
+  if (npow >= 2) expm_be_gemm(n, false, false, 1.0, P[0], P[0], 0.0, P[1]); // A^4
+  if (npow >= 3) expm_be_gemm(n, false, false, 1.0, P[0], P[1], 0.0, P[2]); // A^6
+  if (npow >= 4) expm_be_gemm(n, false, false, 1.0, P[1], P[1], 0.0, P[3]); // A^8
+
+  if (m == 13) {
+    // Higham 2005 Algorithm 2.3 lines 16-20.  The term ordering below is the
+    // published one (approximately increasing order of norm); do not reorder.
+    const double c_odd_hi[3]  = {b[9],  b[11], b[13]}; // of A^2, A^4, A^6
+    const double c_odd_lo[3]  = {b[3],  b[5],  b[7]};
+    const double c_even_hi[3] = {b[8],  b[10], b[12]};
+    const double c_even_lo[3] = {b[2],  b[4],  b[6]};
+
+    // U = B * (A^6 * (b13*A^6 + b11*A^4 + b9*A^2) + b7*A^6 + b5*A^4 + b3*A^2 + b1*I)
+    expm_poly_terms(tmp, n, 0.0,    P, c_odd_hi, 3);
+    expm_poly_terms(Wk,  n, b[1],   P, c_odd_lo, 3);
+    expm_be_gemm(n, false, false, 1.0, P[2], tmp, 1.0, Wk); // Wk += A^6 * tmp
+    expm_be_gemm(n, false, false, 1.0, B, Wk, 0.0, U);
+
+    // V = A^6 * (b12*A^6 + b10*A^4 + b8*A^2) + b6*A^6 + b4*A^4 + b2*A^2 + b0*I
+    expm_poly_terms(tmp, n, 0.0,    P, c_even_hi, 3);
+    expm_poly_terms(V,   n, b[0],   P, c_even_lo, 3);
+    expm_be_gemm(n, false, false, 1.0, P[2], tmp, 1.0, V);
+  } else {
+    // Scheme (2.10) for m <= 9:
+    //   U = B * (b1*I + b3*A^2 + b5*A^4 + ...),  V = b0*I + b2*A^2 + b4*A^4 + ...
+    double c_odd[4], c_even[4];
+    for (int j = 0; j < npow; j++) {
+      c_odd[j]  = b[2 * j + 3];
+      c_even[j] = b[2 * j + 2];
+    }
+    expm_poly_terms(Wk, n, b[1], P, c_odd,  npow);
+    expm_poly_terms(V,  n, b[0], P, c_even, npow);
+    expm_be_gemm(n, false, false, 1.0, B, Wk, 0.0, U);
+  }
+
+  // --- solve ---
+  // r_m = (V - U)^-1 (V + U) = I + 2 (V - U)^-1 U, the form SciPy ships: it
+  // avoids forming V + U and the cancellation that goes with it.
+  expm_be_axpy(N, -1.0, U, V);              // V <- V - U  (the denominator)
+  std::copy(U, U + N, X.data_ptr);          // right hand side
+  expm_be_factor_and_solve(n, V, X.data_ptr);
+  expm_be_scal(N, 2.0, X.data_ptr);
+  for (size_t i = 0; i < n; i++) X.data_ptr[i + i * n] += 1.0;
+
+  // --- squaring ---
+  double* x = X.data_ptr;
+  double* y = tmp;
+  for (int i = 0; i < s; i++) {
+    expm_be_gemm(n, false, false, 1.0, x, x, 0.0, y);
+    std::swap(x, y);
+  }
+  X.data_ptr = x; // Both buffers came from malloc, so either may be kept.
+  tmp = y;
+
+  for (int j = 0; j < npow; j++) free(P[j]);
+  free(U);
+  free(V);
+  free(Wk);
+  free(tmp);
+  free(B);
+
+  return X;
+}
+
+// The Cayley transform cay(t*A) = (I - (t/2)A)^-1 (I + (t/2)A), the [1/1]
+// diagonal Pade approximant to exp(t*A).  For skew A the result is exactly
+// orthogonal in exact arithmetic and, per the survey probe, is marginally
+// better conditioned for orthogonality than the exponential at large steps.
+// It agrees with exp(t*A) only to first order -- the gap grows like a^3/12 --
+// so it is a different (but equally valid) retraction, not an approximation to
+// be used where the exponential is meant.
+//
+// Cost is one factor-and-solve, roughly (8/3)n^3, against the exponential's
+// (7.33 + s)*2n^3.
+//
+// A is read only.
+Matrix cayley(const Matrix& A, double t = 1.0, bool verbose = false) {
+  if (A.nrow != A.ncol) {
+    throw std::runtime_error("cayley: input matrix must be square");
+  }
+  size_t n = A.nrow;
+  size_t N = n * n;
+  Matrix X(N, n, n);
+  if (n == 0) return X;
+
+  // D = I - (t/2)A (overwritten by its LU factors), R = I + (t/2)A.
+  double* D = (double*) malloc((N + 64) * sizeof(double));
+  double h = 0.5 * t;
+  for (size_t i = 0; i < N; i++) {
+    D[i] = -h * A.data_ptr[i];
+    X.data_ptr[i] = h * A.data_ptr[i];
+  }
+  for (size_t i = 0; i < n; i++) {
+    D[i + i * n] += 1.0;
+    X.data_ptr[i + i * n] += 1.0;
+  }
+
+  expm_be_factor_and_solve(n, D, X.data_ptr);
+  free(D);
+
+  if (verbose) printf("cayley: n = %zu, t = %e\n", n, t);
+  return X;
+}
+
+// Reuse crossover thresholds: the number of trial step sizes at which paying
+// for one real Schur decomposition starts to beat evaluating directly at each
+// step.  VERIFICATION_audit.md A6 measured 4.3-8.7 against direct Pade and
+// about 17 against direct Cayley, under OpenBLAS.  Re-measured here against
+// MKL on this machine (n = 200..2000, 1/8/32 threads, shared node so the
+// numbers are noisy): K(Pade) came out 0.8-8.4 and K(Cayley) 4-177, i.e. the
+// Cayley crossover is considerably further out under MKL than the audit's
+// OpenBLAS figure.  The defaults below are set so the reuse path engages only
+// when it is clearly worth it; both are overridable per call because the
+// crossover is strongly n-, thread- and BLAS-dependent.
+static const size_t EXPM_REUSE_MIN_STEPS_EXPM = 8;
+static const size_t EXPM_REUSE_MIN_STEPS_CAYLEY = 32;
+
+// Retraction selector for expm_multi.
+enum Retraction { RETRACT_EXPM = 0, RETRACT_CAYLEY = 1 };
+
+// Single shot.  exp(t*A) for any square A, by Pade scaling-and-squaring.
+// Deliberately does NOT decompose, even for skew input: for one evaluation,
+// direct Pade is the cheaper route (audit A6).
+//
+// A is read only.
+Matrix expm(const Matrix& A, double t = 1.0, bool verbose = false) {
+  return expm_pade(A, t, verbose);
+}
+
+// Many step sizes, one direction.  Evaluates the chosen retraction of t*A for
+// every t in `ts`, and makes the reuse decision at run time:
+//
+//   * if A is skew-symmetric to `skew_tol` AND ts.size() >= the crossover
+//     threshold, decompose once with skew_schur and apply per step;
+//   * otherwise evaluate each step directly.
+//
+// `reuse_min_steps = 0` selects the built-in threshold for the chosen
+// retraction; pass a positive value to override, or a huge value to disable
+// reuse entirely.
+//
+// A is read only.  Every returned Matrix is owned by the caller and must be
+// cleared individually.
+std::vector<Matrix> expm_multi(const Matrix& A, const std::vector<double>& ts,
+                               int retraction = RETRACT_EXPM,
+                               size_t reuse_min_steps = 0,
+                               double skew_tol = 1e-12,
+                               bool verbose = false) {
+  if (A.nrow != A.ncol) {
+    throw std::runtime_error("expm_multi: input matrix must be square");
+  }
+  if (retraction != RETRACT_EXPM && retraction != RETRACT_CAYLEY) {
+    throw std::runtime_error("expm_multi: unknown retraction");
+  }
+  bool use_cayley = (retraction == RETRACT_CAYLEY);
+
+  if (reuse_min_steps == 0) {
+    reuse_min_steps = use_cayley ? EXPM_REUSE_MIN_STEPS_CAYLEY
+                                 : EXPM_REUSE_MIN_STEPS_EXPM;
+  }
+
+  bool skew = is_skew_symmetric(A, skew_tol);
+  bool reuse = skew && (ts.size() >= reuse_min_steps);
+
+  if (verbose) {
+    printf("expm_multi: n = %zu, %zu steps, retraction = %s, skew = %d, "
+           "reuse = %d (threshold %zu)\n",
+           A.nrow, ts.size(), use_cayley ? "cayley" : "expm",
+           (int) skew, (int) reuse, reuse_min_steps);
+  }
+
+  std::vector<Matrix> out;
+  out.reserve(ts.size());
+
+  if (reuse) {
+    Matrix Q;
+    std::vector<double> theta;
+    std::tie(Q, theta) = skew_schur(A, verbose);
+    for (size_t i = 0; i < ts.size(); i++) {
+      out.push_back(skew_blockdiag_apply(Q, theta, ts[i], use_cayley, verbose,
+                                         "expm_multi"));
+    }
+    Q.clear();
+  } else {
+    for (size_t i = 0; i < ts.size(); i++) {
+      out.push_back(use_cayley ? cayley(A, ts[i], verbose)
+                               : expm_pade(A, ts[i], verbose));
+    }
+  }
+
+  return out;
+}
 
 #endif

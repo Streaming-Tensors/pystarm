@@ -199,6 +199,41 @@ PYBIND11_MODULE(pystarm, m) {
 	m.def("tsvdmi_compress", &tsvdmi_compress, "Compress using TSVDM-I algorithm");
 	m.def("tsvdmi_reconstruct", &tsvdmi_reconstruct, "Reconstruct output of TSVDM-I algorithm");
 	m.def("tsvdmii_compress", &tsvdmii_compress, "Compress using TSVDM-II algorithm");
+
+	// --- matrix exponential and related retractions ---
+	// Retraction selector for expm_multi, exposed as plain ints so the
+	// argument stays a simple C++ int on the other side.
+	m.attr("RETRACT_EXPM") = (int) RETRACT_EXPM;
+	m.attr("RETRACT_CAYLEY") = (int) RETRACT_CAYLEY;
+	m.def("is_skew_symmetric", &is_skew_symmetric,
+        "Test whether a square matrix is skew-symmetric to a relative tolerance.",
+        py::arg("A"), py::arg("tol") = 1e-12);
+	m.def("expm", &expm,
+        "Compute exp(t*A) for a square matrix by Pade scaling-and-squaring.",
+        py::arg("A"), py::arg("t") = 1.0, py::arg("verbose") = false);
+	m.def("expm_pade", &expm_pade,
+        "Compute exp(t*A) by Pade scaling-and-squaring (Higham 2005 Algorithm 2.3).",
+        py::arg("A"), py::arg("t") = 1.0, py::arg("verbose") = false);
+	m.def("cayley", &cayley,
+        "Compute the Cayley transform (I - (t/2)A)^-1 (I + (t/2)A).",
+        py::arg("A"), py::arg("t") = 1.0, py::arg("verbose") = false);
+	m.def("skew_schur", &skew_schur,
+        "Real Schur decomposition of a skew-symmetric matrix; returns (Q, theta).",
+        py::arg("S"), py::arg("verbose") = false);
+	m.def("expm_skew_apply", &expm_skew_apply,
+        "Build exp(t*S) from a skew_schur decomposition (Q, theta).",
+        py::arg("Q"), py::arg("theta"), py::arg("t") = 1.0, py::arg("verbose") = false);
+	m.def("cayley_skew_apply", &cayley_skew_apply,
+        "Build the Cayley transform of t*S from a skew_schur decomposition (Q, theta).",
+        py::arg("Q"), py::arg("theta"), py::arg("t") = 1.0, py::arg("verbose") = false);
+	m.def("expm_skew", &expm_skew,
+        "Compute exp(t*S) for a skew-symmetric S via one real Schur decomposition.",
+        py::arg("S"), py::arg("t") = 1.0, py::arg("verbose") = false);
+	m.def("expm_multi", &expm_multi,
+        "Evaluate a retraction of t*A at many step sizes, reusing a Schur decomposition when that pays.",
+        py::arg("A"), py::arg("ts"), py::arg("retraction") = (int) RETRACT_EXPM,
+        py::arg("reuse_min_steps") = 0, py::arg("skew_tol") = 1e-12,
+        py::arg("verbose") = false);
 }
 
 #endif
