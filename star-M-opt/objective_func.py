@@ -1,6 +1,156 @@
+'''
+Objective and gradient for the low star-M rank approximation.
+
+Two routes are provided and they are not equivalent.
+
+`low_rank_objective_and_gradient` is the one to use. It computes the gradient
+without differentiating through the SVD factors at all, which matters because
+the factor adjoints in svd_gradient_calculations.py are not correct when the
+rank is truncated, and truncation is the only regime this algorithm runs in.
+
+`low_rank_obj_func_gradient` is the original factor-adjoint chain, kept for
+reference and comparison. It inherits that truncation defect.
+
+The reformulation. For orthogonal M the Frobenius norm is invariant under a
+mode product, so with A_hat = A x_j M for the transform modes,
+
+    f(M) = ||A - A_k(M)||_F^2
+         = ||A_hat - truncate_k(A_hat)||_F^2
+         = sum over slices of sum_{i>k} sigma_i^2
+
+that is, the discarded singular energy of the transformed tensor. The gradient
+of tail singular energy involves singular values only,
+
+    d/dX sum_{i>k} sigma_i(X)^2 = 2 (X - X_k)
+
+so chaining through A_hat gives the gradient as one contraction of the residual
+against the data. No singular-vector derivative appears.
+
+Verified numerically in
+/storage/vhebbur/survey/research_notes/Matrix exponential strategy for pystarm/
+gradient_without_svd_adjoints.md: the directional derivative along the geodesic
+matches central differences to ten digits with second-order convergence.
+
+Two conditions. M must be orthogonal, since the derivation uses M^-1 = M^T;
+off the group the identity above is false, and a naive ambient finite-difference
+check will appear to contradict it. And sigma_k must exceed sigma_{k+1}, or the
+truncation is not unique and the objective is not differentiable there.
+'''
+
 import numpy as np
 from svd_gradient_calculations import calc_U_gradient, calc_S_gradient, calc_VT_gradient
 import pystarm
+
+
+def _as_numpy(obj):
+    '''Read a pystarm Matrix or Tensor as a numpy array without copying.'''
+    return np.frombuffer(obj, dtype=np.float64).reshape(obj.getdims(), order='F')
+
+
+def transform_modes(ndim):
+    '''
+    The modes a transform matrix is applied to, as pystarm mode indices.
+    Input:
+    - ndim: Number of modes of the tensor.
+
+    Output:
+    - modes: List of 0-based mode indices, one per transform matrix. Mode index 2
+      is the third tensor mode, matching pystarm.ttm's convention.
+    '''
+    return list(range(2, ndim))
+
+
+def low_rank_objective_and_gradient(A, Ms, k, want_gradient=True):
+    '''
+    Objective and Euclidean gradients for the low star-M rank approximation.
+    Input:
+    - A: pystarm Tensor of order >= 3. The raw data. Not freed by this function.
+    - Ms: Python list of pystarm Matrices, one per transform mode, each orthogonal.
+      There must be ndim - 2 of them. Not freed by this function.
+    - k: Target rank for the slicewise truncation.
+    - want_gradient: If False, only the objective is computed and the gradient
+      list comes back empty. The line search uses this.
+
+    Output:
+    - f: The objective ||A - A_k(M)||_F^2, as a float.
+    - grads: List of numpy arrays, one per transform matrix, each the Euclidean
+      gradient of f with respect to that matrix. Empty when want_gradient is False.
+      These are ambient gradients; project them to the tangent space with
+      optimizer.tangent_direction before stepping.
+    '''
+    dims = A.getdims()
+    modes = transform_modes(len(dims))
+    if len(Ms) != len(modes):
+        raise ValueError(f'expected {len(modes)} transform matrices, got {len(Ms)}')
+
+    # Forward: move every transform mode into the transform domain, keeping the
+    # partial products. partials[j] is A with every transform applied except Ms[j],
+    # which is exactly what the gradient for Ms[j] must contract against.
+    partials = []
+    A_hat = A
+    owned = []
+    for j, mode in enumerate(modes):
+        nxt = pystarm.ttm(A_hat, Ms[j], mode)
+        owned.append(nxt)
+        A_hat = nxt
+
+    if want_gradient:
+        for j, mode in enumerate(modes):
+            B = A
+            tmp = []
+            for i, mi in enumerate(modes):
+                if i == j:
+                    continue
+                B = pystarm.ttm(B, Ms[i], mi)
+                tmp.append(B)
+            partials.append((B, tmp))
+
+    # Truncate slicewise in the transform domain and form the residual there.
+    Uk, Sk, Vkt = pystarm.slicewise_svdx(A_hat, k)
+    Ak_hat = pystarm.slicewise_matmul(Uk, Sk, Vkt)
+    R = pystarm.tensor_minus_tensor(A_hat, Ak_hat)
+
+    # The objective is the discarded singular energy, which is the squared norm
+    # of the residual in the transform domain. No inverse transform is needed:
+    # the orthogonal mode product preserves the norm.
+    f = float(R.norm()) ** 2
+
+    grads = []
+    if want_gradient:
+        for j, mode in enumerate(modes):
+            B, tmp = partials[j]
+            # dF/dM_j = 2 * R_(j) B_(j)^T, with the unfolding taken in mode j.
+            G = pystarm.tensor_contract_all_but_one(R, B, mode, False)
+            grads.append(2.0 * np.array(_as_numpy(G), copy=True))
+            G.clear()
+            for t in tmp:
+                t.clear()
+
+    R.clear()
+    Ak_hat.clear()
+    Uk.clear()
+    Sk.clear()
+    Vkt.clear()
+    for t in owned:
+        t.clear()
+
+    return f, grads
+
+
+def low_rank_objective(A, Ms, k):
+    '''
+    Objective only, for the line search.
+    Input:
+    - A: pystarm Tensor of order >= 3.
+    - Ms: Python list of pystarm Matrices, one per transform mode.
+    - k: Target rank.
+
+    Output:
+    - f: The objective ||A - A_k(M)||_F^2, as a float.
+    '''
+    f, _ = low_rank_objective_and_gradient(A, Ms, k, want_gradient=False)
+    return f
+
 
 def tensor_times_matrix(A, M, inv_flag=False):
     '''
