@@ -62,9 +62,19 @@ def low_rank_obj_func_gradient(A, Ms, k):
         print(grd_B_wrt_S.getdims())
 
         # Step 2
-        grd_U = calc_U_gradient(Uk_hat, Sk_hat, Vkt_hat, grd_B_wrt_U, k)
-        grd_S = calc_S_gradient(Uk_hat, Vkt_hat, grd_B_wrt_S)
-        grd_VT = calc_VT_gradient(grd_Akhat_wrt_VT)
+        # All three adjoints take the same (U, S, VT, cotangent) signature; the rank is
+        # read off the factors rather than passed in, so it cannot disagree with them.
+        #
+        # CAVEAT: slicewise_svdx above truncates to k. When k < min(m, n) the U and VT
+        # adjoints are not the true adjoints of the truncated SVD -- the derivative of a
+        # truncated singular vector picks up contributions from the discarded directions
+        # i > k that the formula omits. See the docstring of SVDGradientTestCase in
+        # tests/test.py, which measures this. The reference MATLAB
+        # (objectiveFunctions/objFctnLowRank.m) has the same limitation. The
+        # singular-value adjoint is exact either way.
+        grd_U = calc_U_gradient(Uk_hat, Sk_hat, Vkt_hat, grd_B_wrt_U)
+        grd_S = calc_S_gradient(Uk_hat, Sk_hat, Vkt_hat, grd_B_wrt_S)
+        grd_VT = calc_VT_gradient(Uk_hat, Sk_hat, Vkt_hat, grd_Akhat_wrt_VT)
 
         grd_AkHat = pystarm.tensor_plus_tensor(grd_U, grd_S, grd_VT)
         # Step 1

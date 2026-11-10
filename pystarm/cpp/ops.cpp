@@ -582,34 +582,53 @@ Tensor slicewise_matmul(const Tensor& U, const Matrix& S, bool inv_flag=false, b
 
     PARAMS:
     U: Tensor of size (m x n x n_slices)
-    S: Diagonal tensor stored as matrix of size (n x n_slices)
-    inv_flag: Whether or not you want matrix S to be inverse. 
+    S: Diagonal tensor stored as matrix of size (d x n_slices), where d == n when
+       ten_left is true (right multiply) and d == m when ten_left is false (left multiply).
+    inv_flag: Whether or not you want matrix S to be inverted, i.e. to divide by S
+              elementwise rather than multiply.
     ten_left: True if doing U * S, False if doing S * U
+
+    ZERO SINGULAR VALUES (inv_flag == true):
+    The reciprocal of an entry of S is only defined when that entry is nonzero. We adopt
+    the Moore-Penrose pseudo-inverse convention: 1/s when s != 0, and 0 when s == 0.
+    Doing this rather than taking an unguarded reciprocal keeps the result finite instead
+    of filling the output with +/-Inf or NaN, which would silently poison every downstream
+    tensor. The same convention is used by the reference MATLAB implementation of Newman
+    and Keegan for the companion matrix F in tensorSVD/facewiseSVDJacobian.m, which does
+    `idx = (F ~= 0); F(idx) = 1 ./ F(idx);` and leaves the remaining entries at zero.
+    Note that this makes the operator a pseudo-inverse, not an inverse: for an exactly
+    singular S, `slicewise_matmul(slicewise_matmul(U, S), S, true)` does NOT recover U.
     */
     assert(U.nslices == S.ncol);
-    assert(U.dims[1] == S.nrow);
-    // assert(!(inv_flag == true && ten_left == true));
-    if(!ten_left){
+    if (ten_left) {
+      // U * diag(S): the diagonal acts on the columns of each slice, so it is n long.
+      assert(U.dims[1] == S.nrow);
+    } else {
+      // diag(S) * U: the diagonal acts on the rows of each slice, so it is m long.
       assert(U.dims[0] == S.nrow);
     }
 
     // Scale U with S
     std::vector<size_t> USdims(U.dims); // US is the scaled version of U
-                                        // where columns of the frontal slices of U is scaled by singular values of the corresponding slice in S
-                                        // Dimensions of US would be same as U
-    USdims[1] = S.nrow; // Because we are not multiplying by VT in the end, we will not have the same dimensions as U.
+                                        // where columns (ten_left) or rows (!ten_left) of the frontal slices
+                                        // of U are scaled by the corresponding entry of S for that slice.
+                                        // Scaling by a diagonal never changes the shape, so US has U's dims.
     size_t USbuflen = std::accumulate(USdims.begin(), USdims.end(), (size_t)1, std::multiplies<size_t>());
-    //size_t USbuflen = 1;
-    //for (int i = 0; i < USdims.size(); i++){
-        //USbuflen = USbuflen * USdims[i];
-    //}
     Tensor US(USbuflen, U.ndim, USdims);
-    Matrix S_inv(S.nrow * S.ncol, S.nrow, S.ncol);
+
+    // Only materialise the reciprocal matrix when it is actually needed.
+    Matrix S_inv;
     if(inv_flag){
-      for (size_t i = 0; i < S_inv.buflen; ++i){
-        for(size_t j = 0; j < S_inv.buflen; ++j){
-          S_inv.set(i, j, 1 / S.get(i, j));
-        }
+      S_inv = Matrix(S.nrow * S.ncol, S.nrow, S.ncol);
+      // S is column major and contiguous, so a flat loop over nrow*ncol visits exactly
+      // the allocated entries. The bug this replaces ran BOTH loop counters to
+      // buflen = nrow*ncol and indexed with set(i,j)/get(i,j), writing and reading far
+      // past the allocation; neither Matrix::set nor Matrix::get bounds checks.
+      const size_t S_len = S.nrow * S.ncol;
+      #pragma omp parallel for simd schedule(static) if(S_len > 100000)
+      for (size_t idx = 0; idx < S_len; ++idx){
+        const double s = S.data_ptr[idx];
+        S_inv.data_ptr[idx] = (s != 0.0) ? (1.0 / s) : 0.0;
       }
     }
     // Multiplying each slice of U with the diagonal matrix corresponding to the corresponding column of matrix S (which is compact format of tensor S)
@@ -646,12 +665,9 @@ Tensor slicewise_matmul(const Tensor& U, const Matrix& S, bool inv_flag=false, b
             cblas_batch_size
             );
 
-      // #pragma omp parallel for simd schedule(static) if(USbuflen > 100000)
-      // for(size_t j = 0; j < S.ncol; ++j){
-      //   for(size_t i = 0; i < S.nrow; ++i){
-      //     size_t U_index = ((i % U_n_cols) + (i * U_n_cols));
-      //     US.data_ptr[U_index] = U.data_ptr[U_index] / S.get(i, j);
-      //   }
+    // S_inv is either a C++-owned malloc (inv_flag) or an empty Matrix with a null
+    // data_ptr; clear() is a no-op in the latter case. S itself is never cleared here
+    // because it may wrap a NumPy-owned buffer.
     S_inv.clear();
     return US;
   }
@@ -5986,6 +6002,25 @@ Tensor tensor_minus_tensor(Tensor &A, Tensor &B){
 
   return TO;
 
+}
+
+Tensor tensor_plus_tensor(Tensor &A, Tensor &B){
+  // Two-tensor elementwise sum. The three-tensor form below predates this one; the
+  // SVD-gradient adjoints need a binary add (tmp1 + tmp2) and were otherwise forced to
+  // manufacture a zero tensor just to reach the ternary overload.
+  assert(A.getdims() == B.getdims() && "Tensors A and B must have the same dimensions.");
+  std::vector<size_t> TOdims(A.dims);
+
+  size_t TObuflen = A.buflen;
+  Tensor TO(TObuflen, A.ndim, TOdims);
+
+  // Only use openMP fork/join for large tensors. Otherwise the cost isn't worth it.
+  #pragma omp parallel for simd schedule(static) if(TObuflen > 100000)
+  for(size_t i = 0; i < TObuflen; ++i){
+    TO.data_ptr[i] = A.data_ptr[i] + B.data_ptr[i];
+  }
+
+  return TO;
 }
 
 Tensor tensor_plus_tensor(Tensor &A, Tensor &B, Tensor &C){
