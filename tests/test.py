@@ -7,8 +7,16 @@ import itertools
 import gc
 import time
 import math
+import sys
 from alg import starM_product, starM_product_ttb, tensor_contraction_product_ttb, tensor_contract_multiply, tensor_contract_batched, contegra_tensor_contract_timed
 import pystarm
+
+# star-M-opt/ is not an importable package name (the hyphens are not valid in an
+# identifier), so put the directory on sys.path and import the module directly.
+_STAR_M_OPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, 'star-M-opt')
+if _STAR_M_OPT_DIR not in sys.path:
+    sys.path.insert(0, _STAR_M_OPT_DIR)
+import svd_gradient_calculations as svdgrad
 
 
 def np_slicewise_matmulks(U_jagged, S_jagged, Vt_jagged):
@@ -1236,7 +1244,381 @@ class TensorArithmeticTestCase(unittest.TestCase):
 
         self.assertTrue(np.allclose(D_np, D_pystarm))
 
-       
+    def test_tensor_addition_two_operands(self):
+        '''Test the two-tensor overload of tensor_plus_tensor.'''
+        A_np, B_np = self.create_rand_np_tensors()
+
+        A = pystarm.Tensor(A_np, A_np.ndim, A_np.shape)
+        B = pystarm.Tensor(B_np, B_np.ndim, B_np.shape)
+
+        C = pystarm.tensor_plus_tensor(A, B)
+        C_np = A_np + B_np
+        C_pystarm = np.frombuffer(C, dtype=np.float64).reshape(C.getdims(), order='F', copy=False)
+
+        self.assertTrue(np.allclose(C_np, C_pystarm))
+        C.clear()
+
+
+class SlicewiseMatmulDiagTestCase(unittest.TestCase):
+    """Tests for slicewise_matmul(Tensor, Matrix, inv_flag, ten_left).
+
+    This overload scales each frontal slice of a tensor by a diagonal matrix held
+    compactly as one column of S per slice. Four combinations are reachable:
+    multiply/divide crossed with left/right. The division (inv_flag) path was
+    previously unreachable from Python and contained an out-of-bounds write: both
+    loops that filled the reciprocal matrix ran to S.buflen = nrow*ncol instead of
+    to nrow and ncol, and Matrix::set does no bounds checking.
+
+    Tolerances are explicit rather than np.allclose's defaults because these are
+    exact scalar products and quotients; anything looser than a few ulp would hide
+    an operand mix-up.
+    """
+    RTOL = 1e-14
+    ATOL = 1e-14
+
+    def make(self, m, n, L, seed):
+        rng = np.random.default_rng(seed)
+        U_np = np.asfortranarray(rng.standard_normal((m, n, L)))
+        U = pystarm.Tensor(U_np, U_np.ndim, U_np.shape)
+        return rng, U_np, U
+
+    @staticmethod
+    def as_np(T):
+        return np.frombuffer(T, dtype=np.float64).reshape(T.getdims(), order='F').copy()
+
+    @staticmethod
+    def as_mat(a):
+        a = np.asfortranarray(a)
+        return pystarm.Matrix(a, a.shape[0], a.shape[1])
+
+    def test_right_multiply_by_diagonal(self):
+        """U * diag(s) scales column j of each slice by s[j]"""
+        rng, U_np, U = self.make(4, 3, 5, 0)
+        S_np = rng.standard_normal((3, 5))
+        S = self.as_mat(S_np)
+
+        got = self.as_np(pystarm.slicewise_matmul(U, S, inv_flag=False, ten_left=True))
+        self.assertTrue(np.allclose(got, U_np * S_np[None, :, :],
+                                    rtol=self.RTOL, atol=self.ATOL))
+
+    def test_right_divide_by_diagonal(self):
+        """U * diag(1/s) divides column j of each slice by s[j]"""
+        rng, U_np, U = self.make(4, 3, 5, 1)
+        S_np = rng.standard_normal((3, 5))
+        S = self.as_mat(S_np)
+
+        got = self.as_np(pystarm.slicewise_matmul(U, S, inv_flag=True, ten_left=True))
+        self.assertTrue(np.allclose(got, U_np / S_np[None, :, :],
+                                    rtol=self.RTOL, atol=self.ATOL))
+
+    def test_left_multiply_by_diagonal(self):
+        """diag(s) * U scales row i of each slice by s[i]"""
+        rng, U_np, U = self.make(4, 3, 5, 2)
+        S_np = rng.standard_normal((4, 5))
+        S = self.as_mat(S_np)
+
+        got = self.as_np(pystarm.slicewise_matmul(U, S, inv_flag=False, ten_left=False))
+        self.assertTrue(np.allclose(got, U_np * S_np[:, None, :],
+                                    rtol=self.RTOL, atol=self.ATOL))
+
+    def test_left_divide_by_diagonal(self):
+        """diag(1/s) * U divides row i of each slice by s[i]"""
+        rng, U_np, U = self.make(4, 3, 5, 3)
+        S_np = rng.standard_normal((4, 5))
+        S = self.as_mat(S_np)
+
+        got = self.as_np(pystarm.slicewise_matmul(U, S, inv_flag=True, ten_left=False))
+        self.assertTrue(np.allclose(got, U_np / S_np[:, None, :],
+                                    rtol=self.RTOL, atol=self.ATOL))
+
+    def test_divide_by_zero_singular_value_is_pseudo_inverse(self):
+        """A zero entry of S yields zero, not an infinity
+
+        The reciprocal is only defined for nonzero entries. The kernel adopts the
+        Moore-Penrose convention 1/s if s != 0 else 0, matching how the reference
+        MATLAB (facewiseSVDJacobian.m) guards its own reciprocal. The point of the
+        test is that the output stays finite: an unguarded reciprocal would fill
+        downstream tensors with Inf and NaN.
+        """
+        rng, U_np, U = self.make(4, 3, 5, 4)
+        S_np = rng.standard_normal((3, 5))
+        S_np[1, 2] = 0.0
+        S = self.as_mat(S_np)
+
+        got = self.as_np(pystarm.slicewise_matmul(U, S, inv_flag=True, ten_left=True))
+
+        bcast = S_np[None, :, :]
+        expected = np.divide(U_np, bcast, out=np.zeros_like(U_np), where=(bcast != 0))
+        self.assertTrue(np.isfinite(got).all())
+        self.assertTrue(np.allclose(got, expected, rtol=self.RTOL, atol=self.ATOL))
+
+    def test_divide_is_inverse_of_multiply(self):
+        """Dividing undoes multiplying when every singular value is nonzero"""
+        rng, U_np, U = self.make(6, 4, 3, 5)
+        # Keep the entries away from zero so the round trip is well conditioned.
+        S_np = rng.uniform(0.5, 2.0, size=(4, 3))
+        S = self.as_mat(S_np)
+
+        prod = pystarm.slicewise_matmul(U, S, inv_flag=False, ten_left=True)
+        back = pystarm.slicewise_matmul(prod, S, inv_flag=True, ten_left=True)
+        self.assertTrue(np.allclose(self.as_np(back), U_np, rtol=1e-13, atol=1e-13))
+        prod.clear()
+        back.clear()
+
+
+class SVDGradientTestCase(unittest.TestCase):
+    """Finite-difference verification of the star-M SVD gradient helpers.
+
+    The helpers in star-M-opt/svd_gradient_calculations.py are the adjoints of the
+    Jacobians of the slicewise SVD factors with respect to the input tensor, i.e.
+    MATLAB's JacU.AT / JacS.AT / JacV.AT in tensorSVD/facewiseSVDJacobian.m from
+    https://github.com/elizabethnewman/star-M-opt. The property that defines them is
+
+        <d(factor)/dA [x], y>_F  ==  <x, calc_*_gradient(U, S, VT, y)>_F
+
+    for every perturbation direction x of A's shape and every cotangent y of the
+    factor's shape. Checking that identity against a central difference of the
+    factor is the only test that actually catches a sign or transpose error; an
+    eyeball comparison against the MATLAB source does not, as the F-orientation bug
+    this suite was written to catch demonstrated (it flipped the sign of both the U
+    and the V gradient and nothing else noticed).
+
+    Two separate things are checked, because they can fail independently:
+
+      1. test_matches_matlab_reference_formula: the pystarm implementation agrees
+         with a direct NumPy transcription of the MATLAB formulas. This validates
+         the port and holds for truncated factors too.
+      2. test_*_gradient_matches_finite_differences: the formula itself is the true
+         adjoint. This holds only when k == min(m, n).
+
+    KNOWN LIMITATION, pinned by test_truncated_u_and_vt_are_not_the_true_adjoint:
+    for a truncated SVD (k < min(m, n)) the U and VT adjoints are NOT the true
+    adjoints. The derivative of a truncated singular vector has contributions from
+    the discarded singular directions i > k, which the formula's F (restricted to
+    the retained k x k block) omits. The reference MATLAB has the same limitation:
+    facewiseSVDJacobian.m says "assume matrices are full and full-rank" in its
+    header, its own CheckAdjoint tests only exercise the economy case, yet
+    objectiveFunctions/objFctnLowRank.m feeds it truncated factors anyway. The
+    singular-value adjoint stays exact under truncation.
+    """
+
+    # Central differences on an SVD factor converge as O(h^2) until roundoff takes
+    # over. At h = 1e-5 the measured relative error across these cases is at worst
+    # ~2e-8, so 1e-6 leaves about two decades of headroom while still being tight
+    # enough to catch a sign flip (which shows up as a relative error of 2.0).
+    FD_STEP = 1e-5
+    FD_TOL = 1e-6
+
+    @staticmethod
+    def _tensor(a):
+        a = np.asfortranarray(a, dtype=np.float64)
+        return pystarm.Tensor(a, a.ndim, list(a.shape))
+
+    @staticmethod
+    def _as_np(T):
+        return np.frombuffer(T, dtype=np.float64).reshape(T.getdims(), order='F').copy()
+
+    @staticmethod
+    def _ref_F(s):
+        """F[i,j] = 1/(s_j^2 - s_i^2) off the diagonal, 0 where the values coincide."""
+        s2 = s ** 2
+        D = s2[None, :] - s2[:, None]
+        out = np.zeros_like(D)
+        np.divide(1.0, D, out=out, where=(D != 0))
+        return out
+
+    @classmethod
+    def _ref_AT_U(cls, u, s, v, y):
+        F, S, m = cls._ref_F(s), np.diag(s), u.shape[0]
+        t1 = u @ ((F * (u.T @ y - y.T @ u)) @ S)
+        t2 = (np.eye(m) - u @ u.T) @ (y / s[None, :])
+        return (t1 + t2) @ v.T
+
+    @classmethod
+    def _ref_AT_S(cls, u, s, v, y):
+        return u @ (np.eye(len(s)) * y) @ v.T
+
+    @classmethod
+    def _ref_AT_V(cls, u, s, v, y):
+        F, S, n = cls._ref_F(s), np.diag(s), v.shape[0]
+        t1 = (S @ (F * (v.T @ y - y.T @ v))) @ v.T
+        t2 = (y / s[None, :]).T @ (np.eye(n) - v @ v.T)
+        return u @ (t1 + t2)
+
+    @staticmethod
+    def _np_svd_aligned(A_np, k, U_base):
+        """Slicewise economy SVD, each slice sign-aligned to a base factorization.
+
+        LAPACK fixes the sign of each singular vector arbitrarily, so the factors at
+        A + h*x and A - h*x can come back with opposite signs and wreck the central
+        difference. For small h each perturbed vector is close to its unperturbed
+        counterpart, so flipping whenever the inner product is negative recovers the
+        continuous branch. U and V must be flipped together to keep U S V^T == A.
+        """
+        m, n, L = A_np.shape
+        U = np.empty((m, k, L))
+        S = np.empty((k, L))
+        Vt = np.empty((k, n, L))
+        for l in range(L):
+            u, s, vt = np.linalg.svd(A_np[:, :, l], full_matrices=False)
+            u, s, vt = u[:, :k].copy(), s[:k].copy(), vt[:k, :].copy()
+            for j in range(k):
+                if np.dot(u[:, j], U_base[:, j, l]) < 0:
+                    u[:, j] = -u[:, j]
+                    vt[j, :] = -vt[j, :]
+            U[:, :, l] = u
+            S[:, l] = s
+            Vt[:, :, l] = vt
+        return U, S, Vt
+
+    def _setup(self, m, n, L, k, seed):
+        """Factor a random tensor and draw a direction x plus one cotangent per factor."""
+        rng = np.random.default_rng(seed)
+        A_np = np.asfortranarray(rng.standard_normal((m, n, L)))
+        A = self._tensor(A_np)
+        U, S, VT = pystarm.slicewise_svdx(A, k)
+        cotangents = {
+            'U': rng.standard_normal((m, k, L)),
+            'S': rng.standard_normal((k, k, L)),
+            'VT': rng.standard_normal((k, n, L)),
+        }
+        x = rng.standard_normal((m, n, L))
+        return A_np, A, U, S, VT, cotangents, x
+
+    def _analytic(self, U, S, VT, cotangents):
+        gU = svdgrad.calc_U_gradient(U, S, VT, self._tensor(cotangents['U']))
+        gS = svdgrad.calc_S_gradient(U, S, VT, self._tensor(cotangents['S']))
+        gV = svdgrad.calc_VT_gradient(U, S, VT, self._tensor(cotangents['VT']))
+        out = {'U': self._as_np(gU), 'S': self._as_np(gS), 'VT': self._as_np(gV)}
+        for g in (gU, gS, gV):
+            g.clear()
+        return out
+
+    def _fd_rel_errors(self, A_np, U_np, k, cotangents, x, analytic, h):
+        """Relative gap between <x, analytic> and <d(factor)[x], y> for each factor."""
+        L = A_np.shape[2]
+        Up, Sp, Vtp = self._np_svd_aligned(A_np + h * x, k, U_np)
+        Um, Sm, Vtm = self._np_svd_aligned(A_np - h * x, k, U_np)
+        dU = (Up - Um) / (2 * h)
+        dS = (Sp - Sm) / (2 * h)
+        dVt = (Vtp - Vtm) / (2 * h)
+
+        # The S adjoint only sees the diagonal of its cotangent, which is what pairs
+        # with the derivative of the singular values themselves.
+        diag_y = np.array([[cotangents['S'][i, i, l] for l in range(L)] for i in range(k)])
+        fd = {'U': np.sum(dU * cotangents['U']),
+              'S': np.sum(dS * diag_y),
+              'VT': np.sum(dVt * cotangents['VT'])}
+
+        errors = {}
+        for key, value in fd.items():
+            a = float(np.sum(x * analytic[key]))
+            errors[key] = abs(a - value) / max(1.0, abs(value))
+        return errors
+
+    # ---- shapes exercised: wide, tall and square, all at k = min(m, n) ----
+    FULL_RANK_CASES = [(4, 6, 3, 4, 0), (6, 4, 3, 4, 1), (5, 5, 3, 5, 2),
+                       (3, 7, 4, 3, 3), (7, 3, 4, 3, 4)]
+
+    def test_u_gradient_matches_finite_differences(self):
+        """JacU.AT satisfies the adjoint identity against a central difference"""
+        self._check_fd('U')
+
+    def test_s_gradient_matches_finite_differences(self):
+        """JacS.AT satisfies the adjoint identity against a central difference"""
+        self._check_fd('S')
+
+    def test_vt_gradient_matches_finite_differences(self):
+        """JacV.AT satisfies the adjoint identity against a central difference"""
+        self._check_fd('VT')
+
+    def _check_fd(self, factor):
+        for (m, n, L, k, seed) in self.FULL_RANK_CASES:
+            with self.subTest(m=m, n=n, L=L, k=k, seed=seed, factor=factor):
+                A_np, A, U, S, VT, cot, x = self._setup(m, n, L, k, seed)
+                U_np = self._as_np(U)
+                analytic = self._analytic(U, S, VT, cot)
+                err = self._fd_rel_errors(A_np, U_np, k, cot, x, analytic, self.FD_STEP)[factor]
+                # A is a NumPy-backed Tensor and must never be cleared; U/S/VT are
+                # C++ allocations and must be.
+                U.clear(); S.clear(); VT.clear()
+                self.assertLess(
+                    err, self.FD_TOL,
+                    f"{factor} gradient disagrees with central differences: "
+                    f"relative error {err:.3e} at h={self.FD_STEP:g}. A value near 2.0 "
+                    f"means the gradient has the wrong sign.")
+
+    def test_matches_matlab_reference_formula(self):
+        """All three adjoints reproduce a NumPy transcription of facewiseSVDJacobian.m
+
+        This is the port-fidelity check and is expected to hold to machine precision
+        for truncated factors as well as full-rank ones.
+        """
+        cases = self.FULL_RANK_CASES + [(6, 8, 2, 3, 5), (8, 6, 2, 3, 6), (6, 6, 2, 2, 7)]
+        for (m, n, L, k, seed) in cases:
+            with self.subTest(m=m, n=n, L=L, k=k, seed=seed):
+                A_np, A, U, S, VT, cot, x = self._setup(m, n, L, k, seed)
+                U_np, S_np, Vt_np = self._as_np(U), self._as_np(S), self._as_np(VT)
+                analytic = self._analytic(U, S, VT, cot)
+                U.clear(); S.clear(); VT.clear()
+
+                expected = {key: np.empty((m, n, L)) for key in analytic}
+                for l in range(L):
+                    u, s, v = U_np[:, :, l], S_np[:, l], Vt_np[:, :, l].T
+                    expected['U'][:, :, l] = self._ref_AT_U(u, s, v, cot['U'][:, :, l])
+                    expected['S'][:, :, l] = self._ref_AT_S(u, s, v, cot['S'][:, :, l])
+                    expected['VT'][:, :, l] = self._ref_AT_V(u, s, v, cot['VT'][:, :, l].T)
+
+                for key in ('U', 'S', 'VT'):
+                    self.assertTrue(
+                        np.allclose(analytic[key], expected[key], rtol=1e-12, atol=1e-12),
+                        f"{key} gradient does not match the MATLAB reference formula")
+
+    def test_truncated_singular_value_gradient_is_still_exact(self):
+        """JacS.AT remains the true adjoint even for a truncated SVD
+
+        Singular values, unlike singular vectors, do not depend on the discarded
+        subspace to first order, so truncation does not degrade this one.
+        """
+        for (m, n, L, k, seed) in [(6, 8, 2, 3, 5), (8, 6, 2, 3, 6), (6, 6, 2, 2, 7)]:
+            with self.subTest(m=m, n=n, L=L, k=k, seed=seed):
+                A_np, A, U, S, VT, cot, x = self._setup(m, n, L, k, seed)
+                U_np = self._as_np(U)
+                analytic = self._analytic(U, S, VT, cot)
+                err = self._fd_rel_errors(A_np, U_np, k, cot, x, analytic, self.FD_STEP)['S']
+                U.clear(); S.clear(); VT.clear()
+                self.assertLess(err, self.FD_TOL)
+
+    def test_truncated_u_and_vt_are_not_the_true_adjoint(self):
+        """Pin the known truncation limitation of the reference formula
+
+        This test asserts that the U and VT adjoints DISAGREE with finite
+        differences when k < min(m, n), and that the disagreement does not shrink
+        when the step is refined. The h-independence is what distinguishes a genuine
+        formula error from finite-difference noise: a correct adjoint's error would
+        fall by roughly 100x between h=1e-4 and h=1e-5.
+
+        If someone extends the formula to handle truncation properly, this test will
+        start failing. That is the intent: delete it and update the docstrings in
+        star-M-opt/svd_gradient_calculations.py and this class at the same time.
+        """
+        for (m, n, L, k, seed) in [(6, 8, 2, 3, 5), (8, 6, 2, 3, 6), (6, 6, 2, 2, 7)]:
+            A_np, A, U, S, VT, cot, x = self._setup(m, n, L, k, seed)
+            U_np = self._as_np(U)
+            analytic = self._analytic(U, S, VT, cot)
+            coarse = self._fd_rel_errors(A_np, U_np, k, cot, x, analytic, 1e-4)
+            fine = self._fd_rel_errors(A_np, U_np, k, cot, x, analytic, 1e-5)
+            U.clear(); S.clear(); VT.clear()
+
+            for key in ('U', 'VT'):
+                with self.subTest(m=m, n=n, k=k, seed=seed, factor=key):
+                    self.assertGreater(
+                        fine[key], 1e-3,
+                        f"{key} adjoint unexpectedly agrees with finite differences "
+                        f"under truncation; the limitation may have been fixed")
+                    # Error plateaus instead of falling ~100x: not FD noise.
+                    self.assertGreater(fine[key], 0.1 * coarse[key])
+
 
 # ADD A PYTTB TEST CASE FOR CONTRACTION, LOOK AT TTT FUNCTION AND CONTRACT ALL MODES BUT K.
 class MatrixExpTestCase(unittest.TestCase):

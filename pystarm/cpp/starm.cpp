@@ -191,7 +191,9 @@ PYBIND11_MODULE(pystarm, m) {
         py::arg("A"), py::arg("B"), py::arg("k"), py::arg("num_threads"));
     m.def("tensor_minus_tensor", &tensor_minus_tensor, "Subtract two tensors elementwise.",
         py::arg("A"), py::arg("B"));
-    m.def("tensor_plus_tensor", &tensor_plus_tensor, "Add three tensors elementwise.",
+    m.def("tensor_plus_tensor", static_cast<Tensor (*)(Tensor&, Tensor&)>(&tensor_plus_tensor), "Add two tensors elementwise.",
+        py::arg("A"), py::arg("B"));
+    m.def("tensor_plus_tensor", static_cast<Tensor (*)(Tensor&, Tensor&, Tensor&)>(&tensor_plus_tensor), "Add three tensors elementwise.",
         py::arg("A"), py::arg("B"), py::arg("C"));
 	m.def("transform", &transform, "Transform tensor with (multi)ttm in a specified order");
 	m.def("truncate_factors", &truncate_factors, "Truncate a complete TSVDM set of factors given slicewise ranks.",
