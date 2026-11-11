@@ -132,7 +132,7 @@ def tsvdm_I_reconstruct(U_hat, S_hat, VT_hat, Minvs, ttm_modes, orig_shape, verb
     # before applying inverse TTMs (or returning for the eye/empty case).
     if len(A_hat.getdims()) == 3 and len(orig_shape) > 3:
         arr_nd = np.frombuffer(A_hat, dtype=np.float64).reshape(orig_shape, order='F')
-        A_hat  = pystarm.Tensor(arr_nd, len(orig_shape), orig_shape)
+        A_hat  = pystarm.Tensor(np.asfortranarray(arr_nd), len(orig_shape), orig_shape)
 
     if verbose:
         print("[tsvdm_I_reconstruct]", "ttm_modes", ttm_modes)
@@ -180,7 +180,7 @@ def tsvdm_II_reconstruct(U_hat, S_hat, VT_hat, Minvs, ttm_modes, orig_shape, ver
     # before applying inverse TTMs (or returning for the eye/empty case).
     if len(A_hat.getdims()) == 3 and len(orig_shape) > 3:
         arr_nd = np.frombuffer(A_hat, dtype=np.float64).reshape(orig_shape, order='F')
-        A_hat  = pystarm.Tensor(arr_nd, len(orig_shape), orig_shape)
+        A_hat  = pystarm.Tensor(np.asfortranarray(arr_nd), len(orig_shape), orig_shape)
 
     if verbose:
         print("[tsvdm_II_reconstruct]", "ttm_modes", ttm_modes)
@@ -250,12 +250,12 @@ def starM_product(A_np, B_np, M_np, A_transpose=False, B_transpose=False):
     assert np.allclose(np.dot(M_np[0], M_np[0].T), np.identity(len(M_np[0]))), "M must be an orthogonal matrix."
 
     # Convert from numpy to starM Tensor/Matrix for pystarm API.
-    A = pystarm.Tensor(A_np, A_ndim, A_shape) # args are array (numpy), ndim/order, and dimensions
-    B = pystarm.Tensor(B_np, B_ndim, B_shape)
+    A = pystarm.Tensor(np.asfortranarray(A_np), A_ndim, A_shape) # args are array (numpy), ndim/order, and dimensions
+    B = pystarm.Tensor(np.asfortranarray(B_np), B_ndim, B_shape)
 
     # Do initial mode 3 calculation, prevents A_hat and B_hat from going out of range
     M_shape = M_np[0].shape
-    M = pystarm.Matrix(M_np[0], M_shape[0], M_shape[1])
+    M = pystarm.Matrix(np.asfortranarray(M_np[0]), M_shape[0], M_shape[1])
 
     # Move A and B into transform domain
     current_mode = 2 # start with mode 3-1=2
@@ -268,7 +268,7 @@ def starM_product(A_np, B_np, M_np, A_transpose=False, B_transpose=False):
             # Check for M's orthogonality.
             assert np.allclose(np.dot(matrix, matrix.T), np.identity(len(matrix))), "All M's must be orthogonal matrices."
             M_shape = matrix.shape
-            M = pystarm.Matrix(matrix, M_shape[0], M_shape[1])
+            M = pystarm.Matrix(np.asfortranarray(matrix), M_shape[0], M_shape[1])
             # Move A and B into transform domain
             A_hat = pystarm.ttm(A_hat, M, current_mode) # Args: tensor, matrix, mode (index 0, so if you put 1 it will be mode 1+1=2)
             B_hat = pystarm.ttm(B_hat, M, current_mode)
@@ -278,13 +278,13 @@ def starM_product(A_np, B_np, M_np, A_transpose=False, B_transpose=False):
 
     current_mode = 2 # reset mode counter
     # Return product to original domain. NOTE: Since all M's are orthogonal, the inverse = transpose. That's what I'm doing here.
-    M_inv = pystarm.Matrix(M_np[0].T, M_np[0].shape[1], M_np[0].shape[0])
+    M_inv = pystarm.Matrix(np.asfortranarray(M_np[0].T), M_np[0].shape[1], M_np[0].shape[0])
     C = pystarm.ttm(C_hat, M_inv, current_mode)
 
     if A_ndim > 3:
         for matrix in M_np[1:]:
             current_mode += 1
-            M_inv = pystarm.Matrix(matrix.T, matrix.shape[1], matrix.shape[0])
+            M_inv = pystarm.Matrix(np.asfortranarray(matrix.T), matrix.shape[1], matrix.shape[0])
             C = pystarm.ttm(C, M_inv, current_mode)
     
     # Return to numpy
@@ -391,8 +391,8 @@ def tensor_contract_multiply(A_np, B_np, k, naive: bool=False):
     A_shape = A_np.shape
     B_shape = B_np.shape
 
-    A = pystarm.Tensor(A_np, A_ndim, A_shape)
-    B = pystarm.Tensor(B_np, B_ndim, B_shape)
+    A = pystarm.Tensor(np.asfortranarray(A_np), A_ndim, A_shape)
+    B = pystarm.Tensor(np.asfortranarray(B_np), B_ndim, B_shape)
     
     # Slicewise multiply A and B
     C = pystarm.tensor_contract_all_but_one(A, B, k, naive)
@@ -422,8 +422,8 @@ def tensor_contract_batched(A_np, B_np, k):
     A_shape = A_np.shape
     B_shape = B_np.shape
 
-    A = pystarm.Tensor(A_np, A_ndim, A_shape)
-    B = pystarm.Tensor(B_np, B_ndim, B_shape)
+    A = pystarm.Tensor(np.asfortranarray(A_np), A_ndim, A_shape)
+    B = pystarm.Tensor(np.asfortranarray(B_np), B_ndim, B_shape)
     
     # Slicewise multiply A and B
     start = time.perf_counter()

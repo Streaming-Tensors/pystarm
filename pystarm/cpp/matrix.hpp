@@ -11,6 +11,57 @@
 
 namespace py = pybind11;
 
+/* Validate a Python buffer handed to one of the wrapping constructors.
+ *
+ * Every kernel here assumes 64-bit doubles in column-major (Fortran) order,
+ * and the wrapping constructors take the raw pointer without looking at the
+ * layout. A C-ordered array was therefore accepted silently and read as its
+ * own transpose. That is not a loud failure: for a skew-symmetric matrix the
+ * transpose is the negative, so `expm` on a C-ordered array returned a
+ * rotation the wrong way with no error raised anywhere.
+ *
+ * This turns that class of silent wrong answer into an exception at the
+ * boundary, which is the only place the information still exists.
+ *
+ * The layout check is deliberately conservative. It applies only when the
+ * buffer reports the same rank as the declared dims, and it skips axes of
+ * length one, where column-major and row-major strides coincide and an
+ * ordering complaint would be meaningless.
+ */
+static inline void check_fortran_double_buffer(const py::buffer_info &info,
+                                               const std::vector<size_t> &dims,
+                                               const char *who) {
+  if (info.itemsize != (py::ssize_t) sizeof(double) ||
+      info.format != py::format_descriptor<double>::format()) {
+    throw std::runtime_error(
+        std::string(who) + ": expected a float64 buffer. Build the array with "
+        "dtype=np.float64.");
+  }
+
+  size_t want = 1;
+  for (size_t d : dims) want *= d;
+  if ((size_t) info.size != want) {
+    throw std::runtime_error(
+        std::string(who) + ": buffer holds " + std::to_string(info.size) +
+        " elements but the declared dimensions need " + std::to_string(want) +
+        ".");
+  }
+
+  if ((size_t) info.ndim == dims.size() && info.ndim > 1) {
+    py::ssize_t expect = (py::ssize_t) sizeof(double);
+    for (size_t i = 0; i < dims.size(); i++) {
+      if (dims[i] > 1 && info.strides[i] != expect) {
+        throw std::runtime_error(
+            std::string(who) + ": buffer is not column-major (Fortran) "
+            "ordered. pystarm reads every array as column-major, so a "
+            "C-ordered array would be silently interpreted as its transpose. "
+            "Wrap it with np.asfortranarray(...) before passing it in.");
+      }
+      expect *= (py::ssize_t) dims[i];
+    }
+  }
+}
+
 /*
  * pybind11 memory management resources:
  * - Prevent automatic data copy
@@ -37,6 +88,7 @@ public:
         std::cout << "Reg constructor (pybuffer)" << std::endl;
         #endif
         py::buffer_info buf_info = buf.request();
+        check_fortran_double_buffer(buf_info, {m, n}, "Matrix");
         this->data_ptr = static_cast<double*>(buf_info.ptr);
         this->buflen = m * n;
         #ifdef _MEMPRINT

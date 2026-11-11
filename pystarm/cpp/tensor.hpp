@@ -35,6 +35,7 @@ class Tensor {
             this->buflen *= dims[i];
         }
         py::buffer_info buf_info = buf.request();
+        check_fortran_double_buffer(buf_info, this->dims, "Tensor");
         this->data_ptr = static_cast<double*>(buf_info.ptr);
 
         // Count the number of slices
