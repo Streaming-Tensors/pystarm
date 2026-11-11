@@ -255,16 +255,23 @@ class Tensor {
     /* Get a frontal slice
        Assuming natural ordering
        Slices are linearly indexed (0-based indexing)
+
+       This returns a *borrowing* Matrix: it points into the tensor's own buffer and
+       allocates nothing, so the result must never be cleared. It is const-qualified so
+       that callers holding a `const Tensor&` (the slicewise_svd* kernels all do) can use
+       it instead of the allocating getfrontalslice_copy. Handing out a writable pointer
+       from a const method is consistent with the rest of this class, whose data_ptr is a
+       public field.
     */
-    Matrix getfrontalslice(size_t i) {
+    Matrix getfrontalslice(size_t i) const {
       size_t buflen  = this->dims[0] * this->dims[1];
-      
+
       // Check if requesting a legal slice
       assert(i < this->nslices);
-  
+
       size_t start_idx = i * buflen;
-    
-      Matrix slice_mat(this->data_ptr + start_idx, 
+
+      Matrix slice_mat(this->data_ptr + start_idx,
                           this->dims[0], this->dims[1]);
 
       #ifdef _MEMPRINT

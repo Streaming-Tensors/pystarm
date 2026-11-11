@@ -1900,9 +1900,8 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
   /*
 #pragma omp for
   for (size_t ii = 0; ii < A.nslices; ii++) {
-    Matrix As = A.getfrontalslice_copy(ii);
-    A_copy.setfrontalslice(A.getfrontalslice_copy(ii), ii);
-    As.clear();
+    // Borrowing accessor, no allocation; see the live copies of this loop below.
+    A_copy.setfrontalslice(A.getfrontalslice(ii), ii);
   }
   */
 
@@ -2118,10 +2117,13 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp for
         for (size_t i = 0; i < nslices; i++) {
-          // Copy over a slice
-          Matrix As = A.getfrontalslice_copy(i);
-          A_copy.setfrontalslice(A.getfrontalslice_copy(i), i);
-          As.clear();
+          // Copy over a slice. getfrontalslice hands back a Matrix that borrows A's own
+          // buffer, so this copies the slice into A_copy with no intermediate allocation
+          // at all. The previous form allocated twice per iteration: once into As, and
+          // once into an unnamed getfrontalslice_copy temporary that setfrontalslice read
+          // from and nobody ever freed, leaking a full slice on every iteration of this
+          // omp for.
+          A_copy.setfrontalslice(A.getfrontalslice(i), i);
 
           //#pragma omp barrier
           double t0_qr = omp_get_wtime();
@@ -2312,10 +2314,13 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp for
         for (size_t i = 0; i < nslices; i++) {
-          // Copy over a slice
-          Matrix As = A.getfrontalslice_copy(i);
-          A_copy.setfrontalslice(A.getfrontalslice_copy(i), i);
-          As.clear();
+          // Copy over a slice. getfrontalslice hands back a Matrix that borrows A's own
+          // buffer, so this copies the slice into A_copy with no intermediate allocation
+          // at all. The previous form allocated twice per iteration: once into As, and
+          // once into an unnamed getfrontalslice_copy temporary that setfrontalslice read
+          // from and nobody ever freed, leaking a full slice on every iteration of this
+          // omp for.
+          A_copy.setfrontalslice(A.getfrontalslice(i), i);
 
           //#pragma omp barrier
           double t0_brd = omp_get_wtime();
@@ -2473,10 +2478,13 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp for
         for (size_t i = 0; i < nslices; i++) {
-          // Copy over a slice
-          Matrix As = A.getfrontalslice_copy(i);
-          A_copy.setfrontalslice(A.getfrontalslice_copy(i), i);
-          As.clear();
+          // Copy over a slice. getfrontalslice hands back a Matrix that borrows A's own
+          // buffer, so this copies the slice into A_copy with no intermediate allocation
+          // at all. The previous form allocated twice per iteration: once into As, and
+          // once into an unnamed getfrontalslice_copy temporary that setfrontalslice read
+          // from and nobody ever freed, leaking a full slice on every iteration of this
+          // omp for.
+          A_copy.setfrontalslice(A.getfrontalslice(i), i);
 
           //#pragma omp barrier
           double t0_qr = omp_get_wtime();
@@ -2665,10 +2673,13 @@ std::tuple<JaggedTensor, JaggedMatrix, JaggedTensor> slicewise_svd_thr(
 
 #pragma omp for
         for (size_t i = 0; i < nslices; i++) {
-          // Copy over a slice
-          Matrix As = A.getfrontalslice_copy(i);
-          A_copy.setfrontalslice(A.getfrontalslice_copy(i), i);
-          As.clear();
+          // Copy over a slice. getfrontalslice hands back a Matrix that borrows A's own
+          // buffer, so this copies the slice into A_copy with no intermediate allocation
+          // at all. The previous form allocated twice per iteration: once into As, and
+          // once into an unnamed getfrontalslice_copy temporary that setfrontalslice read
+          // from and nobody ever freed, leaking a full slice on every iteration of this
+          // omp for.
+          A_copy.setfrontalslice(A.getfrontalslice(i), i);
 
           //#pragma omp barrier
           double t0_brd = omp_get_wtime();

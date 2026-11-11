@@ -381,11 +381,14 @@ class JaggedMatrix{
     }
 
     // Copy constructor (deep copy of data)
-    JaggedMatrix(const JaggedMatrix &obj) 
+    JaggedMatrix(const JaggedMatrix &obj)
+      : ncol(obj.ncol), col_ranks(obj.col_ranks), col_offset(obj.col_offset) {
+      // The _MEMPRINT trace used to sit between the declarator and the initialiser list,
+      // which is not valid C++ and broke the build whenever _MEMPRINT was defined. Moved
+      // into the body, matching Matrix's copy constructor.
       #ifdef _MEMPRINT
       std::cout << "JaggedMatrix copy constructor" << std::endl;
       #endif
-      : ncol(obj.ncol), col_ranks(obj.col_ranks), col_offset(obj.col_offset) {
       this->buflen = this->col_offset[this->ncol];
       this->data_ptr = static_cast<double*>(malloc(this->buflen * sizeof(double)));
       std::copy(obj.data_ptr, obj.data_ptr + this->buflen, this->data_ptr);
@@ -518,6 +521,13 @@ class JaggedMatrix{
         if (this->data_ptr != nullptr){
             free(this->data_ptr);
         }
+        // Null the pointer and zero the length, as Matrix::clear, Tensor::clear and
+        // JaggedTensor::clear all do. Without this a second clear() -- which the Python
+        // API invites, since callers must free explicitly -- passes the same pointer to
+        // free() twice. The null check above only makes clear() idempotent if the
+        // pointer is actually nulled here.
+        this->data_ptr = nullptr;
+        this->buflen = 0;
         this->col_ranks.clear();
         this->col_offset.clear();
     }
