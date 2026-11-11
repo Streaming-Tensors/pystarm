@@ -3,9 +3,14 @@ import numpy as np
 import scipy as sp
 from scipy.fft import dct
 import numpy as np
-import matplotlib.pyplot as plt
 import pystarm
-import pyttb as ttb
+
+# matplotlib was imported here but never used, and pyttb is used by only three
+# functions below. Both were imported at module scope, and because
+# pystarm/__init__.py does `from .alg import *`, that made them hard
+# dependencies of `import pystarm` itself: the package failed to import on any
+# machine without them, even for code that only touches the C++ kernels.
+# matplotlib is now gone and pyttb is imported where it is used.
 
 def tsvdm_I_compress(A, Ms, ttm_modes, k, verbose=False):
     '''
@@ -300,6 +305,7 @@ def facewise_product_pyttb(A, B):
     Returns:
     - C: pyttb.tensor
     """
+    import pyttb as ttb  # deferred: keeps pyttb off the package import path
     # Extract underlying numpy arrays
     A_data = A.data 
     B_data = B.data  
@@ -335,6 +341,7 @@ def starM_product_ttb(A_np, B_np, M_np):
     Returns:
     - C = starM product of A and B, numpy tensor (ndarray).
     '''
+    import pyttb as ttb  # deferred: keeps pyttb off the package import path
     # Move to transform domain + calculate facewise product
     ndim = A_np.ndim
     if(type(M_np) != list and ndim == 3):
@@ -429,6 +436,7 @@ def tensor_contraction_product_ttb(A, B, mode: int) -> np.ndarray:
     ValueError
         If mode is out of range for the tensor dimensions.
     """
+    import pyttb as ttb  # deferred: keeps pyttb off the package import path
     # --- Input validation ---
     # if A.shape != B.shape:
     #     raise ValueError(
