@@ -20,6 +20,7 @@ import math
 
 import argparse 
 from objective_func import low_rank_obj_func_gradient
+from linesearch import armijo_linesearch
 
 def riemannian_gradient_descent(A_np, M_0, max_iter=100, k=1):
     '''
@@ -34,9 +35,15 @@ def riemannian_gradient_descent(A_np, M_0, max_iter=100, k=1):
     - A_k: Optimal rank-k approximation of A. Pystarm tensor
     - M_opt: Optimal transformation matrices for A. Python list of pystarm matrices.
     '''
+    # TODO: Right now, this is basically just psuedocode. Needs to be fully updated to work on this. 
+    M = M_0
+    for i in range(max_iter):
+        M_old = M
+        M = armijo_linesearch()
+        low_rank_obj_func_gradient(A_np, M, k)
 
 
-    return low_rank_obj_func_gradient(A_np, M_0, k), [1]
+    return _ , M_0
     
 
 def optimize_transformation_matrix(A: np.array, M_0, max_iter=100, k=1):

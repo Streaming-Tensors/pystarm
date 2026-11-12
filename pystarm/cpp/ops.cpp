@@ -6,6 +6,13 @@
 
 #include <numeric>
 #include <tuple>
+#include <cmath>
+#include <cstring>
+#include <limits>
+#include <stdexcept>
+#include <string>
+#include <algorithm>
+#include <vector>
 #include "utils.hpp"
 #include "matrix.hpp"
 #include "tensor.hpp"
@@ -6049,10 +6056,314 @@ Matrix get_slicewise_diagonals(Tensor &A){
   return M;
 
 }
-// Matrix matrix_transpose(const Matrix &M){
-//   std::vector<size_t> out_dims = [M.dims[1], M.dims[0]]
 
-// }
+// ---------------------------------------------------------------------------
+// Matrix exponential, following the structure of MATLAB's expm():
+//   - Higham (2005) scaling and squaring with diagonal Pade approximants of
+//     degree m in {3, 5, 7, 9, 13}, selected from norm(A, 1) using the
+//     theta_m thresholds.
+//   - Diagonal inputs are handled directly with exp() of the diagonal.
+//   - Triangular inputs have the diagonal and first superdiagonal of the
+//     result recomputed exactly after the Pade evaluation and after every
+//     squaring (recompute_block_diag).
+// ---------------------------------------------------------------------------
+
+static const int expm_m_vals[5] = {3, 5, 7, 9, 13};
+
+// theta_m: largest 1-norm for which the degree m Pade approximant meets double precision unit roundoff.
+static const double expm_theta[5] = {
+  1.495585217958292e-002, // m = 3
+  2.539398330063230e-001, // m = 5
+  9.504178996162932e-001, // m = 7
+  2.097847961257068e+000, // m = 9
+  5.371920351148152e+000  // m = 13
+};
+
+// Pade coefficients b_0, ..., b_m (same ordering as c(1:m+1) in MATLAB).
+static std::vector<double> expm_pade_coefficients(int m){
+  switch(m){
+    case 3:
+      return {120.0, 60.0, 12.0, 1.0};
+    case 5:
+      return {30240.0, 15120.0, 3360.0, 420.0, 30.0, 1.0};
+    case 7:
+      return {17297280.0, 8648640.0, 1995840.0, 277200.0, 25200.0, 1512.0, 56.0, 1.0};
+    case 9:
+      return {17643225600.0, 8821612800.0, 2075673600.0, 302702400.0, 30270240.0,
+              2162160.0, 110880.0, 3960.0, 90.0, 1.0};
+    case 13:
+      return {64764752532480000.0, 32382376266240000.0, 7771770303897600.0,
+              1187353796428800.0, 129060195264000.0, 10559470521600.0,
+              670442572800.0, 33522128640.0, 1323241920.0, 40840800.0,
+              960960.0, 16380.0, 182.0, 1.0};
+    default:
+      throw std::invalid_argument("expm: unsupported Pade degree");
+  }
+}
+
+// Y += alpha * X
+static void expm_axpy(size_t N, double alpha, const double* X, double* Y){
+  #pragma omp parallel for simd schedule(static) if(N > 100000)
+  for(size_t i = 0; i < N; ++i){
+    Y[i] += alpha * X[i];
+  }
+}
+
+// Add alpha * I to the n x n column-major matrix Y.
+static void expm_add_identity(size_t n, double alpha, double* Y){
+  for(size_t i = 0; i < n; ++i){
+    Y[i + i * n] += alpha;
+  }
+}
+
+// C = A * B for n x n column-major matrices.
+static void expm_gemm(size_t n, const double* A, const double* B, double* C){
+  cblas_dgemm(
+    CblasColMajor, CblasNoTrans, CblasNoTrans,
+    (lapack_int) n, (lapack_int) n, (lapack_int) n,
+    1.0, A, (lapack_int) n, B, (lapack_int) n,
+    0.0, C, (lapack_int) n
+  );
+}
+
+// 1-norm (maximum absolute column sum).
+static double expm_norm1(size_t n, const double* A){
+  double nrm = 0.0;
+  bool nonfinite = false;
+  #pragma omp parallel for schedule(static) reduction(max:nrm) reduction(||:nonfinite) if(n * n > 100000)
+  for(size_t j = 0; j < n; ++j){
+    double colsum = 0.0;
+    for(size_t i = 0; i < n; ++i){
+      colsum += std::abs(A[i + j * n]);
+    }
+    if(!std::isfinite(colsum)){
+      nonfinite = true;
+    } else if(colsum > nrm){
+      nrm = colsum;
+    }
+  }
+  return nonfinite ? std::numeric_limits<double>::infinity() : nrm;
+}
+
+// sinh(x)/x with the removable singularity at 0 handled.
+static double expm_sinch(double x){
+  return (x == 0.0) ? 1.0 : std::sinh(x) / x;
+}
+
+// Replace the diagonal and first superdiagonal of F (an approximation of exp(scale * T) for upper triangular T) 
+// with their exact values.
+static void expm_recompute_block_diag(const double* T, size_t n, double scale, double* F){
+  for(size_t i = 0; i < n; ++i){
+    F[i + i * n] = std::exp(scale * T[i + i * n]);
+  }
+  for(size_t i = 0; i + 1 < n; ++i){
+    double a1 = scale * T[i + i * n];
+    double a2 = scale * T[(i + 1) + (i + 1) * n];
+    double t  = scale * T[i + (i + 1) * n];
+    F[i + (i + 1) * n] = t * std::exp(0.5 * (a1 + a2)) * expm_sinch(0.5 * (a1 - a2));
+  }
+}
+
+// Evaluate the degree m diagonal Pade approximant r_m(A) = (V - U)^{-1} (V + U), where U contains the odd
+// powers of A and V the even powers. Result is written to F (n x n, column-major).
+static void expm_pade_approximant(size_t n, const double* A, int m, std::vector<double>& F){
+  const size_t N = n * n;
+  std::vector<double> c = expm_pade_coefficients(m);
+  std::vector<double> U(N, 0.0), V(N, 0.0);
+
+  if(m == 3 || m == 5 || m == 7 || m == 9){
+    // Apowers[j] = A^(2j) for j >= 1 (A^0 = I is applied implicitly).
+    size_t nP = (size_t)((m + 1) / 2);
+    std::vector< std::vector<double> > Apowers(nP);
+    Apowers[1].resize(N);
+    expm_gemm(n, A, A, Apowers[1].data());
+    for(size_t j = 2; j < nP; ++j){
+      Apowers[j].resize(N);
+      expm_gemm(n, Apowers[j - 1].data(), Apowers[1].data(), Apowers[j].data());
+    }
+
+    // U = A * sum_{j = m+1, m-1, ..., 2} c(j) * A^(j-2)
+    for(int j = m + 1; j >= 2; j -= 2){
+      size_t k = (size_t)(j / 2 - 1);
+      if(k == 0) expm_add_identity(n, c[j - 1], U.data());
+      else       expm_axpy(N, c[j - 1], Apowers[k].data(), U.data());
+    }
+    std::vector<double> AU(N);
+    expm_gemm(n, A, U.data(), AU.data());
+    U.swap(AU);
+
+    // V = sum_{j = m, m-2, ..., 1} c(j) * A^(j-1)
+    for(int j = m; j >= 1; j -= 2){
+      size_t k = (size_t)((j + 1) / 2 - 1);
+      if(k == 0) expm_add_identity(n, c[j - 1], V.data());
+      else       expm_axpy(N, c[j - 1], Apowers[k].data(), V.data());
+    }
+  } else if(m == 13){
+    // For optimal evaluation need different formula for m >= 12.
+    std::vector<double> A2(N), A4(N), A6(N), W(N), T(N);
+    expm_gemm(n, A,  A,  A2.data());
+    expm_gemm(n, A2.data(), A2.data(), A4.data());
+    expm_gemm(n, A2.data(), A4.data(), A6.data());
+
+    // U = A * (A6*(c14*A6 + c12*A4 + c10*A2) + c8*A6 + c6*A4 + c4*A2 + c2*I)
+    std::fill(W.begin(), W.end(), 0.0);
+    expm_axpy(N, c[13], A6.data(), W.data());
+    expm_axpy(N, c[11], A4.data(), W.data());
+    expm_axpy(N, c[9],  A2.data(), W.data());
+    expm_gemm(n, A6.data(), W.data(), T.data());
+    expm_axpy(N, c[7], A6.data(), T.data());
+    expm_axpy(N, c[5], A4.data(), T.data());
+    expm_axpy(N, c[3], A2.data(), T.data());
+    expm_add_identity(n, c[1], T.data());
+    expm_gemm(n, A, T.data(), U.data());
+
+    // V = A6*(c13*A6 + c11*A4 + c9*A2) + c7*A6 + c5*A4 + c3*A2 + c1*I
+    std::fill(W.begin(), W.end(), 0.0);
+    expm_axpy(N, c[12], A6.data(), W.data());
+    expm_axpy(N, c[10], A4.data(), W.data());
+    expm_axpy(N, c[8],  A2.data(), W.data());
+    expm_gemm(n, A6.data(), W.data(), V.data());
+    expm_axpy(N, c[6], A6.data(), V.data());
+    expm_axpy(N, c[4], A4.data(), V.data());
+    expm_axpy(N, c[2], A2.data(), V.data());
+    expm_add_identity(n, c[0], V.data());
+  } else {
+    throw std::invalid_argument("expm: unsupported Pade degree");
+  }
+
+  // F = (-U + V) \ (U + V)
+  std::vector<double> L(N);
+  F.resize(N);
+  #pragma omp parallel for simd schedule(static) if(N > 100000)
+  for(size_t i = 0; i < N; ++i){
+    L[i] = V[i] - U[i];
+    F[i] = V[i] + U[i];
+  }
+
+  lapack_int nn = (lapack_int) n, nrhs = (lapack_int) n, info = 0;
+  std::vector<lapack_int> ipiv(n);
+  dgesv(&nn, &nrhs, L.data(), &nn, ipiv.data(), F.data(), &nn, &info);
+  if(info != 0){
+    throw std::runtime_error("expm: Pade denominator is singular or dgesv failed (info = " + std::to_string((long long) info) + ")");
+  }
+}
+
+Matrix matrix_exponential(const Matrix &M){
+  /*
+  Compute the matrix exponential exp(M) of a square matrix using the scaling and squaring algorithm with Pade
+  approximants, mirroring MATLAB's expm().
+  */
+  if(M.nrow != M.ncol){
+    throw std::invalid_argument("matrix_exponential: matrix must be square");
+  }
+  const size_t n = M.nrow;
+  const size_t N = n * n;
+
+  Matrix E(N, n, n);
+  if(n == 0){
+    return E;
+  }
+
+  const double* Ain = M.data_ptr;
+
+  // Structure detection.
+  bool isUpper = true, isLower = true;
+  for(size_t j = 0; j < n && (isUpper || isLower); ++j){
+    for(size_t i = 0; i < n; ++i){
+      if(i == j || Ain[i + j * n] == 0.0) continue;
+      if(i > j) isUpper = false;
+      else      isLower = false;
+    }
+  }
+
+  // Diagonal (including 1x1): exp of the diagonal.
+  if(isUpper && isLower){
+    std::memset(E.data_ptr, 0, N * sizeof(double));
+    for(size_t i = 0; i < n; ++i){
+      E.data_ptr[i + i * n] = std::exp(Ain[i + i * n]);
+    }
+    return E;
+  }
+
+  // Lower triangular: use exp(A^T) = exp(A)^T so only the upper triangular path is needed.
+  const bool transposed = !isUpper && isLower;
+  const bool isTriangular = isUpper || isLower;
+
+  std::vector<double> A(N);
+  if(transposed){
+    for(size_t j = 0; j < n; ++j){
+      for(size_t i = 0; i < n; ++i){
+        A[j + i * n] = Ain[i + j * n];
+      }
+    }
+  } else {
+    std::copy(Ain, Ain + N, A.begin());
+  }
+
+  const double normA = expm_norm1(n, A.data());
+  if(!std::isfinite(normA)){
+    std::fill(E.data_ptr, E.data_ptr + N, std::numeric_limits<double>::quiet_NaN());
+    return E;
+  }
+
+  std::vector<double> F;
+  const double theta_max = expm_theta[4];
+
+  if(normA <= theta_max){
+    // No scaling and squaring is required.
+    int m = expm_m_vals[4];
+    for(int i = 0; i < 5; ++i){
+      if(normA <= expm_theta[i]){
+        m = expm_m_vals[i];
+        break;
+      }
+    }
+    expm_pade_approximant(n, A.data(), m, F);
+    if(isTriangular){
+      expm_recompute_block_diag(A.data(), n, 1.0, F.data());
+    }
+  } else {
+    // Scaling: choose s such that ||A / 2^s||_1 <= theta_13.
+    int s = 0;
+    double t = std::frexp(normA / theta_max, &s);
+    if(t == 0.5) s -= 1; // normA / theta_max is an exact power of 2.
+    if(s < 0) s = 0;
+
+    const double scale = std::ldexp(1.0, -s);
+    std::vector<double> As(A);
+    #pragma omp parallel for simd schedule(static) if(N > 100000)
+    for(size_t i = 0; i < N; ++i){
+      As[i] *= scale;
+    }
+
+    expm_pade_approximant(n, As.data(), expm_m_vals[4], F);
+    if(isTriangular){
+      expm_recompute_block_diag(A.data(), n, scale, F.data());
+    }
+
+    // Squaring: exp(A) = (exp(A / 2^s))^(2^s)
+    std::vector<double> F2(N);
+    for(int k = 1; k <= s; ++k){
+      expm_gemm(n, F.data(), F.data(), F2.data());
+      F.swap(F2);
+      if(isTriangular){
+        expm_recompute_block_diag(A.data(), n, std::ldexp(1.0, -(s - k)), F.data());
+      }
+    }
+  }
+
+  if(transposed){
+    for(size_t j = 0; j < n; ++j){
+      for(size_t i = 0; i < n; ++i){
+        E.data_ptr[j + i * n] = F[i + j * n];
+      }
+    }
+  } else {
+    std::copy(F.begin(), F.end(), E.data_ptr);
+  }
+
+  return E;
+}
 
 
 #endif

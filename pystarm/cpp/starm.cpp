@@ -143,6 +143,7 @@ PYBIND11_MODULE(pystarm, m) {
     m.def("get_slicewise_diagonals", &get_slicewise_diagonals, " Return the diagonal values of a tensor as a matrix.");
     m.def("hadamard_pointwise", &hadamard_pointwise, "Compute elementwise multiplication of two tensors.");
 	m.def("matmul", &matmul, "Multiply two matrices and return a new result matrix");
+    m.def("matrix_exponential", &matrix_exponential, "Get the matrix exponential using Pade approximation.");
 	m.def("svdvals", &svdvals, "Compute the singular values of a matrix.",
         py::arg("A"), py::arg("verbose") = false);
 	m.def("svd", &svd, "Compute the thin SVD of a matrix and return a tuple of the factors.",

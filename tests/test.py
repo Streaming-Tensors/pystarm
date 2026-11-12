@@ -1235,9 +1235,41 @@ class TensorArithmeticTestCase(unittest.TestCase):
 
         self.assertTrue(np.allclose(D_np, D_pystarm))
 
-       
+class MatrixExponentialTestCase(unittest.TestCase):
+    
 
-# ADD A PYTTB TEST CASE FOR CONTRACTION, LOOK AT TTT FUNCTION AND CONTRACT ALL MODES BUT K.
+    def test_arange_matrix(self):
+       '''Test matrix_exponential with numpy arange matrix'''
+       from scipy.linalg import expm
+
+       mat_dims = (5,5)
+       mat_nelm = np.prod(mat_dims)
+       arr2 = np.arange(mat_nelm, dtype=np.float64).reshape(mat_dims, order='F')         
+       
+       mat2 = pystarm.Matrix(arr2, mat_dims[0], mat_dims[1])
+       mat_exp = pystarm.matrix_exponential(mat2)
+       
+       arr3 = np.frombuffer(mat_exp, dtype=np.float64).reshape(mat_exp.getdims(), order='F', copy = False)
+       mat_exp_scipy = expm(arr2)
+
+       self.assertTrue(np.allclose(arr3, mat_exp_scipy))
+
+    def test_random_matrix(self):
+       '''Test matrix_exponential with numpy random matrix'''
+       from scipy.linalg import expm
+
+       mat_dims = (5,5)
+       mat_nelm = np.prod(mat_dims)
+       arr2 = np.asfortranarray(np.random.rand(mat_nelm).reshape(mat_dims, order='F'))
+       
+       mat2 = pystarm.Matrix(arr2, mat_dims[0], mat_dims[1])
+       mat_exp = pystarm.matrix_exponential(mat2)
+       
+       arr3 = np.frombuffer(mat_exp, dtype=np.float64).reshape(mat_exp.getdims(), order='F', copy = False)
+       mat_exp_scipy = expm(arr2)
+
+       self.assertTrue(np.allclose(arr3, mat_exp_scipy))
+       
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
