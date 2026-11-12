@@ -81,7 +81,7 @@ def _check_mkl_interface():
                 "this process and MKL_INTERFACE_LAYER is not set to ILP64. "
                 "pystarm is compiled for the 64-bit interface, so its integer "
                 "arguments may be read as 32-bit, which produces wrong results "
-                "intermittently rather than an error. Export "
+                "intermittently rather than an error. "
                 "Do NOT simply export MKL_INTERFACE_LAYER=ILP64: that fixes "
                 "pystarm and segfaults numpy, which needs the other interface "
                 "from the same dispatcher. Link MKL statically (the default "
